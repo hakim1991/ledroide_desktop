@@ -1,0 +1,21 @@
+{
+  "id": "sticky-notes",
+  "name": "Sticky Notes",
+  "version": "1.0.0",
+  "description": "Tableau de post-its colorés — créez, organisez et retrouvez vos notes en un coup d'œil.",
+  "icon": "📝",
+  "author": "ABOURA Abdelhakim",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": ["database"],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

@@ -1,0 +1,12 @@
+{
+  "id": "calculator",
+  "name": "Calculatrice",
+  "version": "1.0.0",
+  "description": "Calculatrice normale et scientifique avec historique",
+  "icon": "⌗",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": []
+}

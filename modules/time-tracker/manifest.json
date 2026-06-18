@@ -1,0 +1,15 @@
+{
+  "id": "time-tracker",
+  "name": "Suivi des tâches",
+  "version": "1.0.0",
+  "description": "Enregistrement de tâches avec chrono intégré et export Excel (pip install openpyxl)",
+  "icon": "⏱",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "sqlite"
+  }
+}

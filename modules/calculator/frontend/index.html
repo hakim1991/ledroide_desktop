@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calculatrice</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 1.5rem 1rem 2rem;
+    }
+
+    .app { width: 100%; max-width: 440px; }
+
+    /* ── Mode toggle ──────────────────────────────────────── */
+    .mode-toggle {
+      display: flex;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 10px;
+      padding: 3px;
+      gap: 3px;
+      margin-bottom: 1rem;
+      width: fit-content;
+    }
+    .mode-toggle button {
+      padding: .35rem 1rem;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: #71717a;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .mode-toggle button.active { background: #27272a; color: #f4f4f5; }
+
+    /* ── Calculator card ──────────────────────────────────── */
+    .calc {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 16px;
+      padding: 1rem;
+      margin-bottom: .875rem;
+    }
+
+    /* ── Display ──────────────────────────────────────────── */
+    .display {
+      background: #09090b;
+      border-radius: 10px;
+      padding: .75rem 1rem;
+      margin-bottom: .875rem;
+      min-height: 88px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: flex-end;
+      gap: .25rem;
+      overflow: hidden;
+    }
+    #expr-line {
+      font-size: .9375rem;
+      color: #3f3f46;
+      word-break: break-all;
+      text-align: right;
+      min-height: 1.4rem;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #result-line {
+      font-size: 2.25rem;
+      font-weight: 600;
+      color: #f4f4f5;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      word-break: break-all;
+      width: 100%;
+      line-height: 1.1;
+      transition: font-size .1s, color .1s;
+    }
+    #result-line.preview { color: #52525b; font-size: 1.5rem; }
+
+    /* ── Scientific panel ─────────────────────────────────── */
+    .sci-panel {
+      padding-bottom: .875rem;
+      margin-bottom: .875rem;
+      border-bottom: 1px solid #1f1f22;
+    }
+    .sci-top {
+      display: flex;
+      gap: .4rem;
+      margin-bottom: .5rem;
+    }
+    #btn-deg {
+      background: #0c4a6e; color: #38bdf8;
+      border: 1px solid #0369a1;
+      border-radius: 6px; padding: .25rem .65rem;
+      font-size: .6875rem; font-weight: 700;
+      letter-spacing: .06em; cursor: pointer;
+      transition: all .15s;
+    }
+    #btn-2nd {
+      background: #18181b; color: #71717a;
+      border: 1px solid #27272a;
+      border-radius: 6px; padding: .25rem .65rem;
+      font-size: .6875rem; font-weight: 700;
+      letter-spacing: .06em; cursor: pointer;
+      transition: all .15s;
+    }
+    #btn-2nd.on { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+
+    .sci-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: .35rem;
+    }
+
+    /* ── Main grid ────────────────────────────────────────── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .4rem;
+    }
+
+    /* ── Buttons ──────────────────────────────────────────── */
+    button {
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity .1s, transform .08s;
+      user-select: none;
+    }
+    button:active { transform: scale(.91); }
+
+    .main-grid button { height: 60px; font-size: 1.25rem; }
+    .sci-grid  button { height: 42px; font-size: .875rem; }
+
+    .btn-digit { background: #27272a; color: #f4f4f5; }
+    .btn-digit:hover { background: #2f2f33; }
+    .btn-op    { background: #3a3a3f; color: #e4e4e7; }
+    .btn-op:hover { background: #424248; }
+    .btn-fn    { background: #1c1a2e; color: #a5b4fc; font-size: .8125rem; }
+    .btn-fn:hover { background: #22203a; }
+    .btn-ac    { background: #3f3f46; color: #f9fafb; font-size: 1.05rem; }
+    .btn-ac:hover { background: #4a4a52; }
+    .btn-eq    { background: #6366f1; color: #fff; }
+    .btn-eq:hover { background: #5155e8; }
+
+    .btn-zero { grid-column: span 2; justify-content: flex-start; padding-left: 1.25rem; }
+
+    /* ── History ──────────────────────────────────────────── */
+    .history-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .hist-header {
+      width: 100%;
+      padding: .7rem 1rem;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      color: #71717a;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: inherit;
+      transition: background .1s;
+    }
+    .hist-header:hover { background: #1c1c1f; }
+    .badge {
+      background: #27272a; color: #71717a;
+      border-radius: 4px; padding: .1rem .4rem;
+      font-size: .6875rem;
+    }
+    .hist-body { border-top: 1px solid #27272a; }
+    .hist-item {
+      padding: .55rem 1rem;
+      border-bottom: 1px solid #1c1c1f;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .75rem;
+      transition: background .1s;
+    }
+    .hist-item:hover { background: #1c1c1f; }
+    .hist-item:last-child { border-bottom: none; }
+    .h-expr   { font-size: .8125rem; color: #52525b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .h-result { font-size: .9375rem; font-weight: 600; color: #a5b4fc; white-space: nowrap; }
+    .hist-footer {
+      padding: .55rem 1rem;
+      border-top: 1px solid #27272a;
+      display: flex;
+      justify-content: flex-end;
+    }
+    .btn-clr {
+      font-size: .75rem; color: #52525b;
+      background: transparent;
+      border: 1px solid #27272a;
+      border-radius: 6px; padding: .3rem .65rem;
+      cursor: pointer; font-family: inherit;
+      transition: all .15s;
+    }
+    .btn-clr:hover { color: #ef4444; border-color: #7f1d1d; background: #1a0a0a; }
+    .hist-empty { padding: 1.5rem 1rem; text-align: center; color: #3f3f46; font-size: .875rem; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Mode toggle -->
+  <div class="mode-toggle">
+    <button id="btn-normal" class="active" onclick="setMode('normal')">Normale</button>
+    <button id="btn-sci"                   onclick="setMode('scientific')">Scientifique</button>
+  </div>
+
+  <!-- Calculator -->
+  <div class="calc">
+
+    <!-- Display -->
+    <div class="display">
+      <div id="expr-line"></div>
+      <div id="result-line">0</div>
+    </div>
+
+    <!-- Scientific panel -->
+    <div class="sci-panel hidden" id="sci-panel">
+      <div class="sci-top">
+        <button id="btn-deg" onclick="toggleDeg()">DEG</button>
+        <button id="btn-2nd" onclick="toggle2nd()">2nd</button>
+      </div>
+      <div class="sci-grid">
+        <!-- Row 1: trig -->
+        <button class="btn-fn sci-btn"
+          data-fn="sin(" data-label="sin"
+          data-fn2="asin(" data-label2="sin⁻¹">sin</button>
+        <button class="btn-fn sci-btn"
+          data-fn="cos(" data-label="cos"
+          data-fn2="acos(" data-label2="cos⁻¹">cos</button>
+        <button class="btn-fn sci-btn"
+          data-fn="tan(" data-label="tan"
+          data-fn2="atan(" data-label2="tan⁻¹">tan</button>
+        <button class="btn-fn" onclick="pressConst('π')">π</button>
+        <button class="btn-fn" onclick="pressConst('e')">e</button>
+        <!-- Row 2: power / log -->
+        <button class="btn-fn" onclick="press('sq(')">x²</button>
+        <button class="btn-fn sci-btn"
+          data-fn="√(" data-label="√"
+          data-fn2="∛(" data-label2="∛">√</button>
+        <button class="btn-fn sci-btn"
+          data-fn="ln(" data-label="ln"
+          data-fn2="e^(" data-label2="eˣ">ln</button>
+        <button class="btn-fn sci-btn"
+          data-fn="log(" data-label="log"
+          data-fn2="10^(" data-label2="10ˣ">log</button>
+        <button class="btn-fn" onclick="press('^')">xⁿ</button>
+        <!-- Row 3: misc -->
+        <button class="btn-fn" onclick="pressFactorial()">n!</button>
+        <button class="btn-fn" onclick="press('abs(')">|x|</button>
+        <button class="btn-op" onclick="press('(')"> ( </button>
+        <button class="btn-op" onclick="press(')')"> ) </button>
+        <button class="btn-fn" onclick="pressAns()">Ans</button>
+      </div>
+    </div>
+
+    <!-- Main grid -->
+    <div class="main-grid">
+      <button class="btn-ac" id="btn-ac" onclick="clearAll()">AC</button>
+      <button class="btn-op"             onclick="backspace()">⌫</button>
+      <button class="btn-op"             onclick="pressPercent()">%</button>
+      <button class="btn-op"             onclick="press('÷')">÷</button>
+
+      <button class="btn-digit" onclick="press('7')">7</button>
+      <button class="btn-digit" onclick="press('8')">8</button>
+      <button class="btn-digit" onclick="press('9')">9</button>
+      <button class="btn-op"    onclick="press('×')">×</button>
+
+      <button class="btn-digit" onclick="press('4')">4</button>
+      <button class="btn-digit" onclick="press('5')">5</button>
+      <button class="btn-digit" onclick="press('6')">6</button>
+      <button class="btn-op"    onclick="press('−')">−</button>
+
+      <button class="btn-digit" onclick="press('1')">1</button>
+      <button class="btn-digit" onclick="press('2')">2</button>
+      <button class="btn-digit" onclick="press('3')">3</button>
+      <button class="btn-op"    onclick="press('+')">+</button>
+
+      <button class="btn-digit btn-zero" onclick="press('0')">0</button>
+      <button class="btn-digit"          onclick="pressDot()">.</button>
+      <button class="btn-eq"             onclick="equals()">=</button>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-card">
+    <button class="hist-header" onclick="toggleHistory()">
+      <span>Historique</span>
+      <span class="badge" id="hist-badge">0</span>
+    </button>
+    <div class="hidden" id="hist-body">
+      <div class="hist-body">
+        <div id="hist-list">
+          <div class="hist-empty">Aucun calcul pour le moment</div>
+        </div>
+        <div class="hist-footer">
+          <button class="btn-clr" onclick="clearHistory()">Effacer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+  const PORT = parseInt(window.location.port) || 8765
+  const BASE = `http://127.0.0.1:${PORT}/modules/calculator/api`
+
+  async function apiCall(method, path, body) {
+    const opts = { method, headers: {} }
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json'
+      opts.body = JSON.stringify(body)
+    }
+    const r = await fetch(BASE + path, opts)
+    if (!r.ok) throw new Error(r.statusText)
+    return r.json()
+  }
+
+  function esc(s) {
+    return String(s ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+
+  // ── State ───────────────────────────────────────────────────────────────────
+
+  let expr          = '0'
+  let lastResult    = '0'
+  let justEvaluated = false
+  let mode          = 'normal'
+  let degMode       = true
+  let is2nd         = false
+  let histOpen      = false
+  let historyList   = []
+
+  const OPS = ['+', '−', '×', '÷', '^', '%']
+
+  // ── Mode ────────────────────────────────────────────────────────────────────
+
+  function setMode(m) {
+    mode = m
+    document.getElementById('btn-normal').classList.toggle('active', m === 'normal')
+    document.getElementById('btn-sci').classList.toggle('active', m === 'scientific')
+    document.getElementById('sci-panel').classList.toggle('hidden', m === 'normal')
+  }
+
+  function toggleDeg() {
+    degMode = !degMode
+    const btn = document.getElementById('btn-deg')
+    if (degMode) {
+      btn.textContent = 'DEG'
+      btn.style.cssText = 'background:#0c4a6e;color:#38bdf8;border-color:#0369a1'
+    } else {
+      btn.textContent = 'RAD'
+      btn.style.cssText = 'background:#14532d;color:#4ade80;border-color:#15803d'
+    }
+  }
+
+  function toggle2nd() {
+    is2nd = !is2nd
+    document.getElementById('btn-2nd').classList.toggle('on', is2nd)
+    document.querySelectorAll('.sci-btn').forEach(btn => {
+      btn.textContent = is2nd ? btn.dataset.label2 : btn.dataset.label
+    })
+  }
+
+  // assign click handlers for sci-btn (2nd-aware)
+  document.querySelectorAll('.sci-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      press(is2nd ? btn.dataset.fn2 : btn.dataset.fn)
+    })
+  })
+
+  // ── Expression builder ───────────────────────────────────────────────────────
+
+  function press(char) {
+    if (justEvaluated) {
+      justEvaluated = false
+      if (OPS.includes(char)) {
+        expr = lastResult + char
+      } else if (char === '(') {
+        expr = lastResult + '×('
+      } else {
+        expr = char
+      }
+      updateDisplay()
+      return
+    }
+
+    // Handle leading zero: replace '0' only when starting a new number
+    if (expr === '0') {
+      if (/^[1-9]$/.test(char)) {
+        expr = char
+      } else if (char === '0') {
+        // stay at '0'
+      } else {
+        expr += char
+      }
+    } else {
+      expr += char
+    }
+    updateDisplay()
+  }
+
+  function pressConst(c) {
+    if (justEvaluated) {
+      justEvaluated = false
+      expr = c
+    } else if (expr === '0') {
+      expr = c
+    } else {
+      // Auto-multiply if last char is a number, constant or closing paren
+      if (/[0-9πe)]$/.test(expr)) expr += '×'
+      expr += c
+    }
+    updateDisplay()
+  }
+
+  function pressAns() {
+    pressConst(lastResult)
+  }
+
+  function pressDot() {
+    if (justEvaluated) {
+      expr = '0.'
+      justEvaluated = false
+      updateDisplay()
+      return
+    }
+    // Check the current number segment has no dot already
+    const seg = expr.split(/[+\-−×÷^%(]/).pop()
+    if (!seg.includes('.')) {
+      expr = (expr === '0' || OPS.some(o => expr.endsWith(o))) ? expr + '0.' : expr + '.'
+    }
+    updateDisplay()
+  }
+
+  function pressPercent() {
+    if (justEvaluated) return
+    // Convert trailing number to /100
+    const m = expr.match(/(\d+\.?\d*)$/)
+    if (m) {
+      const num = parseFloat(m[1]) / 100
+      expr = expr.slice(0, -m[1].length) + num
+    }
+    updateDisplay()
+  }
+
+  function pressFactorial() {
+    if (justEvaluated) { justEvaluated = false }
+    if (/[0-9)]$/.test(expr)) {
+      expr += '!'
+      updateDisplay()
+    }
+  }
+
+  function clearAll() {
+    expr = '0'
+    lastResult = '0'
+    justEvaluated = false
+    updateDisplay()
+  }
+
+  function backspace() {
+    if (justEvaluated) { clearAll(); return }
+    if (expr.length <= 1) { expr = '0'; updateDisplay(); return }
+    // Remove multi-char function names atomically
+    const fns = [
+      'sin(','cos(','tan(','asin(','acos(','atan(',
+      'ln(','log(','√(','∛(','sq(','abs(','10^(','e^(',
+    ]
+    let done = false
+    for (const fn of fns) {
+      if (expr.endsWith(fn)) {
+        expr = expr.slice(0, -fn.length) || '0'
+        done = true
+        break
+      }
+    }
+    if (!done) expr = expr.slice(0, -1) || '0'
+    updateDisplay()
+  }
+
+  // ── Evaluator ────────────────────────────────────────────────────────────────
+
+  function evalExpr(e) {
+    if (!e || e === '0') return 0
+
+    const D = degMode ? Math.PI / 180 : 1
+    const R = degMode ? 180 / Math.PI : 1
+
+    let s = e
+      .replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-')
+      .replace(/\^/g, '**')
+      .replace(/π/g, `(${Math.PI})`)
+      // Standalone 'e' (Euler) — not preceded by a digit and not followed by digit/^ chars
+      .replace(/(?<![0-9.*])e(?![0-9*^])/g, `(${Math.E})`)
+
+    // Factorial: n! → computed integer
+    s = s.replace(/(\d+)!/g, (_, n) => {
+      const k = parseInt(n, 10)
+      if (k > 170 || k < 0) return 'Infinity'
+      let r = 1; for (let i = 2; i <= k; i++) r *= i; return r
+    })
+
+    // Trig & scientific functions → IIFEs to handle degree mode safely
+    s = s
+      .replace(/\bsin\(/g,  `((_v)=>Math.sin(_v*${D}))(`)
+      .replace(/\bcos\(/g,  `((_v)=>Math.cos(_v*${D}))(`)
+      .replace(/\btan\(/g,  `((_v)=>Math.tan(_v*${D}))(`)
+      .replace(/\basin\(/g, `((_v)=>Math.asin(_v)*${R})(`)
+      .replace(/\bacos\(/g, `((_v)=>Math.acos(_v)*${R})(`)
+      .replace(/\batan\(/g, `((_v)=>Math.atan(_v)*${R})(`)
+      .replace(/\bln\(/g,   `Math.log(`)
+      .replace(/\blog\(/g,  `Math.log10(`)
+      .replace(/\b√\(/g,    `Math.sqrt(`)
+      .replace(/\b∛\(/g,    `Math.cbrt(`)
+      .replace(/\bsq\(/g,   `((_v)=>_v*_v)(`)
+      .replace(/\babs\(/g,  `Math.abs(`)
+
+    // eslint-disable-next-line no-new-func
+    return Function(`"use strict"; return (${s})`)()
+  }
+
+  function fmtNum(n) {
+    if (!isFinite(n)) {
+      if (n === Infinity)  return '∞'
+      if (n === -Infinity) return '-∞'
+      return 'Erreur'
+    }
+    if (Math.abs(n) >= 1e13 || (Math.abs(n) < 1e-8 && n !== 0)) {
+      return parseFloat(n.toPrecision(8)).toExponential()
+    }
+    return parseFloat(n.toPrecision(12)).toString()
+  }
+
+  // ── Display ──────────────────────────────────────────────────────────────────
+
+  function updateDisplay() {
+    const exprEl = document.getElementById('expr-line')
+    const resEl  = document.getElementById('result-line')
+
+    // AC label: show 'C' when there's something to clear (not just '0')
+    document.getElementById('btn-ac').textContent = (expr === '0') ? 'AC' : 'C'
+
+    if (justEvaluated) return  // equals() already set both lines
+
+    // expr-line shows expression only when it's not a bare number
+    exprEl.textContent = /^-?[\d.]+$/.test(expr) ? '' : expr
+
+    // result-line
+    if (/^-?[\d.]+$/.test(expr)) {
+      // Bare number being entered: show as main value
+      resEl.textContent = expr
+      resEl.className = 'result-line'
+    } else {
+      // Try live preview
+      try {
+        const val = evalExpr(expr)
+        if (val !== null && val !== undefined && (isFinite(val) || val === Infinity || val === -Infinity)) {
+          const formatted = fmtNum(val)
+          resEl.textContent = formatted
+          resEl.className = 'result-line preview'
+        } else {
+          resEl.textContent = ''
+          resEl.className = 'result-line preview'
+        }
+      } catch {
+        resEl.textContent = ''
+        resEl.className = 'result-line preview'
+      }
+    }
+  }
+
+  function equals() {
+    try {
+      const val = evalExpr(expr)
+      if (val === null || val === undefined) throw new Error('invalid')
+      const resultStr = fmtNum(val)
+
+      // Update display
+      document.getElementById('expr-line').textContent = expr + ' ='
+      document.getElementById('result-line').textContent = resultStr
+      document.getElementById('result-line').className = 'result-line'
+      document.getElementById('btn-ac').textContent = 'AC'
+
+      // Persist to history
+      addToHistory(expr, resultStr)
+
+      lastResult    = resultStr
+      expr          = resultStr
+      justEvaluated = true
+    } catch {
+      document.getElementById('result-line').textContent = 'Erreur'
+      document.getElementById('result-line').className   = 'result-line'
+    }
+  }
+
+  // ── History ──────────────────────────────────────────────────────────────────
+
+  async function addToHistory(expression, result) {
+    try {
+      const entry = await apiCall('POST', '/history', { expression, result })
+      historyList.unshift(entry)
+      renderHistory()
+    } catch {}
+  }
+
+  async function clearHistory() {
+    try {
+      await apiCall('DELETE', '/history')
+      historyList = []
+      renderHistory()
+    } catch {}
+  }
+
+  function toggleHistory() {
+    histOpen = !histOpen
+    document.getElementById('hist-body').classList.toggle('hidden', !histOpen)
+  }
+
+  function renderHistory() {
+    document.getElementById('hist-badge').textContent = historyList.length
+
+    const list = document.getElementById('hist-list')
+    if (historyList.length === 0) {
+      list.innerHTML = '<div class="hist-empty">Aucun calcul pour le moment</div>'
+      return
+    }
+    list.innerHTML = historyList.slice(0, 40).map(h => `
+      <div class="hist-item" onclick="reuseResult('${esc(h.result)}')">
+        <span class="h-expr">${esc(h.expression)} =</span>
+        <span class="h-result">${esc(h.result)}</span>
+      </div>
+    `).join('')
+  }
+
+  function reuseResult(result) {
+    expr          = result
+    lastResult    = result
+    justEvaluated = true
+    document.getElementById('expr-line').textContent   = result
+    document.getElementById('result-line').textContent = result
+    document.getElementById('result-line').className   = 'result-line'
+    document.getElementById('btn-ac').textContent      = 'C'
+  }
+
+  // ── Keyboard ─────────────────────────────────────────────────────────────────
+
+  document.addEventListener('keydown', ev => {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return
+    const key = ev.key
+    if (/^[0-9]$/.test(key))               { press(key); return }
+    if (key === '+')                         { press('+'); return }
+    if (key === '-')                         { press('−'); return }
+    if (key === '*')                         { press('×'); return }
+    if (key === '/')  { ev.preventDefault(); press('÷'); return }
+    if (key === '^')                         { press('^'); return }
+    if (key === '.')                         { pressDot(); return }
+    if (key === '(')                         { press('('); return }
+    if (key === ')')                         { press(')'); return }
+    if (key === '%')                         { pressPercent(); return }
+    if (key === 'Enter' || key === '=')      { equals(); return }
+    if (key === 'Backspace')                 { backspace(); return }
+    if (key === 'Escape')                    { clearAll(); return }
+  })
+
+  // ── Init ─────────────────────────────────────────────────────────────────────
+
+  async function init() {
+    try {
+      historyList = await apiCall('GET', '/history')
+    } catch {
+      historyList = []
+    }
+    renderHistory()
+    updateDisplay()
+  }
+
+  init()
+</script>
+</body>
+</html>

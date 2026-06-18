@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Suivi des tâches</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.25rem;
+    }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    .app { max-width: 1100px; margin: 0 auto; }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+      gap: .75rem;
+    }
+    .header h1 { font-size: 1.125rem; font-weight: 700; color: #f4f4f5; }
+    .header-sub { font-size: .8125rem; color: #52525b; margin-top: .15rem; }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Cards ───────────────────────────────────────────── */
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .card-title {
+      font-size: .6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #52525b;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Chrono ──────────────────────────────────────────── */
+    .chrono-time {
+      font-size: 3rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #f4f4f5;
+      line-height: 1;
+      letter-spacing: -.02em;
+      transition: color .2s;
+    }
+    .chrono-time.running { color: #22c55e; }
+    .chrono-time.paused  { color: #eab308; }
+    .chrono-time.done    { color: #6366f1; }
+
+    .chrono-label {
+      font-size: .75rem;
+      color: #52525b;
+      margin: .35rem 0 1rem;
+      height: 1rem;
+    }
+
+    .chrono-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+      margin-bottom: .875rem;
+    }
+
+    .use-banner {
+      background: #1e1b4b;
+      border: 1px solid #3730a3;
+      border-radius: 8px;
+      padding: .625rem .875rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
+    }
+    .use-banner span { font-size: .8125rem; color: #a5b4fc; }
+
+    /* ── Form ────────────────────────────────────────────── */
+    .frow {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .625rem;
+      margin-bottom: .625rem;
+    }
+    .frow.full { grid-template-columns: 1fr; }
+
+    .field label {
+      display: block;
+      font-size: .6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #52525b;
+      margin-bottom: .3rem;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 7px;
+      color: #e2e2e8;
+      font-size: .875rem;
+      padding: .45rem .65rem;
+      outline: none;
+      font-family: inherit;
+      transition: border-color .15s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #6366f1; }
+    textarea { resize: vertical; min-height: 64px; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.5); cursor: pointer; }
+
+    .form-actions {
+      display: flex;
+      gap: .5rem;
+      justify-content: flex-end;
+      margin-top: .875rem;
+    }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    button {
+      border: 1px solid transparent;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: .875rem;
+      font-weight: 600;
+      padding: .45rem .9rem;
+      font-family: inherit;
+      transition: opacity .12s, transform .08s;
+      white-space: nowrap;
+    }
+    button:hover:not(:disabled) { opacity: .82; }
+    button:active:not(:disabled) { transform: scale(.97); }
+    button:disabled { opacity: .3; cursor: default; }
+
+    .btn-primary   { background: #6366f1; color: #fff; border-color: #6366f1; }
+    .btn-green     { background: #16a34a; color: #fff; border-color: #16a34a; }
+    .btn-yellow    { background: #b45309; color: #fff; border-color: #b45309; }
+    .btn-secondary { background: #27272a; color: #a1a1aa; }
+    .btn-ghost     { background: transparent; color: #71717a; border-color: #27272a; }
+    .btn-danger    { background: #7f1d1d; color: #fca5a5; border-color: #991b1b; }
+    .btn-sm        { padding: .35rem .7rem; font-size: .8125rem; }
+
+    /* ── Table section ───────────────────────────────────── */
+    .table-header {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: .875rem;
+      flex-wrap: wrap;
+    }
+    .table-header select { width: auto; min-width: 170px; }
+    .summary { font-size: .8125rem; color: #52525b; flex: 1; }
+    .summary strong { color: #a1a1aa; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    thead th {
+      text-align: left;
+      font-size: .625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #3f3f46;
+      padding: .45rem .75rem;
+      border-bottom: 1px solid #27272a;
+    }
+    tbody tr { border-bottom: 1px solid #1c1c1f; transition: background .1s; }
+    tbody tr:hover { background: #1c1c1f; }
+    tbody td { padding: .5rem .75rem; vertical-align: middle; }
+    td.c-date { white-space: nowrap; color: #71717a; font-size: .8125rem; }
+    td.c-proj  { }
+    td.c-task  { color: #a1a1aa; }
+    td.c-desc  { color: #71717a; font-size: .8125rem; max-width: 220px; }
+    td.c-desc span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    td.c-hours { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: #818cf8; }
+    td.c-act   { text-align: right; white-space: nowrap; }
+
+    tfoot td {
+      padding: .55rem .75rem;
+      border-top: 1px solid #27272a;
+      font-size: .8125rem;
+      font-weight: 600;
+    }
+    tfoot .tf-label { color: #52525b; }
+    tfoot .tf-total { text-align: right; color: #6366f1; font-size: .9375rem; }
+
+    .tag {
+      display: inline-block;
+      background: #27272a;
+      color: #a1a1aa;
+      border-radius: 4px;
+      padding: .1rem .45rem;
+      font-size: .75rem;
+      font-weight: 500;
+    }
+    .tag.blue { background: #1e1b4b; color: #a5b4fc; }
+
+    .empty { text-align: center; padding: 3rem 1rem; color: #3f3f46; font-size: .875rem; }
+
+    /* ── Toast ───────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 10px;
+      padding: .65rem 1rem;
+      font-size: .875rem;
+      z-index: 9999;
+      box-shadow: 0 4px 24px rgba(0,0,0,.5);
+      transition: opacity .25s, transform .25s;
+      pointer-events: none;
+    }
+    #toast.ok  { border-color: #16a34a; color: #22c55e; }
+    #toast.err { border-color: #dc2626; color: #ef4444; }
+    #toast.off { opacity: 0; transform: translateY(6px); }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 720px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>⏱ Suivi des tâches</h1>
+      <p class="header-sub" id="hdr-sub">—</p>
+    </div>
+    <button class="btn-primary" onclick="exportExcel()">↓ Exporter Excel</button>
+  </div>
+
+  <!-- Chrono + Form -->
+  <div class="main-grid">
+
+    <!-- Chrono -->
+    <div class="card">
+      <p class="card-title">Chronomètre</p>
+      <div class="chrono-time" id="c-time">00:00:00</div>
+      <p class="chrono-label" id="c-label">Prêt</p>
+      <div class="chrono-btns">
+        <button class="btn-green"     id="c-start"  onclick="cStart()">▶ Démarrer</button>
+        <button class="btn-yellow hidden" id="c-pause"  onclick="cPause()">⏸ Pause</button>
+        <button class="btn-green  hidden" id="c-resume" onclick="cResume()">▶ Reprendre</button>
+        <button class="btn-secondary hidden" id="c-stop" onclick="cStop()">■ Stop</button>
+        <button class="btn-ghost  hidden" id="c-reset"  onclick="cReset()">↺ Reset</button>
+      </div>
+      <div class="use-banner hidden" id="c-use">
+        <span id="c-use-text">—</span>
+        <button class="btn-primary btn-sm" onclick="useTime()">Utiliser →</button>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <div class="card">
+      <p class="card-title" id="form-title">Nouvelle entrée</p>
+      <form id="entry-form" onsubmit="submitForm(event)">
+        <div class="frow">
+          <div class="field">
+            <label for="f-date">Date</label>
+            <input type="date" id="f-date" required />
+          </div>
+          <div class="field">
+            <label for="f-project">Projet</label>
+            <input type="text" id="f-project" list="dl-projects" placeholder="ex: MonProjet" autocomplete="off" />
+          </div>
+        </div>
+        <div class="frow">
+          <div class="field">
+            <label for="f-task">Tâche</label>
+            <input type="text" id="f-task" list="dl-tasks" placeholder="ex: Développement" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="f-hours">Heures</label>
+            <input type="number" id="f-hours" min="0" max="24" step="0.25" placeholder="0.00" />
+          </div>
+        </div>
+        <div class="frow full">
+          <div class="field">
+            <label for="f-desc">Description</label>
+            <textarea id="f-desc" placeholder="Décrivez la tâche effectuée…"></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-ghost hidden" id="btn-cancel" onclick="cancelEdit()">Annuler</button>
+          <button type="submit" class="btn-primary" id="btn-submit">Ajouter</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <datalist id="dl-projects"></datalist>
+  <datalist id="dl-tasks"></datalist>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="table-header">
+      <select id="sel-project" onchange="onFilter()">
+        <option value="">Tous les projets</option>
+      </select>
+      <p class="summary" id="summary"></p>
+      <button class="btn-ghost btn-sm" onclick="loadAll()">↺</button>
+    </div>
+    <div id="table-wrap"><div class="empty">Chargement…</div></div>
+  </div>
+</div>
+
+<div id="toast" class="off"></div>
+
+<script>
+  const PORT = parseInt(window.location.port) || 8765
+  const BASE = `http://127.0.0.1:${PORT}/modules/time-tracker/api`
+
+  // ── API ─────────────────────────────────────────────────────────────────────
+
+  async function api(method, path, body) {
+    const opts = { method, headers: {} }
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json'
+      opts.body = JSON.stringify(body)
+    }
+    const r = await fetch(BASE + path, opts)
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({ detail: r.statusText }))
+      throw new Error(e.detail || r.statusText)
+    }
+    return r.json()
+  }
+
+  function toast(msg, type = 'ok') {
+    const el = document.getElementById('toast')
+    el.textContent = msg
+    el.className = type
+    clearTimeout(el._t)
+    el._t = setTimeout(() => el.classList.add('off'), 2600)
+  }
+
+  function esc(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+
+  function todayISO() {
+    return new Date().toISOString().slice(0, 10)
+  }
+
+  // ── Chrono ──────────────────────────────────────────────────────────────────
+
+  const C = { state: 'idle', elapsed: 0, startedAt: null, iv: null }
+  // states: idle | running | paused | done
+
+  function fmtSec(s) {
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+  }
+
+  function currentElapsed() {
+    return C.state === 'running'
+      ? C.elapsed + Math.floor((Date.now() - C.startedAt) / 1000)
+      : C.elapsed
+  }
+
+  function renderChrono() {
+    const total = currentElapsed()
+    const timeEl  = document.getElementById('c-time')
+    const labelEl = document.getElementById('c-label')
+    const useEl   = document.getElementById('c-use')
+
+    timeEl.textContent = fmtSec(total)
+    timeEl.className = 'chrono-time ' + (C.state === 'idle' && total === 0 ? '' : C.state)
+
+    const show = id => document.getElementById(id).classList.remove('hidden')
+    const hide = id => document.getElementById(id).classList.add('hidden')
+
+    if (C.state === 'idle') {
+      show('c-start'); hide('c-pause'); hide('c-resume'); hide('c-stop'); hide('c-reset')
+      labelEl.textContent = 'Prêt'
+      useEl.classList.add('hidden')
+    } else if (C.state === 'running') {
+      hide('c-start'); show('c-pause'); hide('c-resume'); show('c-stop'); hide('c-reset')
+      labelEl.textContent = 'En cours…'
+      useEl.classList.add('hidden')
+    } else if (C.state === 'paused') {
+      hide('c-start'); hide('c-pause'); show('c-resume'); show('c-stop'); hide('c-reset')
+      labelEl.textContent = 'En pause'
+      useEl.classList.add('hidden')
+    } else if (C.state === 'done') {
+      hide('c-start'); hide('c-pause'); hide('c-resume'); hide('c-stop'); show('c-reset')
+      const h = total / 3600
+      const hDisp = h >= 0.1 ? `${h.toFixed(2)}h` : `${total}s`
+      document.getElementById('c-use-text').textContent = `Temps écoulé : ${hDisp}`
+      useEl.classList.remove('hidden')
+      labelEl.textContent = 'Terminé'
+    }
+  }
+
+  function cStart() {
+    C.state = 'running'
+    C.startedAt = Date.now()
+    C.iv = setInterval(renderChrono, 1000)
+    renderChrono()
+  }
+
+  function cPause() {
+    C.elapsed += Math.floor((Date.now() - C.startedAt) / 1000)
+    C.startedAt = null
+    C.state = 'paused'
+    clearInterval(C.iv)
+    renderChrono()
+  }
+
+  function cResume() {
+    C.state = 'running'
+    C.startedAt = Date.now()
+    C.iv = setInterval(renderChrono, 1000)
+    renderChrono()
+  }
+
+  function cStop() {
+    if (C.state === 'running') {
+      C.elapsed += Math.floor((Date.now() - C.startedAt) / 1000)
+      C.startedAt = null
+      clearInterval(C.iv)
+    }
+    C.state = 'done'
+    renderChrono()
+  }
+
+  function cReset() {
+    clearInterval(C.iv)
+    C.state = 'idle'; C.elapsed = 0; C.startedAt = null; C.iv = null
+    renderChrono()
+  }
+
+  function useTime() {
+    const total = currentElapsed()
+    // Round to nearest quarter-hour (0.25)
+    const raw = total / 3600
+    const rounded = Math.round(raw * 4) / 4
+    document.getElementById('f-hours').value = rounded > 0 ? rounded : raw.toFixed(2)
+    document.getElementById('f-project').focus()
+    document.getElementById('entry-form').scrollIntoView({ behavior: 'smooth' })
+  }
+
+  // ── Form ────────────────────────────────────────────────────────────────────
+
+  let editingId = null
+
+  function resetForm() {
+    editingId = null
+    document.getElementById('entry-form').reset()
+    document.getElementById('f-date').value = todayISO()
+    document.getElementById('form-title').textContent = 'Nouvelle entrée'
+    document.getElementById('btn-submit').textContent = 'Ajouter'
+    document.getElementById('btn-cancel').classList.add('hidden')
+  }
+
+  function cancelEdit() { resetForm() }
+
+  function editEntry(e) {
+    editingId = e.id
+    document.getElementById('f-date').value    = e.date
+    document.getElementById('f-project').value = e.project
+    document.getElementById('f-task').value    = e.task
+    document.getElementById('f-desc').value    = e.description
+    document.getElementById('f-hours').value   = e.hours
+    document.getElementById('form-title').textContent  = 'Modifier l\'entrée'
+    document.getElementById('btn-submit').textContent  = 'Mettre à jour'
+    document.getElementById('btn-cancel').classList.remove('hidden')
+    document.getElementById('entry-form').scrollIntoView({ behavior: 'smooth' })
+    document.getElementById('f-date').focus()
+  }
+
+  async function submitForm(ev) {
+    ev.preventDefault()
+    const data = {
+      date:        document.getElementById('f-date').value,
+      project:     document.getElementById('f-project').value.trim(),
+      task:        document.getElementById('f-task').value.trim(),
+      description: document.getElementById('f-desc').value.trim(),
+      hours:       parseFloat(document.getElementById('f-hours').value) || 0,
+    }
+    try {
+      if (editingId) {
+        await api('PUT', `/entries/${editingId}`, data)
+        toast('Entrée mise à jour')
+      } else {
+        await api('POST', '/entries', data)
+        toast('Entrée ajoutée')
+      }
+      resetForm()
+      await loadAll()
+    } catch (err) {
+      toast('Erreur : ' + err.message, 'err')
+    }
+  }
+
+  // ── Entries ─────────────────────────────────────────────────────────────────
+
+  let allEntries = []
+  let filterProject = ''
+
+  async function loadEntries() {
+    allEntries = await api('GET', '/entries')
+    renderTable()
+  }
+
+  async function loadProjects() {
+    const projects = await api('GET', '/projects')
+
+    const dl = document.getElementById('dl-projects')
+    dl.innerHTML = projects.map(p => `<option value="${esc(p)}">`).join('')
+
+    const sel = document.getElementById('sel-project')
+    const cur = sel.value
+    sel.innerHTML = '<option value="">Tous les projets</option>' +
+      projects.map(p => `<option value="${esc(p)}"${p===cur?' selected':''}>${esc(p)}</option>`).join('')
+  }
+
+  async function loadTasks() {
+    const tasks = await api('GET', '/tasks')
+    const dl = document.getElementById('dl-tasks')
+    dl.innerHTML = tasks.map(t => `<option value="${esc(t)}">`).join('')
+  }
+
+  function onFilter() {
+    filterProject = document.getElementById('sel-project').value
+    renderTable()
+  }
+
+  function renderTable() {
+    const rows = filterProject
+      ? allEntries.filter(e => e.project === filterProject)
+      : allEntries
+
+    const total = rows.reduce((s, e) => s + (e.hours || 0), 0)
+    document.getElementById('hdr-sub').textContent =
+      `${allEntries.length} entrée${allEntries.length !== 1 ? 's' : ''}`
+    document.getElementById('summary').innerHTML =
+      `<strong>${rows.length}</strong> entrée${rows.length !== 1 ? 's' : ''} · ` +
+      `<strong>${total.toFixed(2)}h</strong> totales`
+
+    const wrap = document.getElementById('table-wrap')
+
+    if (rows.length === 0) {
+      wrap.innerHTML = '<div class="empty">Aucune entrée enregistrée</div>'
+      return
+    }
+
+    const trs = rows.map(e => `
+      <tr>
+        <td class="c-date">${esc(e.date)}</td>
+        <td class="c-proj">${e.project ? `<span class="tag blue">${esc(e.project)}</span>` : '<span style="color:#3f3f46">—</span>'}</td>
+        <td class="c-task">${esc(e.task) || '<span style="color:#3f3f46">—</span>'}</td>
+        <td class="c-desc"><span title="${esc(e.description)}">${esc(e.description) || '<span style="color:#3f3f46">—</span>'}</span></td>
+        <td class="c-hours">${e.hours ? e.hours.toFixed(2) + 'h' : '—'}</td>
+        <td class="c-act">
+          <button class="btn-ghost btn-sm" onclick='editEntry(${JSON.stringify(e)})' title="Modifier">✎</button>
+          <button class="btn-danger btn-sm" onclick="deleteEntry(${e.id})" title="Supprimer">✕</button>
+        </td>
+      </tr>
+    `).join('')
+
+    wrap.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Projet</th><th>Tâche</th>
+            <th>Description</th><th style="text-align:right">Heures</th><th></th>
+          </tr>
+        </thead>
+        <tbody>${trs}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" class="tf-label">Total</td>
+            <td class="tf-total">${total.toFixed(2)}h</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    `
+  }
+
+  async function deleteEntry(id) {
+    if (!confirm('Supprimer cette entrée ?')) return
+    try {
+      await api('DELETE', `/entries/${id}`)
+      toast('Entrée supprimée')
+      await loadAll()
+    } catch (err) {
+      toast('Erreur : ' + err.message, 'err')
+    }
+  }
+
+  // ── Export ──────────────────────────────────────────────────────────────────
+
+  async function exportExcel() {
+    try {
+      const params = filterProject ? `?project=${encodeURIComponent(filterProject)}` : ''
+      const url = `${BASE}/export/excel${params}`
+      const r = await fetch(url)
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({ detail: r.statusText }))
+        throw new Error(e.detail || r.statusText)
+      }
+      const blob = await r.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = filterProject ? `taches-${filterProject}.xlsx` : 'taches.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(a.href)
+      toast('Export téléchargé')
+    } catch (err) {
+      toast('Export échoué : ' + err.message, 'err')
+    }
+  }
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+
+  async function loadAll() {
+    await Promise.all([loadEntries(), loadProjects(), loadTasks()])
+  }
+
+  document.getElementById('f-date').value = todayISO()
+  renderChrono()
+  loadAll()
+</script>
+</body>
+</html>
