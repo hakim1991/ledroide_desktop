@@ -78,5 +78,14 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"[WS] error: {exc}")
 
 
+# ── System ───────────────────────────────────────────────────────────────────
+
+@app.post("/system/reload")
+async def system_reload():
+    """Hot-reload: pick up new modules without restarting the process."""
+    result = await registry.hot_reload()
+    return {"ok": True, **result}
+
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=PORT, reload=False)

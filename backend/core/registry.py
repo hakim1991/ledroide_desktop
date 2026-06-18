@@ -30,18 +30,33 @@ class ModuleRegistry:
     # ── Startup ──────────────────────────────────────────────────────────────
 
     async def load_all(self):
+        """Initial scan — called once at startup."""
         MODULES_DIR.mkdir(exist_ok=True)
         AVAILABLE_DIR.mkdir(exist_ok=True)
+        await self._scan(overwrite=False)
+
+    async def hot_reload(self) -> dict:
+        """Re-scan modules/ and catalog without disturbing active modules."""
+        new_ids = await self._scan(overwrite=False)
+        print(f"[Registry] hot_reload: {len(new_ids)} new module(s) found")
+        return {"new_modules": new_ids, "total": len(self._modules)}
+
+    async def _scan(self, overwrite: bool) -> list[str]:
+        new_ids: list[str] = []
 
         for module_dir in sorted(MODULES_DIR.iterdir()):
             if not module_dir.is_dir():
                 continue
             manifest_path = module_dir / "manifest.json"
-            if manifest_path.exists():
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not manifest_path.exists():
+                continue
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            mod_id = manifest["id"]
+            if mod_id not in self._modules or overwrite:
                 manifest["status"] = "installed"
-                self._modules[manifest["id"]] = manifest
-                print(f"[Registry] loaded: {manifest['id']}")
+                self._modules[mod_id] = manifest
+                new_ids.append(mod_id)
+                print(f"[Registry] loaded: {mod_id}")
 
         catalog_path = AVAILABLE_DIR / "catalog.json"
         if catalog_path.exists():
@@ -50,6 +65,9 @@ class ModuleRegistry:
                 if mod["id"] not in self._modules:
                     mod["status"] = "available"
                     self._modules[mod["id"]] = mod
+                    new_ids.append(mod["id"])
+
+        return new_ids
 
     # ── Module lifecycle ─────────────────────────────────────────────────────
 

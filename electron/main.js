@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const { spawn } = require('child_process')
 const fs = require('fs')
@@ -89,6 +89,21 @@ function waitForBackend(retries = 20, delay = 300) {
     attempt()
   })
 }
+
+// ── IPC: restart backend from renderer ───────────────────────────────────────
+ipcMain.handle('restart-backend', async () => {
+  if (pythonProcess) {
+    pythonProcess.kill()
+    await new Promise((resolve) => {
+      pythonProcess.once('exit', resolve)
+      setTimeout(resolve, 4000) // force-continue after 4s if stuck
+    })
+    pythonProcess = null
+  }
+  startPythonBackend()
+  await waitForBackend(40, 300)
+  return { ok: true }
+})
 
 app.whenReady().then(async () => {
   startPythonBackend()

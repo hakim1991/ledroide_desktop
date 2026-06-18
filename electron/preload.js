@@ -1,4 +1,4 @@
-const { contextBridge } = require('electron')
+const { contextBridge, ipcRenderer } = require('electron')
 
 const BACKEND_PORT = process.env.LEDROIDE_BACKEND_PORT || 8765
 const WS_URL = `ws://127.0.0.1:${BACKEND_PORT}/ws`
@@ -87,6 +87,9 @@ contextBridge.exposeInMainWorld('ledroide', {
     const key = `${moduleId}:${event}`
     listeners.get(key)?.delete(callback)
   },
+
+  // Ask Electron main to kill + respawn the Python process
+  restartBackend: () => ipcRenderer.invoke('restart-backend'),
 })
 
 // Initiate connection on preload load

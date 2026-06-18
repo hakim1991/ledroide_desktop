@@ -27,6 +27,16 @@
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent);
+  transition: background .3s;
+}
+
+.mm-logo-dot.pulse {
+  animation: mm-pulse 1s ease-in-out infinite;
+}
+
+@keyframes mm-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .4; transform: scale(.8); }
 }
 
 .mm-logo-text {
@@ -36,10 +46,65 @@
   letter-spacing: -.01em;
 }
 
-.mm-refresh {
-  font-size: 1.1rem;
-  padding: .35rem .7rem;
+.mm-header-actions {
+  display: flex;
+  gap: .4rem;
+  align-items: center;
 }
+
+.mm-action-btn {
+  font-size: .8rem;
+  padding: .35rem .75rem;
+  gap: .35rem;
+}
+
+.mm-action-restart {
+  color: #f97316;
+  border-color: #431407;
+}
+.mm-action-restart:hover:not(:disabled) {
+  color: #fb923c;
+  border-color: #7c2d12;
+  background: rgba(249,115,22,.06);
+}
+
+.mm-action-btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+/* ── Operation banner ── */
+.mm-op-banner {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-size: .8125rem;
+  color: var(--text-mid);
+}
+
+.mm-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--bg-border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ── */
+.mm-toast {
+  padding: .5rem 1.75rem;
+  font-size: .8125rem;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.mm-toast.ok   { background: rgba(34,197,94,.1);  color: #4ade80; }
+.mm-toast.fail { background: rgba(239,68,68,.1);  color: #f87171; }
 
 /* ── Tabs ── */
 .mm-tabs {

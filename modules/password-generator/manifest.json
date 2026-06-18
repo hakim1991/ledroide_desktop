@@ -1,0 +1,31 @@
+{
+  "id": "password-generator",
+  "name": "Générateur de mots de passe",
+  "version": "1.0.0",
+  "description": "Génère des mots de passe sécurisés avec contrôle de la longueur, des types de caractères et indicateur de force.",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "default_length": {
+      "type": "integer",
+      "default": 16,
+      "description": "Longueur par défaut"
+    },
+    "history_size": {
+      "type": "integer",
+      "default": 10,
+      "description": "Nombre de mots de passe conservés en historique"
+    }
+  }
+}

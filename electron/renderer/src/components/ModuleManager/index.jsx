@@ -10,11 +10,19 @@ const TABS = [
   { id: 'available', label: 'Disponibles' },
 ]
 
+// op: null | 'reloading' | 'restarting'
+const OP_LABEL = {
+  reloading:  'Rechargement des modules...',
+  restarting: 'Redémarrage du backend Python...',
+}
+
 export default function ModuleManager({ onOpen }) {
-  const [tab, setTab] = useState('active')
+  const [tab, setTab]       = useState('active')
   const [modules, setModules] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError]   = useState(null)
+  const [op, setOp]         = useState(null)   // current operation in progress
+  const [toast, setToast]   = useState(null)   // { text, ok }
 
   const fetchModules = useCallback(() => {
     setLoading(true)
@@ -28,16 +36,48 @@ export default function ModuleManager({ onOpen }) {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => {
-    fetchModules()
-  }, [fetchModules])
+  useEffect(() => { fetchModules() }, [fetchModules])
 
+  function showToast(text, ok = true) {
+    setToast({ text, ok })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  async function hotReload() {
+    setOp('reloading')
+    try {
+      const r = await fetch(`${API}/system/reload`, { method: 'POST' })
+      const d = await r.json()
+      const n = d.new_modules?.length ?? 0
+      fetchModules()
+      showToast(n > 0 ? `${n} nouveau(x) module(s) détecté(s)` : 'Aucun nouveau module')
+    } catch {
+      showToast('Échec du rechargement', false)
+    } finally {
+      setOp(null)
+    }
+  }
+
+  async function restartBackend() {
+    if (!window.ledroide?.restartBackend) {
+      showToast('Redémarrage non disponible hors Electron', false)
+      return
+    }
+    setOp('restarting')
+    try {
+      await window.ledroide.restartBackend()
+      fetchModules()
+      showToast('Backend redémarré')
+    } catch (err) {
+      showToast(`Erreur : ${err.message}`, false)
+    } finally {
+      setOp(null)
+    }
+  }
+
+  const busy    = !!op
   const filtered = modules.filter((m) => m.status === tab)
-
-  const counts = modules.reduce((acc, m) => {
-    acc[m.status] = (acc[m.status] || 0) + 1
-    return acc
-  }, {})
+  const counts   = modules.reduce((acc, m) => ({ ...acc, [m.status]: (acc[m.status] || 0) + 1 }), {})
 
   async function handleActivate(mod) {
     await fetch(`${API}/modules/${mod.id}/activate`, { method: 'POST' })
@@ -60,13 +100,42 @@ export default function ModuleManager({ onOpen }) {
     <div className="mm-layout">
       <header className="mm-header">
         <div className="mm-logo">
-          <span className="mm-logo-dot" />
+          <span className={`mm-logo-dot ${busy ? 'pulse' : ''}`} />
           <span className="mm-logo-text">LedroideDesktop</span>
         </div>
-        <button className="btn btn-ghost mm-refresh" onClick={fetchModules} title="Actualiser">
-          ↺
-        </button>
+
+        {op && (
+          <div className="mm-op-banner">
+            <span className="mm-spinner" />
+            <span>{OP_LABEL[op]}</span>
+          </div>
+        )}
+
+        <div className="mm-header-actions">
+          <button
+            className="btn btn-ghost mm-action-btn"
+            onClick={hotReload}
+            disabled={busy}
+            title="Recharger les modules sans redémarrer le backend"
+          >
+            ↺ Recharger
+          </button>
+          <button
+            className="btn btn-ghost mm-action-btn mm-action-restart"
+            onClick={restartBackend}
+            disabled={busy}
+            title="Arrêter et relancer le process Python (prend en compte les changements de code)"
+          >
+            ⟳ Redémarrer
+          </button>
+        </div>
       </header>
+
+      {toast && (
+        <div className={`mm-toast ${toast.ok ? 'ok' : 'fail'}`}>
+          {toast.ok ? '✓' : '✕'} {toast.text}
+        </div>
+      )}
 
       <nav className="mm-tabs">
         {TABS.map(({ id, label }) => (
@@ -99,9 +168,7 @@ export default function ModuleManager({ onOpen }) {
           </div>
         )}
 
-        {!error && loading && (
-          <p className="mm-empty">Connexion au backend...</p>
-        )}
+        {!error && loading && <p className="mm-empty">Connexion au backend...</p>}
 
         {!error && !loading && filtered.length === 0 && (
           <p className="mm-empty">

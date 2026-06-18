@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Générateur de mots de passe</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f0f12;
+      --surface:  #18181b;
+      --border:   #27272a;
+      --text:     #f4f4f5;
+      --muted:    #71717a;
+      --accent:   #6366f1;
+      --radius:   10px;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 560px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -.015em;
+    }
+
+    h1 span { color: var(--accent); }
+
+    /* ── Password display ── */
+    .pwd-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      min-height: 64px;
+    }
+
+    .pwd-text {
+      flex: 1;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 1.05rem;
+      word-break: break-all;
+      color: var(--text);
+      letter-spacing: .04em;
+    }
+
+    .pwd-text.empty { color: var(--muted); font-style: italic; font-family: inherit; font-size: .875rem; }
+
+    .btn-icon {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      transition: color .12s, border-color .12s;
+    }
+    .btn-icon:hover { color: var(--text); border-color: #52525b; }
+    .btn-icon.copied { color: #22c55e; border-color: #22c55e; }
+
+    /* ── Strength bar ── */
+    .strength {
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+    }
+
+    .strength-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .8rem;
+    }
+
+    .strength-label { font-weight: 600; }
+    .strength-entropy { color: var(--muted); }
+
+    .strength-track {
+      height: 5px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .strength-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .35s ease, background .35s ease;
+      width: 0%;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.125rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card-title {
+      font-size: .75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+    }
+
+    /* ── Length slider ── */
+    .length-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .length-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      min-width: 2.5rem;
+      text-align: right;
+      color: var(--accent);
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    /* ── Toggles ── */
+    .toggles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .5rem;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .55rem .75rem;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      cursor: pointer;
+      transition: border-color .12s, background .12s;
+      user-select: none;
+    }
+
+    .toggle.on {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, .08);
+    }
+
+    .toggle input { display: none; }
+
+    .toggle-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      flex-shrink: 0;
+      transition: background .12s, border-color .12s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .6rem;
+    }
+
+    .toggle.on .toggle-dot {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .toggle-label { font-size: .8125rem; }
+    .toggle-sample { margin-left: auto; font-size: .7rem; color: var(--muted); font-family: monospace; }
+
+    /* ── Generate button ── */
+    .btn-generate {
+      width: 100%;
+      padding: .75rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: .9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .12s, transform .08s;
+      letter-spacing: -.01em;
+    }
+
+    .btn-generate:hover  { opacity: .9; }
+    .btn-generate:active { transform: scale(.98); }
+
+    /* ── History ── */
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn-clear {
+      font-size: .75rem;
+      padding: .25rem .6rem;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .btn-clear:hover { color: var(--text); }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .5rem .75rem;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--bg);
+      cursor: pointer;
+      transition: border-color .12s;
+    }
+
+    .history-item:hover { border-color: #3f3f46; }
+
+    .history-pwd {
+      flex: 1;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: .8rem;
+      color: #a1a1aa;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-badge {
+      font-size: .65rem;
+      padding: .15rem .45rem;
+      border-radius: 4px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .history-copy { font-size: .75rem; color: var(--muted); flex-shrink: 0; }
+
+    .empty-history { color: var(--muted); font-size: .8rem; text-align: center; padding: .75rem 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Mots de passe <span>sécurisés</span></h1>
+
+  <!-- Password output -->
+  <div class="pwd-box">
+    <span class="pwd-text empty" id="pwdText">Cliquez sur Générer</span>
+    <button class="btn-icon" id="copyBtn" title="Copier" onclick="copyPassword()">⎘</button>
+  </div>
+
+  <!-- Strength indicator -->
+  <div class="strength" id="strengthBlock" style="display:none">
+    <div class="strength-row">
+      <span class="strength-label" id="strengthLabel">—</span>
+      <span class="strength-entropy" id="entropyLabel"></span>
+    </div>
+    <div class="strength-track">
+      <div class="strength-fill" id="strengthFill"></div>
+    </div>
+  </div>
+
+  <!-- Options -->
+  <div class="card">
+    <span class="card-title">Options</span>
+
+    <div>
+      <div class="length-row">
+        <span style="font-size:.8125rem;color:var(--muted)">Longueur</span>
+        <input type="range" id="lengthSlider" min="4" max="128" value="16"
+          oninput="document.getElementById('lengthVal').textContent=this.value" />
+        <span class="length-value" id="lengthVal">16</span>
+      </div>
+    </div>
+
+    <div class="toggles">
+      <label class="toggle on" id="tUpper">
+        <input type="checkbox" checked onchange="toggleClass(this,'tUpper')" />
+        <span class="toggle-dot">✓</span>
+        <span class="toggle-label">Majuscules</span>
+        <span class="toggle-sample">A–Z</span>
+      </label>
+      <label class="toggle on" id="tLower">
+        <input type="checkbox" checked onchange="toggleClass(this,'tLower')" />
+        <span class="toggle-dot">✓</span>
+        <span class="toggle-label">Minuscules</span>
+        <span class="toggle-sample">a–z</span>
+      </label>
+      <label class="toggle on" id="tNumbers">
+        <input type="checkbox" checked onchange="toggleClass(this,'tNumbers')" />
+        <span class="toggle-dot">✓</span>
+        <span class="toggle-label">Chiffres</span>
+        <span class="toggle-sample">0–9</span>
+      </label>
+      <label class="toggle" id="tSymbols">
+        <input type="checkbox" onchange="toggleClass(this,'tSymbols')" />
+        <span class="toggle-dot"></span>
+        <span class="toggle-label">Symboles</span>
+        <span class="toggle-sample">!@#…</span>
+      </label>
+    </div>
+  </div>
+
+  <button class="btn-generate" onclick="generate()">Générer un mot de passe</button>
+
+  <!-- History -->
+  <div class="card">
+    <div class="history-header">
+      <span class="card-title">Historique</span>
+      <button class="btn-clear" onclick="clearHistory()">Effacer</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <p class="empty-history">Aucun mot de passe généré.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const PORT  = window.parent?.ledroide?.backendPort ?? 8765
+  const BASE  = `http://127.0.0.1:${PORT}/modules/password-generator/api`
+
+  let currentPassword = null
+
+  function toggleClass(checkbox, id) {
+    const label = document.getElementById(id)
+    const dot   = label.querySelector('.toggle-dot')
+    if (checkbox.checked) {
+      label.classList.add('on')
+      dot.textContent = '✓'
+    } else {
+      label.classList.remove('on')
+      dot.textContent = ''
+    }
+  }
+
+  async function generate() {
+    const length    = document.getElementById('lengthSlider').value
+    const uppercase = document.querySelector('#tUpper input').checked
+    const lowercase = document.querySelector('#tLower input').checked
+    const numbers   = document.querySelector('#tNumbers input').checked
+    const symbols   = document.querySelector('#tSymbols input').checked
+
+    const params = new URLSearchParams({ length, uppercase, lowercase, numbers, symbols })
+    const r = await fetch(`${BASE}/generate?${params}`)
+    const d = await r.json()
+
+    if (d.error) { alert(d.error); return }
+
+    currentPassword = d.password
+
+    // Display password
+    const el = document.getElementById('pwdText')
+    el.textContent = d.password
+    el.classList.remove('empty')
+
+    // Reset copy button
+    const copyBtn = document.getElementById('copyBtn')
+    copyBtn.classList.remove('copied')
+    copyBtn.textContent = '⎘'
+
+    // Strength
+    const block = document.getElementById('strengthBlock')
+    block.style.display = 'flex'
+    document.getElementById('strengthLabel').textContent = d.strength.label
+    document.getElementById('strengthLabel').style.color  = d.strength.color
+    document.getElementById('entropyLabel').textContent   = `${d.entropy} bits d'entropie`
+    const fill = document.getElementById('strengthFill')
+    fill.style.background = d.strength.color
+    fill.style.width = `${(d.strength.level / 5) * 100}%`
+
+    refreshHistory()
+  }
+
+  async function copyPassword() {
+    if (!currentPassword) return
+    await navigator.clipboard.writeText(currentPassword)
+    const btn = document.getElementById('copyBtn')
+    btn.textContent = '✓'
+    btn.classList.add('copied')
+    setTimeout(() => { btn.textContent = '⎘'; btn.classList.remove('copied') }, 1500)
+  }
+
+  async function refreshHistory() {
+    const r    = await fetch(`${BASE}/history`)
+    const list = await r.json()
+    const el   = document.getElementById('historyList')
+
+    if (!list.length) {
+      el.innerHTML = '<p class="empty-history">Aucun mot de passe généré.</p>'
+      return
+    }
+
+    el.innerHTML = list.map((item) => `
+      <div class="history-item" onclick="copyFromHistory('${item.password.replace(/'/g, "\\'")}', this)">
+        <span class="history-pwd">${item.password}</span>
+        <span class="history-badge" style="background:${item.strength.color}22;color:${item.strength.color}">
+          ${item.strength.label}
+        </span>
+        <span class="history-copy" title="Cliquer pour copier">⎘</span>
+      </div>
+    `).join('')
+  }
+
+  async function copyFromHistory(pwd, el) {
+    await navigator.clipboard.writeText(pwd)
+    const icon = el.querySelector('.history-copy')
+    icon.textContent = '✓'
+    setTimeout(() => { icon.textContent = '⎘' }, 1200)
+  }
+
+  async function clearHistory() {
+    await fetch(`${BASE}/history`, { method: 'DELETE' })
+    refreshHistory()
+  }
+
+  // Listen for push events (multi-window sync)
+  if (window.parent?.ledroide) {
+    window.parent.ledroide.on('password-generator', 'generated', () => refreshHistory())
+  }
+
+  // Generate one on load
+  generate()
+</script>
+</body>
+</html>
