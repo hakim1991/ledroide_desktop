@@ -9,21 +9,41 @@ const RENDERER_DIST = path.join(__dirname, '../dist/renderer/index.html')
 let mainWindow
 let pythonProcess
 
+function resolvePython() {
+  const root = path.join(__dirname, '..')
+  // Prefer venv Python so deps are guaranteed available
+  const candidates = [
+    path.join(root, 'backend', '.venv', 'Scripts', 'python.exe'), // Windows venv
+    path.join(root, 'backend', '.venv', 'bin', 'python'),          // Unix venv
+    path.join(root, '.venv', 'Scripts', 'python.exe'),             // root venv Windows
+    path.join(root, '.venv', 'bin', 'python'),                     // root venv Unix
+    'python',                                                        // system PATH
+    'python3',
+  ]
+  for (const p of candidates) {
+    if (p === 'python' || p === 'python3') return p
+    if (fs.existsSync(p)) return p
+  }
+  return 'python'
+}
+
 function startPythonBackend() {
   const backendPath = path.join(__dirname, '../backend/main.py')
   const cwd = path.join(__dirname, '..')
+  const pythonExe = resolvePython()
 
-  pythonProcess = spawn('python', [backendPath], {
+  console.log(`[Python] using: ${pythonExe}`)
+  console.log(`[Python] script: ${backendPath}`)
+
+  pythonProcess = spawn(pythonExe, [backendPath], {
     cwd,
     env: { ...process.env, LEDROIDE_BACKEND_PORT: String(BACKEND_PORT) },
   })
 
   pythonProcess.stdout.on('data', (d) => process.stdout.write(`[Python] ${d}`))
-  pythonProcess.stderr.on('data', (d) => process.stderr.write(`[Python] ${d}`))
+  pythonProcess.stderr.on('data', (d) => process.stderr.write(`[Python ERR] ${d}`))
   pythonProcess.on('exit', (code) => {
-    if (code !== 0 && code !== null) {
-      console.error(`[Python] process exited with code ${code}`)
-    }
+    console.error(`[Python] process exited with code ${code}`)
   })
 }
 

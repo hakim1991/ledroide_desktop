@@ -19,9 +19,12 @@ export default function ModuleManager({ onOpen }) {
   const fetchModules = useCallback(() => {
     setLoading(true)
     fetch(`${API}/modules`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then((data) => { setModules(data); setError(null) })
-      .catch(() => setError('Impossible de joindre le backend Python.'))
+      .catch((err) => setError(`Backend injoignable sur le port ${BACKEND_PORT} — ${err.message}`))
       .finally(() => setLoading(false))
   }, [])
 
@@ -81,8 +84,18 @@ export default function ModuleManager({ onOpen }) {
       <main className="mm-content">
         {error && (
           <div className="mm-error">
-            <span>{error}</span>
-            <button className="btn btn-ghost" onClick={fetchModules}>Réessayer</button>
+            <div>
+              <strong>Backend Python injoignable</strong>
+              <br />
+              <small>{error}</small>
+              <br />
+              <small style={{ color: '#6b7280', marginTop: '.4rem', display: 'block' }}>
+                Vérifiez que le backend tourne : <code>python backend/main.py</code>
+              </small>
+            </div>
+            <button className="btn btn-ghost" onClick={fetchModules} style={{ flexShrink: 0 }}>
+              Réessayer
+            </button>
           </div>
         )}
 

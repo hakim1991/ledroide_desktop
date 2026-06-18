@@ -2,7 +2,7 @@
   "id": "demo",
   "name": "Module Demo",
   "version": "0.1.0",
-  "description": "Module de demonstration — compteur interactif avec appels backend.",
+  "description": "Module de demonstration : compteur interactif avec appels backend.",
   "author": "LedroideDesktop",
   "entry": {
     "backend": "backend/main.py",
