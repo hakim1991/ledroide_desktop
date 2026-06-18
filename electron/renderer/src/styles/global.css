@@ -1,0 +1,56 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-base:    #0f0f12;
+  --bg-surface: #18181b;
+  --bg-border:  #27272a;
+  --text-hi:    #f4f4f5;
+  --text-mid:   #a1a1aa;
+  --text-lo:    #52525b;
+  --accent:     #6366f1;
+  --success:    #22c55e;
+  --radius:     8px;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--bg-base);
+  color: var(--text-hi);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root, .app {
+  height: 100vh;
+}
+
+button.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .45rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: .8125rem;
+  font-weight: 500;
+  line-height: 1;
+  transition: opacity .12s, background .12s;
+  white-space: nowrap;
+}
+
+button.btn:hover { opacity: .85; }
+button.btn:active { opacity: .7; }
+
+button.btn-primary   { background: var(--accent);   color: #fff; }
+button.btn-secondary { background: var(--success);  color: #fff; }
+button.btn-ghost     { background: transparent; color: var(--text-mid); border-color: var(--bg-border); }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-border); border-radius: 3px; }

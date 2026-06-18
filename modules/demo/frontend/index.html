@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      text-align: center;
+      padding: 2.5rem 3rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 14px;
+      min-width: 280px;
+    }
+
+    .label {
+      font-size: .8125rem;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: .5rem;
+    }
+
+    .count {
+      font-size: 6rem;
+      font-weight: 700;
+      line-height: 1;
+      color: #f4f4f5;
+      margin-bottom: 1.75rem;
+      transition: transform .1s;
+    }
+
+    .count.bump { transform: scale(1.08); }
+
+    .actions { display: flex; gap: .6rem; justify-content: center; }
+
+    button {
+      padding: .55rem 1.25rem;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: .9375rem;
+      font-weight: 600;
+      transition: opacity .12s, background .12s;
+    }
+
+    button:hover { opacity: .8; }
+
+    .btn-dec { background: #27272a; color: #a1a1aa; }
+    .btn-inc { background: #6366f1; color: #fff; border-color: #6366f1; }
+    .btn-rst { background: transparent; color: #52525b; font-size: .75rem; padding: .4rem .75rem; margin-top: .75rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <p class="label">Compteur</p>
+    <div class="count" id="count">—</div>
+    <div class="actions">
+      <button class="btn-dec" onclick="decrement()">−</button>
+      <button class="btn-inc" onclick="increment()">+</button>
+    </div>
+    <br />
+    <button class="btn-rst" onclick="reset()">Remettre à zéro</button>
+  </div>
+
+  <script>
+    // Resolve backend port: prefer parent ledroide bridge, fallback to 8765
+    const PORT = window.parent?.ledroide?.backendPort ?? 8765
+    const BASE = `http://127.0.0.1:${PORT}/modules/demo/api`
+
+    async function refresh() {
+      try {
+        const r = await fetch(`${BASE}/count`)
+        const d = await r.json()
+        const el = document.getElementById('count')
+        el.textContent = d.count
+        el.classList.add('bump')
+        setTimeout(() => el.classList.remove('bump'), 120)
+      } catch {
+        document.getElementById('count').textContent = '?'
+      }
+    }
+
+    async function increment() {
+      await fetch(`${BASE}/increment`, { method: 'POST' })
+      refresh()
+    }
+
+    async function decrement() {
+      await fetch(`${BASE}/decrement`, { method: 'POST' })
+      refresh()
+    }
+
+    async function reset() {
+      // Route via the WebSocket bridge (demonstrates IPC)
+      if (window.parent?.ledroide) {
+        await window.parent.ledroide.call('demo', 'reset', {})
+      } else {
+        await fetch(`${BASE}/decrement`, { method: 'POST' }) // fallback
+      }
+      refresh()
+    }
+
+    // Listen for server-side push events
+    if (window.parent?.ledroide) {
+      window.parent.ledroide.on('demo', 'count_updated', (payload) => {
+        document.getElementById('count').textContent = payload.count
+      })
+    }
+
+    refresh()
+  </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+const { app, BrowserWindow, ipcMain } = require('electron')
+const path = require('path')
+const { spawn } = require('child_process')
+const fs = require('fs')
+
+const BACKEND_PORT = process.env.LEDROIDE_BACKEND_PORT || 8765
+const RENDERER_DIST = path.join(__dirname, '../dist/renderer/index.html')
+
+let mainWindow
+let pythonProcess
+
+function startPythonBackend() {
+  const backendPath = path.join(__dirname, '../backend/main.py')
+  const cwd = path.join(__dirname, '..')
+
+  pythonProcess = spawn('python', [backendPath], {
+    cwd,
+    env: { ...process.env, LEDROIDE_BACKEND_PORT: String(BACKEND_PORT) },
+  })
+
+  pythonProcess.stdout.on('data', (d) => process.stdout.write(`[Python] ${d}`))
+  pythonProcess.stderr.on('data', (d) => process.stderr.write(`[Python] ${d}`))
+  pythonProcess.on('exit', (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(`[Python] process exited with code ${code}`)
+    }
+  })
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    backgroundColor: '#0f0f12',
+    show: false,
+  })
+
+  mainWindow.once('ready-to-show', () => mainWindow.show())
+
+  if (!app.isPackaged && !fs.existsSync(RENDERER_DIST)) {
+    mainWindow.loadURL('http://localhost:5173')
+  } else {
+    mainWindow.loadFile(RENDERER_DIST)
+  }
+}
+
+// Wait for FastAPI to be ready before opening the window
+function waitForBackend(retries = 20, delay = 300) {
+  const http = require('http')
+  return new Promise((resolve) => {
+    const attempt = () => {
+      const req = http.get(`http://127.0.0.1:${BACKEND_PORT}/modules`, (res) => {
+        if (res.statusCode === 200) return resolve()
+        retry()
+      })
+      req.on('error', retry)
+      function retry() {
+        if (--retries <= 0) return resolve() // open anyway after timeout
+        setTimeout(attempt, delay)
+      }
+    }
+    attempt()
+  })
+}
+
+app.whenReady().then(async () => {
+  startPythonBackend()
+  await waitForBackend()
+  createWindow()
+})
+
+app.on('window-all-closed', () => {
+  if (pythonProcess) pythonProcess.kill()
+  if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+})

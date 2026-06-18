@@ -1,0 +1,11 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+backend/sdk/*.egg-info/
+backend/sdk/ledroide_sdk.egg-info/
+backend/configs.json
+.env
+*.log
