@@ -4,9 +4,10 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 
-MODULES_DIR  = Path(__file__).parent.parent.parent / "modules"
+MODULES_DIR   = Path(__file__).parent.parent.parent / "modules"
 AVAILABLE_DIR = Path(__file__).parent.parent.parent / "modules-available"
 CONFIGS_FILE  = Path(__file__).parent.parent / "configs.json"
+STATE_FILE    = Path(__file__).parent.parent / "state.json"
 
 
 class ModuleRegistry:
@@ -15,6 +16,7 @@ class ModuleRegistry:
         self._modules: dict[str, dict] = {}
         self._connections: set[WebSocket] = set()
         self._configs: dict[str, dict] = self._load_configs()
+        self._state: dict = self._load_state()
         self._module_instances: dict[str, object] = {}
 
     # ── Persistence ──────────────────────────────────────────────────────────
@@ -27,13 +29,30 @@ class ModuleRegistry:
     def _save_configs(self):
         CONFIGS_FILE.write_text(json.dumps(self._configs, indent=2), encoding="utf-8")
 
+    def _load_state(self) -> dict:
+        if STATE_FILE.exists():
+            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        return {"active_modules": []}
+
+    def _save_state(self):
+        STATE_FILE.write_text(json.dumps(self._state, indent=2), encoding="utf-8")
+
     # ── Startup ──────────────────────────────────────────────────────────────
 
     async def load_all(self):
-        """Initial scan — called once at startup."""
+        """Initial scan then auto-reactivate modules that were active before last shutdown."""
         MODULES_DIR.mkdir(exist_ok=True)
         AVAILABLE_DIR.mkdir(exist_ok=True)
         await self._scan(overwrite=False)
+
+        for mod_id in list(self._state.get("active_modules", [])):
+            if mod_id in self._modules:
+                print(f"[Registry] auto-reactivating: {mod_id}")
+                await self.activate(mod_id)
+            else:
+                # Module was removed from disk — clean up saved state
+                self._state["active_modules"].remove(mod_id)
+        self._save_state()
 
     async def hot_reload(self) -> dict:
         """Re-scan modules/ and catalog without disturbing active modules."""
@@ -100,6 +119,10 @@ class ModuleRegistry:
         await self._load_backend(module_id)
 
         mod["status"] = "active"
+        active = self._state.setdefault("active_modules", [])
+        if module_id not in active:
+            active.append(module_id)
+        self._save_state()
         print(f"[Registry] activated: {module_id}")
         return {"status": "active", "id": module_id}
 
@@ -109,6 +132,25 @@ class ModuleRegistry:
             return {"error": "MODULE_NOT_FOUND"}
         mod["status"] = "installed"
         self._module_instances.pop(module_id, None)
+
+        # Remove API routes registered by this module
+        api_prefix = f"/modules/{module_id}/api"
+        self.app.router.routes = [
+            r for r in self.app.router.routes
+            if not getattr(r, "path", "").startswith(api_prefix)
+        ]
+
+        # Remove frontend StaticFiles mount
+        frontend_name = f"frontend_{module_id}"
+        self.app.router.routes = [
+            r for r in self.app.router.routes
+            if getattr(r, "name", None) != frontend_name
+        ]
+
+        active = self._state.get("active_modules", [])
+        if module_id in active:
+            active.remove(module_id)
+        self._save_state()
         print(f"[Registry] deactivated: {module_id}")
         return {"status": "installed", "id": module_id}
 

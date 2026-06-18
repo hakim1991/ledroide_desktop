@@ -1,6 +1,6 @@
-from ledroide_sdk import Module, router, events, config
+from fastapi import APIRouter
 
-module = Module()
+router = APIRouter()
 
 _counter = 0
 
@@ -13,23 +13,19 @@ async def get_count():
 @router.post("/increment")
 async def increment():
     global _counter
-    step = config.get("step", 1)
-    _counter += step
-    await events.emit("count_updated", {"count": _counter})
+    _counter += 1
     return {"count": _counter}
 
 
 @router.post("/decrement")
 async def decrement():
     global _counter
-    step = config.get("step", 1)
-    _counter -= step
-    await events.emit("count_updated", {"count": _counter})
+    _counter -= 1
     return {"count": _counter}
 
 
-@module.on("reset")
-async def on_reset(payload):
+@router.post("/reset")
+async def reset():
     global _counter
     _counter = 0
-    await events.emit("count_updated", {"count": _counter})
+    return {"count": _counter}

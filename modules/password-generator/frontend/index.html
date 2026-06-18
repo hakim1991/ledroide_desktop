@@ -293,6 +293,87 @@
     .history-copy { font-size: .75rem; color: var(--muted); flex-shrink: 0; }
 
     .empty-history { color: var(--muted); font-size: .8rem; text-align: center; padding: .75rem 0; }
+
+    /* ── Logs ── */
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .log-meta {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .log-count {
+      font-size: .7rem;
+      padding: .1rem .45rem;
+      border-radius: 10px;
+      background: var(--border);
+      color: var(--muted);
+      font-weight: 600;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .btn-toggle {
+      font-size: .8rem;
+      padding: .2rem .5rem;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+    }
+    .btn-toggle:hover { color: var(--text); }
+
+    .log-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    .log-list.collapsed { display: none; }
+
+    .log-entry {
+      display: grid;
+      grid-template-columns: 58px 20px 1fr;
+      align-items: baseline;
+      gap: .5rem;
+      padding: .3rem .25rem;
+      border-radius: 5px;
+      font-size: .75rem;
+      transition: background .1s;
+    }
+
+    .log-entry:hover { background: rgba(255,255,255,.03); }
+
+    .log-ts {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      color: var(--muted);
+      font-size: .7rem;
+      white-space: nowrap;
+    }
+
+    .log-icon { text-align: center; font-size: .8rem; }
+
+    .log-body { color: #a1a1aa; line-height: 1.4; }
+
+    .log-action { font-weight: 600; margin-right: .35rem; }
+
+    .log-detail { color: var(--muted); font-size: .7rem; }
+
+    .log-entry.level-info    .log-icon { color: #22c55e; }
+    .log-entry.level-warning .log-icon { color: #eab308; }
+    .log-entry.level-error   .log-icon { color: #ef4444; }
+    .log-entry.level-info    .log-action { color: #86efac; }
+    .log-entry.level-warning .log-action { color: #fde047; }
+    .log-entry.level-error   .log-action { color: #fca5a5; }
   </style>
 </head>
 <body>
@@ -371,11 +452,27 @@
     </div>
   </div>
 
+  <!-- Logs -->
+  <div class="card">
+    <div class="log-header">
+      <span class="card-title">Logs</span>
+      <div class="log-meta">
+        <span class="log-count" id="logCount">0</span>
+        <button class="btn-clear" onclick="clearLogs()">Effacer</button>
+        <button class="btn-toggle" id="logToggle" onclick="toggleLogs()">▾</button>
+      </div>
+    </div>
+    <div class="log-list" id="logList">
+      <p class="empty-history">Aucune activité.</p>
+    </div>
+  </div>
+
 </div>
 
 <script>
-  const PORT  = window.parent?.ledroide?.backendPort ?? 8765
-  const BASE  = `http://127.0.0.1:${PORT}/modules/password-generator/api`
+  // L'iframe est servie par le backend — son port EST le bon port
+  const PORT = parseInt(window.location.port) || 8765
+  const BASE = `http://127.0.0.1:${PORT}/modules/password-generator/api`
 
   let currentPassword = null
 
@@ -391,6 +488,13 @@
     }
   }
 
+  function showError(msg) {
+    const el = document.getElementById('pwdText')
+    el.textContent = msg
+    el.classList.add('empty')
+    document.getElementById('strengthBlock').style.display = 'none'
+  }
+
   async function generate() {
     const length    = document.getElementById('lengthSlider').value
     const uppercase = document.querySelector('#tUpper input').checked
@@ -399,24 +503,29 @@
     const symbols   = document.querySelector('#tSymbols input').checked
 
     const params = new URLSearchParams({ length, uppercase, lowercase, numbers, symbols })
-    const r = await fetch(`${BASE}/generate?${params}`)
-    const d = await r.json()
 
-    if (d.error) { alert(d.error); return }
+    let d
+    try {
+      const r = await fetch(`${BASE}/generate?${params}`)
+      if (!r.ok) { showError(`Erreur API : HTTP ${r.status} — relancez le backend`); return }
+      d = await r.json()
+    } catch {
+      showError('API inaccessible — relancez le backend')
+      return
+    }
+
+    if (d.error) { showError(d.error); return }
 
     currentPassword = d.password
 
-    // Display password
     const el = document.getElementById('pwdText')
     el.textContent = d.password
     el.classList.remove('empty')
 
-    // Reset copy button
     const copyBtn = document.getElementById('copyBtn')
     copyBtn.classList.remove('copied')
     copyBtn.textContent = '⎘'
 
-    // Strength
     const block = document.getElementById('strengthBlock')
     block.style.display = 'flex'
     document.getElementById('strengthLabel').textContent = d.strength.label
@@ -432,6 +541,7 @@
   async function copyPassword() {
     if (!currentPassword) return
     await navigator.clipboard.writeText(currentPassword)
+    fetch(`${BASE}/logs/copy`, { method: 'POST' }).then(() => refreshLogs())
     const btn = document.getElementById('copyBtn')
     btn.textContent = '✓'
     btn.classList.add('copied')
@@ -461,6 +571,7 @@
 
   async function copyFromHistory(pwd, el) {
     await navigator.clipboard.writeText(pwd)
+    fetch(`${BASE}/logs/copy`, { method: 'POST' }).then(() => refreshLogs())
     const icon = el.querySelector('.history-copy')
     icon.textContent = '✓'
     setTimeout(() => { icon.textContent = '⎘' }, 1200)
@@ -469,15 +580,73 @@
   async function clearHistory() {
     await fetch(`${BASE}/history`, { method: 'DELETE' })
     refreshHistory()
+    refreshLogs()
+  }
+
+  // ── Logs ──────────────────────────────────────────────────────────────────
+
+  const LEVEL_COLORS = {
+    info:    '#22c55e',
+    warning: '#eab308',
+    error:   '#ef4444',
+  }
+
+  function formatDetail(details) {
+    if (!details || !Object.keys(details).length) return ''
+    return Object.entries(details)
+      .map(([k, v]) => `${k}: <strong>${v}</strong>`)
+      .join(' · ')
+  }
+
+  function formatTime(iso) {
+    return iso.slice(11, 19) // HH:MM:SS from ISO string
+  }
+
+  async function refreshLogs() {
+    const r    = await fetch(`${BASE}/logs?limit=50`)
+    const list = await r.json()
+    const el   = document.getElementById('logList')
+    const cnt  = document.getElementById('logCount')
+
+    cnt.textContent = list.length
+
+    if (!list.length) {
+      el.innerHTML = '<p class="empty-history">Aucune activité.</p>'
+      return
+    }
+
+    el.innerHTML = list.map((entry) => `
+      <div class="log-entry level-${entry.level}">
+        <span class="log-ts">${formatTime(entry.ts)}</span>
+        <span class="log-icon">${entry.icon}</span>
+        <span class="log-body">
+          <span class="log-action">${entry.action}</span>
+          <span class="log-detail">${formatDetail(entry.details)}</span>
+        </span>
+      </div>
+    `).join('')
+  }
+
+  async function clearLogs() {
+    await fetch(`${BASE}/logs`, { method: 'DELETE' })
+    refreshLogs()
+  }
+
+  let _logsOpen = true
+  function toggleLogs() {
+    _logsOpen = !_logsOpen
+    document.getElementById('logList').classList.toggle('collapsed', !_logsOpen)
+    document.getElementById('logToggle').textContent = _logsOpen ? '▾' : '▸'
   }
 
   // Listen for push events (multi-window sync)
   if (window.parent?.ledroide) {
-    window.parent.ledroide.on('password-generator', 'generated', () => refreshHistory())
+    window.parent.ledroide.on('password-generator', 'generated', () => { refreshHistory(); refreshLogs() })
   }
 
-  // Generate one on load
+  // Init
   generate()
+  refreshLogs()
 </script>
 </body>
 </html>

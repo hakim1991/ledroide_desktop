@@ -76,8 +76,7 @@
   </div>
 
   <script>
-    // Resolve backend port: prefer parent ledroide bridge, fallback to 8765
-    const PORT = window.parent?.ledroide?.backendPort ?? 8765
+    const PORT = parseInt(window.location.port) || 8765
     const BASE = `http://127.0.0.1:${PORT}/modules/demo/api`
 
     async function refresh() {
@@ -93,32 +92,22 @@
       }
     }
 
-    async function increment() {
-      await fetch(`${BASE}/increment`, { method: 'POST' })
-      refresh()
-    }
-
-    async function decrement() {
-      await fetch(`${BASE}/decrement`, { method: 'POST' })
-      refresh()
-    }
-
-    async function reset() {
-      // Route via the WebSocket bridge (demonstrates IPC)
-      if (window.parent?.ledroide) {
-        await window.parent.ledroide.call('demo', 'reset', {})
-      } else {
-        await fetch(`${BASE}/decrement`, { method: 'POST' }) // fallback
+    async function post(path) {
+      try {
+        const r = await fetch(`${BASE}${path}`, { method: 'POST' })
+        const d = await r.json()
+        const el = document.getElementById('count')
+        el.textContent = d.count
+        el.classList.add('bump')
+        setTimeout(() => el.classList.remove('bump'), 120)
+      } catch {
+        document.getElementById('count').textContent = '?'
       }
-      refresh()
     }
 
-    // Listen for server-side push events
-    if (window.parent?.ledroide) {
-      window.parent.ledroide.on('demo', 'count_updated', (payload) => {
-        document.getElementById('count').textContent = payload.count
-      })
-    }
+    const increment = () => post('/increment')
+    const decrement = () => post('/decrement')
+    const reset     = () => post('/reset')
 
     refresh()
   </script>
