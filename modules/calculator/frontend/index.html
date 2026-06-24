@@ -264,7 +264,7 @@
         <button class="btn-fn" onclick="pressConst('π')">π</button>
         <button class="btn-fn" onclick="pressConst('e')">e</button>
         <!-- Row 2: power / log -->
-        <button class="btn-fn" onclick="press('sq(')">x²</button>
+        <button class="btn-fn" onclick="pressFunc('sq(')">x²</button>
         <button class="btn-fn sci-btn"
           data-fn="√(" data-label="√"
           data-fn2="∛(" data-label2="∛">√</button>
@@ -277,7 +277,7 @@
         <button class="btn-fn" onclick="press('^')">xⁿ</button>
         <!-- Row 3: misc -->
         <button class="btn-fn" onclick="pressFactorial()">n!</button>
-        <button class="btn-fn" onclick="press('abs(')">|x|</button>
+        <button class="btn-fn" onclick="pressFunc('abs(')">|x|</button>
         <button class="btn-op" onclick="press('(')"> ( </button>
         <button class="btn-op" onclick="press(')')"> ) </button>
         <button class="btn-fn" onclick="pressAns()">Ans</button>
@@ -397,7 +397,7 @@
   // assign click handlers for sci-btn (2nd-aware)
   document.querySelectorAll('.sci-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      press(is2nd ? btn.dataset.fn2 : btn.dataset.fn)
+      pressFunc(is2nd ? btn.dataset.fn2 : btn.dataset.fn)
     })
   })
 
@@ -423,11 +423,38 @@
         expr = char
       } else if (char === '0') {
         // stay at '0'
+      } else if (char === '(') {
+        expr = char  // replace bare 0 — parenthèse ouvre une nouvelle sous-expression
       } else {
         expr += char
       }
     } else {
-      expr += char
+      // Auto-multiply before '(' si le dernier token est un nombre/constante/fermeture
+      if (char === '(' && /[0-9πe)]$/.test(expr)) {
+        expr += '×('
+      } else {
+        expr += char
+      }
+    }
+    updateDisplay()
+  }
+
+  // Gestion des tokens de fonctions : sin(, ln(, √(, sq(, abs(, …
+  // Évite le bug "0ln(" et insère automatiquement × avant la fonction si nécessaire.
+  function pressFunc(fn) {
+    if (justEvaluated) {
+      justEvaluated = false
+      expr = fn
+      updateDisplay()
+      return
+    }
+    if (expr === '0') {
+      expr = fn
+    } else if (/[0-9πe)]$/.test(expr)) {
+      // auto-multiply : 5 → 5×ln(
+      expr += '×' + fn
+    } else {
+      expr += fn
     }
     updateDisplay()
   }
@@ -521,6 +548,9 @@
 
     let s = e
       .replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-')
+      // e^( must be handled before ^→** : sinon 'e' se retrouve suivi de '*'
+      // et le lookahead de la substitution Euler ne le détecte plus
+      .replace(/e\^/g, `(${Math.E})**`)
       .replace(/\^/g, '**')
       .replace(/π/g, `(${Math.PI})`)
       // Standalone 'e' (Euler) — not preceded by a digit and not followed by digit/^ chars
@@ -533,7 +563,8 @@
       let r = 1; for (let i = 2; i <= k; i++) r *= i; return r
     })
 
-    // Trig & scientific functions → IIFEs to handle degree mode safely
+    // Trig & scientific functions — log10 avant ln pour éviter la cascade :
+    // ln( → Math.log( puis \blog\( re-matcherait 'log(' dans 'Math.log(' → Math.Math.log10(
     s = s
       .replace(/\bsin\(/g,  `((_v)=>Math.sin(_v*${D}))(`)
       .replace(/\bcos\(/g,  `((_v)=>Math.cos(_v*${D}))(`)
@@ -541,8 +572,8 @@
       .replace(/\basin\(/g, `((_v)=>Math.asin(_v)*${R})(`)
       .replace(/\bacos\(/g, `((_v)=>Math.acos(_v)*${R})(`)
       .replace(/\batan\(/g, `((_v)=>Math.atan(_v)*${R})(`)
-      .replace(/\bln\(/g,   `Math.log(`)
       .replace(/\blog\(/g,  `Math.log10(`)
+      .replace(/\bln\(/g,   `Math.log(`)
       .replace(/\b√\(/g,    `Math.sqrt(`)
       .replace(/\b∛\(/g,    `Math.cbrt(`)
       .replace(/\bsq\(/g,   `((_v)=>_v*_v)(`)
