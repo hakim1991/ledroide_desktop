@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>ASCII Art</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.5rem; }
+
+    .layout { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; }
+    @media (max-width: 600px) { .layout { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+
+    .drop-zone {
+      border: 2px dashed #3f3f46;
+      border-radius: 8px;
+      padding: 1.5rem .75rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      margin-bottom: 1rem;
+    }
+    .drop-zone:hover, .drop-zone.over { border-color: #6366f1; background: rgba(99,102,241,.05); }
+    .drop-zone .icon { font-size: 1.75rem; margin-bottom: .35rem; }
+    .drop-zone p { color: #71717a; font-size: .8rem; }
+
+    .preview-img {
+      width: 100%;
+      border-radius: 6px;
+      display: none;
+      margin-bottom: 1rem;
+      max-height: 160px;
+      object-fit: contain;
+      background: #09090b;
+    }
+    .preview-img.show { display: block; }
+
+    label { display: block; font-size: .8125rem; color: #a1a1aa; margin-bottom: .3rem; }
+
+    .control { margin-bottom: 1rem; }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: #6366f1;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: .5rem; }
+    .slider-val { font-size: .875rem; font-weight: 600; color: #e2e2e8; min-width: 30px; }
+
+    .toggle-row { display: flex; align-items: center; gap: .5rem; font-size: .875rem; color: #a1a1aa; cursor: pointer; }
+    .toggle-row input { accent-color: #6366f1; width: 16px; height: 16px; cursor: pointer; }
+
+    button {
+      cursor: pointer; border: none; border-radius: 6px;
+      padding: .5rem 1.25rem; font-size: .875rem; font-weight: 500;
+      transition: opacity .15s; width: 100%;
+    }
+    .btn-primary { background: #6366f1; color: #fff; margin-bottom: .5rem; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: #a1a1aa; border: 1px solid #3f3f46; margin-bottom: .35rem; }
+    .btn-ghost:hover:not(:disabled) { color: #e2e2e8; border-color: #6366f1; }
+    .btn-ghost:disabled { opacity: .4; cursor: not-allowed; }
+
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid #3f3f46; border-top-color: #6366f1;
+      border-radius: 50%; animation: spin .7s linear infinite;
+      vertical-align: middle; margin-right: .35rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .result-area {
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow: auto;
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .result-area .placeholder { color: #52525b; font-size: .875rem; text-align: center; }
+
+    pre {
+      font-family: 'Courier New', Courier, monospace;
+      line-height: 1.1;
+      white-space: pre;
+      color: #d4d4d8;
+    }
+
+    .toast {
+      position: fixed; bottom: 1rem; right: 1rem;
+      background: #6366f1; color: #fff;
+      padding: .5rem 1rem; border-radius: 6px;
+      font-size: .8125rem; opacity: 0;
+      transition: opacity .2s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <h1>🎨 ASCII Art</h1>
+
+  <div class="layout">
+    <div class="card">
+      <div class="drop-zone" id="dropZone">
+        <div class="icon">🖼️</div>
+        <p><strong>Glissez une image</strong></p>
+        <p>ou cliquez pour sélectionner</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" style="display:none" />
+      <img class="preview-img" id="preview" />
+
+      <div class="control">
+        <label>Largeur : <span id="widthVal">100</span> chars</label>
+        <input type="range" id="widthSlider" min="40" max="200" value="100" />
+      </div>
+
+      <div class="control">
+        <label class="toggle-row">
+          <input type="checkbox" id="invertCheck" />
+          Inverser les couleurs
+        </label>
+      </div>
+
+      <button class="btn-primary" id="generateBtn" disabled>Générer</button>
+      <button class="btn-ghost" id="copyBtn" disabled>Copier</button>
+      <button class="btn-ghost" id="dlBtn" disabled>Télécharger .txt</button>
+    </div>
+
+    <div class="card" style="padding:.75rem;">
+      <div class="result-area" id="resultArea">
+        <div class="placeholder">Le résultat apparaîtra ici</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Copié !</div>
+
+  <script>
+    const PORT   = parseInt(window.location.port) || 8765
+    const BASE   = `http://127.0.0.1:${PORT}/modules/ascii-art/api`
+
+    const dropZone    = document.getElementById('dropZone')
+    const fileInput   = document.getElementById('fileInput')
+    const preview     = document.getElementById('preview')
+    const widthSlider = document.getElementById('widthSlider')
+    const widthVal    = document.getElementById('widthVal')
+    const invertCheck = document.getElementById('invertCheck')
+    const generateBtn = document.getElementById('generateBtn')
+    const copyBtn     = document.getElementById('copyBtn')
+    const dlBtn       = document.getElementById('dlBtn')
+    const resultArea  = document.getElementById('resultArea')
+    const toast       = document.getElementById('toast')
+
+    let selectedFile = null
+    let lastAscii    = ''
+
+    widthSlider.addEventListener('input', () => { widthVal.textContent = widthSlider.value })
+
+    function setFile(f) {
+      selectedFile = f
+      const url = URL.createObjectURL(f)
+      preview.src = url
+      preview.classList.add('show')
+      generateBtn.disabled = false
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click())
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]) })
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('over') })
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'))
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault(); dropZone.classList.remove('over')
+      if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0])
+    })
+
+    generateBtn.addEventListener('click', async () => {
+      if (!selectedFile) return
+      generateBtn.disabled = true
+      generateBtn.innerHTML = '<span class="spinner"></span> Génération…'
+      copyBtn.disabled = true; dlBtn.disabled = true
+
+      try {
+        const fd = new FormData()
+        fd.append('file', selectedFile)
+        fd.append('width', widthSlider.value)
+        fd.append('invert', invertCheck.checked ? 'true' : 'false')
+
+        const r = await fetch(`${BASE}/convert`, { method: 'POST', body: fd })
+        const d = await r.json()
+
+        if (d.error) {
+          resultArea.innerHTML = `<div class="placeholder" style="color:#fca5a5;">⚠️ ${d.error}</div>`
+        } else {
+          lastAscii = d.ascii
+          const fs = d.width > 120 ? '8px' : '10px'
+          resultArea.innerHTML = `<pre style="font-size:${fs}"></pre>`
+          resultArea.querySelector('pre').textContent = d.ascii
+          copyBtn.disabled = false; dlBtn.disabled = false
+        }
+      } catch {
+        resultArea.innerHTML = `<div class="placeholder" style="color:#fca5a5;">Erreur de connexion.</div>`
+      } finally {
+        generateBtn.disabled = false
+        generateBtn.textContent = 'Générer'
+      }
+    })
+
+    copyBtn.addEventListener('click', async () => {
+      if (!lastAscii) return
+      await navigator.clipboard.writeText(lastAscii)
+      toast.classList.add('show')
+      setTimeout(() => toast.classList.remove('show'), 1800)
+    })
+
+    dlBtn.addEventListener('click', () => {
+      if (!lastAscii) return
+      const blob = new Blob([lastAscii], { type: 'text/plain' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'ascii-art.txt'
+      a.click()
+    })
+  </script>
+</body>
+</html>

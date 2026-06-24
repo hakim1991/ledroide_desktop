@@ -1,0 +1,11 @@
+{
+  "id": "youtube-downloader",
+  "name": "YouTube Downloader",
+  "version": "1.0.0",
+  "description": "Télécharge une vidéo ou l'audio depuis YouTube",
+  "icon": "▶️",
+  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "permissions": [],
+  "database": {"type": "none"},
+  "dependencies": {"python": ["yt-dlp"], "modules": []}
+}

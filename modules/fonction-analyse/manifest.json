@@ -1,0 +1,11 @@
+{
+  "id": "fonction-analyse",
+  "name": "Analyseur de fonctions",
+  "version": "1.0.0",
+  "description": "Analyse mathématique complète d'une fonction f(x) : dérivée, zéros, extrema, graphe",
+  "icon": "📐",
+  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "permissions": [],
+  "database": {"type": "none"},
+  "dependencies": {"python": ["sympy", "numpy", "matplotlib"], "modules": []}
+}

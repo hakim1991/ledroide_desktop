@@ -1,0 +1,11 @@
+{
+  "id": "csv-grapher",
+  "name": "Graphique CSV",
+  "version": "1.0.0",
+  "description": "Visualise des données CSV sous forme de graphique",
+  "icon": "📊",
+  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "permissions": [],
+  "database": {"type": "none"},
+  "dependencies": {"python": ["pandas", "matplotlib"], "modules": []}
+}

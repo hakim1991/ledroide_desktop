@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>MP4 → MP3</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.125rem; font-weight: 700; color: #f4f4f5; margin-bottom: .25rem; }
+    .subtitle { font-size: .8125rem; color: #71717a; margin-bottom: 1.5rem; }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .drop-zone {
+      border: 2px dashed #3f3f46;
+      border-radius: 8px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #6366f1;
+      background: rgba(99,102,241,.05);
+    }
+    .drop-icon { font-size: 2rem; margin-bottom: .5rem; }
+    .drop-label { font-size: .875rem; color: #a1a1aa; }
+    .drop-label strong { color: #6366f1; cursor: pointer; }
+    .drop-types { font-size: .75rem; color: #52525b; margin-top: .35rem; }
+
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .75rem 1rem;
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 6px;
+      margin-top: .75rem;
+    }
+    .file-icon { font-size: 1.25rem; }
+    .file-name { font-size: .875rem; color: #e4e4e7; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-size { font-size: .75rem; color: #71717a; flex-shrink: 0; }
+    .file-remove { background: none; border: none; color: #52525b; cursor: pointer; font-size: .875rem; padding: .2rem; }
+    .file-remove:hover { color: #ef4444; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .5rem 1.25rem;
+      border: none;
+      border-radius: 6px;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-ghost { background: transparent; border: 1px solid #3f3f46; color: #a1a1aa; }
+    .btn-ghost:hover:not(:disabled) { border-color: #6366f1; color: #e4e4e7; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-full { width: 100%; justify-content: center; margin-top: .75rem; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status-msg {
+      font-size: .8125rem;
+      color: #a1a1aa;
+      text-align: center;
+      margin-top: .5rem;
+    }
+
+    .result-card { display: none; }
+    .result-card.visible { display: block; }
+
+    .result-title {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .875rem;
+      font-weight: 600;
+      color: #4ade80;
+      margin-bottom: 1rem;
+    }
+
+    audio {
+      width: 100%;
+      margin-bottom: .75rem;
+      border-radius: 6px;
+    }
+
+    .error-msg {
+      display: none;
+      background: rgba(239,68,68,.08);
+      border: 1px solid rgba(239,68,68,.2);
+      border-radius: 6px;
+      padding: .75rem 1rem;
+      font-size: .8125rem;
+      color: #f87171;
+      margin-top: .75rem;
+    }
+    .error-msg.visible { display: block; }
+    #fileInput { display: none; }
+  </style>
+</head>
+<body>
+  <h1>🎵 MP4 → MP3</h1>
+  <p class="subtitle">Extrait la piste audio d'une vidéo et l'exporte en MP3</p>
+
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-icon">🎬</div>
+      <div class="drop-label">Glissez une vidéo ici ou <strong id="browseBtn">parcourir</strong></div>
+      <div class="drop-types">MP4 · MOV · AVI · MKV</div>
+    </div>
+    <input type="file" id="fileInput" accept=".mp4,.mov,.avi,.mkv" />
+
+    <div class="file-info" id="fileInfo" style="display:none">
+      <span class="file-icon">🎬</span>
+      <span class="file-name" id="fileName"></span>
+      <span class="file-size" id="fileSize"></span>
+      <button class="file-remove" id="removeBtn" title="Supprimer">✕</button>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <button class="btn btn-primary btn-full" id="convertBtn" disabled>
+      Convertir en MP3
+    </button>
+    <p class="status-msg" id="statusMsg"></p>
+  </div>
+
+  <div class="card result-card" id="resultCard">
+    <div class="result-title">✓ Conversion terminée</div>
+    <audio controls id="audioPlayer"></audio>
+    <a id="downloadLink" class="btn btn-primary btn-full" style="text-decoration:none">
+      ⬇ Télécharger MP3
+    </a>
+  </div>
+
+  <script>
+    const PORT = parseInt(window.location.port) || 8765
+    const BASE = `http://127.0.0.1:${PORT}/modules/mp4-to-mp3/api`
+
+    const dropZone   = document.getElementById('dropZone')
+    const fileInput  = document.getElementById('fileInput')
+    const fileInfo   = document.getElementById('fileInfo')
+    const fileName   = document.getElementById('fileName')
+    const fileSize   = document.getElementById('fileSize')
+    const removeBtn  = document.getElementById('removeBtn')
+    const convertBtn = document.getElementById('convertBtn')
+    const statusMsg  = document.getElementById('statusMsg')
+    const resultCard = document.getElementById('resultCard')
+    const audioPlayer= document.getElementById('audioPlayer')
+    const downloadLink=document.getElementById('downloadLink')
+    const errorMsg   = document.getElementById('errorMsg')
+
+    let selectedFile = null
+
+    function fmtSize(bytes) {
+      if (bytes < 1024) return bytes + ' B'
+      if (bytes < 1024**2) return (bytes/1024).toFixed(1) + ' KB'
+      return (bytes/1024**2).toFixed(1) + ' MB'
+    }
+
+    function setFile(file) {
+      selectedFile = file
+      fileName.textContent = file.name
+      fileSize.textContent = fmtSize(file.size)
+      fileInfo.style.display = 'flex'
+      convertBtn.disabled = false
+      resultCard.classList.remove('visible')
+      errorMsg.classList.remove('visible')
+      statusMsg.textContent = ''
+    }
+
+    function clearFile() {
+      selectedFile = null
+      fileInput.value = ''
+      fileInfo.style.display = 'none'
+      convertBtn.disabled = true
+      resultCard.classList.remove('visible')
+      statusMsg.textContent = ''
+    }
+
+    document.getElementById('browseBtn').addEventListener('click', () => fileInput.click())
+    dropZone.addEventListener('click', () => fileInput.click())
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]) })
+    removeBtn.addEventListener('click', (e) => { e.stopPropagation(); clearFile() })
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over') })
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'))
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault()
+      dropZone.classList.remove('drag-over')
+      const f = e.dataTransfer.files[0]
+      if (f) setFile(f)
+    })
+
+    convertBtn.addEventListener('click', async () => {
+      if (!selectedFile) return
+      convertBtn.disabled = true
+      convertBtn.innerHTML = '<span class="spinner"></span> Conversion…'
+      statusMsg.textContent = 'Extraction de l\'audio en cours…'
+      errorMsg.classList.remove('visible')
+      resultCard.classList.remove('visible')
+
+      const fd = new FormData()
+      fd.append('file', selectedFile)
+
+      try {
+        const r = await fetch(`${BASE}/convert`, { method: 'POST', body: fd })
+        const d = await r.json()
+        if (!r.ok) {
+          throw new Error(d.detail?.error || 'Erreur lors de la conversion')
+        }
+        const url = `${BASE}/file/${encodeURIComponent(d.filename)}`
+        audioPlayer.src = url
+        downloadLink.href = url
+        downloadLink.download = d.filename
+        resultCard.classList.add('visible')
+        statusMsg.textContent = ''
+      } catch (e) {
+        errorMsg.textContent = e.message
+        errorMsg.classList.add('visible')
+        statusMsg.textContent = ''
+      } finally {
+        convertBtn.disabled = false
+        convertBtn.innerHTML = 'Convertir en MP3'
+      }
+    })
+  </script>
+</body>
+</html>

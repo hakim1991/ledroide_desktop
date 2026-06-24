@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Analyseur de fonctions</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.125rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.25rem; }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card-title {
+      font-size: .8125rem;
+      font-weight: 600;
+      color: #a1a1aa;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .875rem;
+    }
+
+    label { display: block; font-size: .8125rem; color: #a1a1aa; margin-bottom: .3rem; }
+
+    .expr-input {
+      width: 100%;
+      background: #09090b;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      color: #e2e2e8;
+      padding: .55rem .875rem;
+      font-size: 1rem;
+      font-family: monospace;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .expr-input:focus { border-color: #6366f1; }
+
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+      margin-top: .6rem;
+    }
+    .ex-chip {
+      padding: .25rem .65rem;
+      background: #1e1b4b;
+      color: #818cf8;
+      border: 1px solid #3730a3;
+      border-radius: 5px;
+      font-size: .8rem;
+      font-family: monospace;
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .ex-chip:hover { background: #2e1b7b; }
+
+    .range-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+      margin-top: .875rem;
+    }
+    .range-group label { margin-bottom: .25rem; }
+    .range-group .range-val {
+      display: inline-block;
+      background: #1e1b4b;
+      color: #818cf8;
+      border-radius: 4px;
+      padding: .1rem .45rem;
+      font-size: .8rem;
+      margin-left: .35rem;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: #6366f1;
+    }
+
+    .btn {
+      padding: .5rem 1.25rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .875rem;
+      font-weight: 500;
+      transition: opacity .15s;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid #3f3f46;
+      color: #a1a1aa;
+    }
+    .btn-ghost:hover:not(:disabled) { border-color: #6366f1; color: #e2e2e8; }
+
+    .spinner {
+      display: inline-block;
+      width: 13px; height: 13px;
+      border: 2px solid #3f3f46;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: .75rem;
+      margin-bottom: 1rem;
+    }
+    .result-item {
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 6px;
+      padding: .875rem 1rem;
+    }
+    .result-label {
+      font-size: .75rem;
+      color: #52525b;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .4rem;
+    }
+    .result-value {
+      font-family: monospace;
+      font-size: .875rem;
+      color: #818cf8;
+      background: #1e1b4b;
+      border-radius: 4px;
+      padding: .3rem .6rem;
+      display: inline-block;
+      word-break: break-all;
+    }
+    .result-list {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+    }
+
+    .chart-img { width: 100%; border-radius: 6px; display: block; }
+    .chart-actions { display: flex; gap: .5rem; margin-top: .75rem; }
+
+    .error { color: #f87171; font-size: .875rem; margin-top: .5rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>📐 Analyseur de fonctions</h1>
+
+  <div class="card">
+    <p class="card-title">Expression f(x)</p>
+    <label>Entrez une fonction de x</label>
+    <input class="expr-input" type="text" id="exprInput" placeholder="ex : x**2 - 4" autocomplete="off" />
+    <div class="examples">
+      <span class="ex-chip">x**2 - 4</span>
+      <span class="ex-chip">sin(x)</span>
+      <span class="ex-chip">1/x</span>
+      <span class="ex-chip">exp(-x**2)</span>
+      <span class="ex-chip">log(x)</span>
+      <span class="ex-chip">x**3 - 3*x</span>
+    </div>
+
+    <div class="range-row">
+      <div class="range-group">
+        <label>x min <span class="range-val" id="xMinVal">-10</span></label>
+        <input type="range" id="xMin" min="-50" max="0" step="1" value="-10" />
+      </div>
+      <div class="range-group">
+        <label>x max <span class="range-val" id="xMaxVal">10</span></label>
+        <input type="range" id="xMax" min="0" max="50" step="1" value="10" />
+      </div>
+    </div>
+
+    <div style="margin-top:1rem; display:flex; gap:.5rem;">
+      <button class="btn btn-primary" id="analyzeBtn">Analyser</button>
+    </div>
+    <p id="analyzeError" class="error hidden"></p>
+  </div>
+
+  <!-- Résultats analytiques -->
+  <div class="card hidden" id="resultsCard">
+    <p class="card-title">Résultats analytiques</p>
+    <div class="results-grid" id="resultsGrid"></div>
+  </div>
+
+  <!-- Graphique -->
+  <div class="card hidden" id="chartCard">
+    <p class="card-title">Graphique</p>
+    <img id="chartImg" class="chart-img" alt="Graphique f(x)" />
+    <div class="chart-actions">
+      <button class="btn btn-primary" id="downloadBtn">Télécharger PNG</button>
+    </div>
+  </div>
+
+  <script>
+    const PORT = parseInt(window.location.port) || 8765
+    const BASE = `http://127.0.0.1:${PORT}/modules/fonction-analyse/api`
+
+    // Sliders
+    const xMinSlider = document.getElementById('xMin')
+    const xMaxSlider = document.getElementById('xMax')
+    xMinSlider.addEventListener('input', () => document.getElementById('xMinVal').textContent = xMinSlider.value)
+    xMaxSlider.addEventListener('input', () => document.getElementById('xMaxVal').textContent = xMaxSlider.value)
+
+    // Exemples
+    document.querySelectorAll('.ex-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.getElementById('exprInput').value = chip.textContent
+      })
+    })
+
+    // Analyser
+    document.getElementById('analyzeBtn').addEventListener('click', async () => {
+      const expr = document.getElementById('exprInput').value.trim()
+      if (!expr) return
+
+      const btn = document.getElementById('analyzeBtn')
+      btn.disabled = true
+      btn.innerHTML = '<span class="spinner"></span> Analyse…'
+      hide('analyzeError')
+      hide('resultsCard')
+      hide('chartCard')
+
+      const body = {
+        expression: expr,
+        x_min: parseFloat(xMinSlider.value),
+        x_max: parseFloat(xMaxSlider.value),
+      }
+
+      try {
+        const [anaRes, plotRes] = await Promise.all([
+          fetch(`${BASE}/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).then(r => r.json()),
+          fetch(`${BASE}/plot`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).then(r => r.json()),
+        ])
+
+        if (anaRes.error) throw new Error(anaRes.error)
+
+        renderResults(anaRes)
+        show('resultsCard')
+
+        if (plotRes.image) {
+          document.getElementById('chartImg').src = `data:image/png;base64,${plotRes.image}`
+          show('chartCard')
+        }
+      } catch(e) {
+        showError('analyzeError', 'Erreur : ' + e.message)
+      } finally {
+        btn.disabled = false
+        btn.textContent = 'Analyser'
+      }
+    })
+
+    function renderResults(d) {
+      const grid = document.getElementById('resultsGrid')
+      grid.innerHTML = ''
+
+      const items = [
+        { label: "Dérivée f'(x)", values: [d.derivative] },
+        { label: "Dérivée seconde f''(x)", values: [d.derivative2] },
+        { label: 'Zéros de f', values: d.zeros.length ? d.zeros : ['Aucun'] },
+        { label: 'Extrema potentiels', values: d.extrema.length ? d.extrema : ['Aucun'] },
+        { label: 'Domaine de définition', values: [d.domain] },
+      ]
+
+      for (const item of items) {
+        const div = document.createElement('div')
+        div.className = 'result-item'
+        const valHtml = item.values.map(v =>
+          `<span class="result-value">${escHtml(v)}</span>`
+        ).join('')
+        div.innerHTML = `
+          <p class="result-label">${item.label}</p>
+          <div class="result-list">${valHtml}</div>
+        `
+        grid.appendChild(div)
+      }
+    }
+
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      const img = document.getElementById('chartImg')
+      const a = document.createElement('a')
+      a.href = img.src
+      a.download = 'fonction.png'
+      a.click()
+    })
+
+    function escHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    }
+    function show(id) { document.getElementById(id).classList.remove('hidden') }
+    function hide(id) { document.getElementById(id).classList.add('hidden') }
+    function showError(id, msg) {
+      const el = document.getElementById(id)
+      el.textContent = msg
+      el.classList.remove('hidden')
+    }
+  </script>
+</body>
+</html>

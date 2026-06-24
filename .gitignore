@@ -12,3 +12,5 @@ backend/state.json
 *.log
 
 modules_backup/
+
+steamlit_tools/

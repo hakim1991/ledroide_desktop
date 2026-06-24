@@ -1,0 +1,14 @@
+{
+  "id": "base64-tool",
+  "name": "Base64",
+  "version": "1.0.0",
+  "description": "Encode ou décode n'importe quel fichier en Base64",
+  "icon": "🔐",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": { "type": "none" },
+  "dependencies": { "python": [], "modules": [] }
+}

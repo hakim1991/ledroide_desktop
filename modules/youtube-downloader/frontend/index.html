@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>YouTube Downloader</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.125rem; font-weight: 700; color: #f4f4f5; margin-bottom: .25rem; }
+    .subtitle { font-size: .8125rem; color: #71717a; margin-bottom: 1.5rem; }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    label { display: block; font-size: .8125rem; color: #a1a1aa; margin-bottom: .35rem; }
+
+    input[type="text"] {
+      width: 100%;
+      background: #09090b;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      padding: .6rem .85rem;
+      color: #e4e4e7;
+      font-size: .9375rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input[type="text"]:focus { border-color: #6366f1; }
+    input[type="text"]::placeholder { color: #52525b; }
+
+    .mode-row {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .mode-option {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .75rem 1rem;
+      background: #09090b;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .mode-option.selected { border-color: #6366f1; background: rgba(99,102,241,.07); }
+    .mode-option input[type="radio"] { display: none; }
+    .mode-label { font-size: .875rem; font-weight: 500; }
+    .mode-sub { font-size: .75rem; color: #71717a; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .45rem;
+      padding: .55rem 1.25rem;
+      border: none;
+      border-radius: 6px;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .15s;
+      width: 100%;
+      margin-top: 1rem;
+    }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress-section { display: none; margin-top: 1rem; }
+    .progress-section.visible { display: block; }
+
+    .progress-bar-wrap {
+      height: 6px;
+      background: #27272a;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: .5rem;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #6366f1;
+      border-radius: 3px;
+      transition: width .3s;
+      width: 0%;
+    }
+    .progress-label { font-size: .8125rem; color: #a1a1aa; }
+
+    .result-card { display: none; }
+    .result-card.visible { display: block; }
+
+    .result-ok {
+      display: flex;
+      align-items: flex-start;
+      gap: .75rem;
+      padding: 1rem;
+      background: rgba(74,222,128,.06);
+      border: 1px solid rgba(74,222,128,.15);
+      border-radius: 6px;
+    }
+    .result-icon { font-size: 1.25rem; flex-shrink: 0; }
+    .result-text strong { display: block; font-size: .875rem; color: #4ade80; margin-bottom: .25rem; }
+    .result-dir { font-size: .8rem; color: #71717a; font-family: monospace; word-break: break-all; }
+
+    .error-msg {
+      display: none;
+      background: rgba(239,68,68,.08);
+      border: 1px solid rgba(239,68,68,.2);
+      border-radius: 6px;
+      padding: .75rem 1rem;
+      font-size: .8125rem;
+      color: #f87171;
+      margin-top: .75rem;
+    }
+    .error-msg.visible { display: block; }
+
+    .info-note {
+      font-size: .8rem;
+      color: #52525b;
+      margin-top: 1rem;
+      padding-top: .75rem;
+      border-top: 1px solid #27272a;
+    }
+  </style>
+</head>
+<body>
+  <h1>▶️ YouTube Downloader</h1>
+  <p class="subtitle">Télécharge une vidéo ou son audio depuis YouTube</p>
+
+  <div class="card">
+    <label for="urlInput">URL YouTube</label>
+    <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=..." />
+
+    <div class="mode-row">
+      <label class="mode-option selected" id="modeAudio">
+        <input type="radio" name="mode" value="audio" checked />
+        <div>
+          <div class="mode-label">🎵 Audio MP3</div>
+          <div class="mode-sub">Extrait uniquement l'audio</div>
+        </div>
+      </label>
+      <label class="mode-option" id="modeVideo">
+        <input type="radio" name="mode" value="video" />
+        <div>
+          <div class="mode-label">🎬 Vidéo MP4</div>
+          <div class="mode-sub">Télécharge la vidéo complète</div>
+        </div>
+      </label>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <button class="btn btn-primary" id="downloadBtn">Télécharger</button>
+
+    <div class="progress-section" id="progressSection">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="progress-label" id="progressLabel">Démarrage…</div>
+    </div>
+
+    <p class="info-note">Les fichiers sont sauvegardés dans <strong>~/Downloads/LedroideYoutube</strong></p>
+  </div>
+
+  <div class="card result-card" id="resultCard">
+    <div class="result-ok">
+      <div class="result-icon">✅</div>
+      <div class="result-text">
+        <strong>Téléchargement terminé</strong>
+        <div class="result-dir" id="resultDir"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PORT = parseInt(window.location.port) || 8765
+    const BASE = `http://127.0.0.1:${PORT}/modules/youtube-downloader/api`
+
+    const urlInput       = document.getElementById('urlInput')
+    const downloadBtn    = document.getElementById('downloadBtn')
+    const progressSection= document.getElementById('progressSection')
+    const progressBar    = document.getElementById('progressBar')
+    const progressLabel  = document.getElementById('progressLabel')
+    const resultCard     = document.getElementById('resultCard')
+    const resultDir      = document.getElementById('resultDir')
+    const errorMsg       = document.getElementById('errorMsg')
+
+    document.querySelectorAll('.mode-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        document.querySelectorAll('.mode-option').forEach(o => o.classList.remove('selected'))
+        opt.classList.add('selected')
+      })
+    })
+
+    let pollInterval = null
+
+    function stopPolling() {
+      if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
+    }
+
+    function setLoading(on) {
+      downloadBtn.disabled = on
+      downloadBtn.innerHTML = on
+        ? '<span class="spinner"></span> En cours…'
+        : 'Télécharger'
+      progressSection.classList.toggle('visible', on)
+      if (!on) { progressBar.style.width = '0%'; progressLabel.textContent = '' }
+    }
+
+    downloadBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim()
+      if (!url) return
+      const mode = document.querySelector('input[name="mode"]:checked').value
+
+      errorMsg.classList.remove('visible')
+      resultCard.classList.remove('visible')
+      setLoading(true)
+
+      try {
+        const r = await fetch(`${BASE}/download`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, mode }),
+        })
+        const d = await r.json()
+        if (!r.ok) throw new Error(d.detail?.error || 'Erreur serveur')
+
+        const jobId = d.job_id
+        progressLabel.textContent = 'Connexion à YouTube…'
+
+        pollInterval = setInterval(async () => {
+          try {
+            const sr = await fetch(`${BASE}/status/${jobId}`)
+            const s  = await sr.json()
+
+            if (s.status === 'running') {
+              const pct = s.progress || 0
+              progressBar.style.width = pct + '%'
+              progressLabel.textContent = pct > 0 ? `Téléchargement : ${pct}%` : 'Téléchargement en cours…'
+            } else if (s.status === 'done') {
+              stopPolling()
+              setLoading(false)
+              progressBar.style.width = '100%'
+              resultDir.textContent = s.download_dir
+              resultCard.classList.add('visible')
+            } else if (s.status === 'error') {
+              stopPolling()
+              setLoading(false)
+              errorMsg.textContent = s.error || 'Erreur lors du téléchargement'
+              errorMsg.classList.add('visible')
+            }
+          } catch { /* réseau temporairement indisponible */ }
+        }, 1000)
+
+      } catch (e) {
+        setLoading(false)
+        errorMsg.textContent = e.message
+        errorMsg.classList.add('visible')
+      }
+    })
+  </script>
+</body>
+</html>

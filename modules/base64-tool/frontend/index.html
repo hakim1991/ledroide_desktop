@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Base64</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    h1 { font-size: 1.125rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.25rem; }
+
+    .tabs {
+      display: flex;
+      gap: .25rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid #27272a;
+    }
+
+    .tab {
+      padding: .5rem 1rem;
+      background: none;
+      border: none;
+      color: #71717a;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color .15s, border-color .15s;
+    }
+    .tab.active { color: #6366f1; border-bottom-color: #6366f1; }
+    .tab:hover:not(.active) { color: #a1a1aa; }
+
+    .panel { display: none; }
+    .panel.active { display: flex; flex-direction: column; gap: 1rem; }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+    }
+
+    label { font-size: .8125rem; color: #a1a1aa; font-weight: 500; }
+
+    .file-drop {
+      border: 2px dashed #3f3f46;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .file-drop:hover, .file-drop.dragover {
+      border-color: #6366f1;
+      background: rgba(99,102,241,.05);
+    }
+    .file-drop input { display: none; }
+    .file-drop-icon { font-size: 2rem; margin-bottom: .5rem; }
+    .file-drop-text { font-size: .875rem; color: #71717a; }
+    .file-drop-name { font-size: .875rem; color: #a1a1aa; margin-top: .35rem; font-weight: 500; }
+
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 6px;
+      color: #e2e2e8;
+      font-family: 'Courier New', monospace;
+      font-size: .8rem;
+      padding: .75rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color .15s;
+    }
+    textarea:focus { border-color: #6366f1; }
+    textarea::placeholder { color: #52525b; }
+
+    input[type="text"] {
+      width: 100%;
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 6px;
+      color: #e2e2e8;
+      font-size: .875rem;
+      padding: .5rem .75rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input[type="text"]:focus { border-color: #6366f1; }
+
+    .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+    button {
+      padding: .5rem 1rem;
+      border-radius: 6px;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: opacity .15s, background .15s;
+    }
+    button:hover { opacity: .85; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-ghost {
+      background: transparent;
+      color: #a1a1aa;
+      border-color: #3f3f46;
+    }
+    .btn-ghost:hover { color: #e2e2e8; opacity: 1; border-color: #52525b; }
+
+    .info {
+      font-size: .8125rem;
+      color: #71717a;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      padding: .6rem 1rem;
+      border-radius: 6px;
+      font-size: .8125rem;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity .2s, transform .2s;
+      pointer-events: none;
+      z-index: 99;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.ok { background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.3); color: #4ade80; }
+    .toast.fail { background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3); color: #f87171; }
+  </style>
+</head>
+<body>
+  <h1>🔐 Base64</h1>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="encode">Encoder</button>
+    <button class="tab" data-tab="decode">Décoder</button>
+  </div>
+
+  <!-- ENCODE -->
+  <div class="panel active" id="panel-encode">
+    <div class="card">
+      <label>Fichier à encoder</label>
+      <div class="file-drop" id="dropEncode">
+        <input type="file" id="fileEncode" />
+        <div class="file-drop-icon">📁</div>
+        <div class="file-drop-text">Glisser un fichier ou cliquer pour choisir</div>
+        <div class="file-drop-name" id="encodeFileName"></div>
+      </div>
+      <div class="actions">
+        <button class="btn-primary" id="btnEncode" disabled>Encoder en Base64</button>
+      </div>
+    </div>
+
+    <div class="card" id="encodeResult" style="display:none">
+      <label>Résultat Base64</label>
+      <div class="info">
+        <span id="encodeSize"></span>
+        <span id="encodeB64Size"></span>
+      </div>
+      <textarea id="b64Output" readonly></textarea>
+      <div class="actions">
+        <button class="btn-primary" id="btnCopy">Copier</button>
+        <button class="btn-ghost" id="btnDownloadTxt">Télécharger .txt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DECODE -->
+  <div class="panel" id="panel-decode">
+    <div class="card">
+      <label>Base64 à décoder</label>
+      <textarea id="b64Input" placeholder="Coller le texte Base64 ici…"></textarea>
+      <label>Nom du fichier de sortie</label>
+      <input type="text" id="outputFilename" placeholder="résultat.bin" value="résultat.bin" />
+      <div class="actions">
+        <button class="btn-primary" id="btnDecode">Télécharger le fichier décodé</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ── Tabs ──────────────────────────────────────────────────────────
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
+        tab.classList.add('active')
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active')
+      })
+    })
+
+    // ── Toast ─────────────────────────────────────────────────────────
+    function showToast(msg, ok = true) {
+      const t = document.getElementById('toast')
+      t.textContent = msg
+      t.className = `toast show ${ok ? 'ok' : 'fail'}`
+      setTimeout(() => t.classList.remove('show'), 2500)
+    }
+
+    // ── Encode ────────────────────────────────────────────────────────
+    let encodeFile = null
+
+    function setupDrop(dropEl, inputEl, onFile) {
+      dropEl.addEventListener('click', () => inputEl.click())
+      inputEl.addEventListener('change', () => { if (inputEl.files[0]) onFile(inputEl.files[0]) })
+      dropEl.addEventListener('dragover', e => { e.preventDefault(); dropEl.classList.add('dragover') })
+      dropEl.addEventListener('dragleave', () => dropEl.classList.remove('dragover'))
+      dropEl.addEventListener('drop', e => {
+        e.preventDefault()
+        dropEl.classList.remove('dragover')
+        if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0])
+      })
+    }
+
+    setupDrop(
+      document.getElementById('dropEncode'),
+      document.getElementById('fileEncode'),
+      file => {
+        encodeFile = file
+        document.getElementById('encodeFileName').textContent = file.name
+        document.getElementById('btnEncode').disabled = false
+        document.getElementById('encodeResult').style.display = 'none'
+      }
+    )
+
+    document.getElementById('btnEncode').addEventListener('click', () => {
+      if (!encodeFile) return
+      const reader = new FileReader()
+      reader.onload = e => {
+        const bytes = new Uint8Array(e.target.result)
+        let binary = ''
+        bytes.forEach(b => binary += String.fromCharCode(b))
+        const b64 = btoa(binary)
+        document.getElementById('b64Output').value = b64
+        document.getElementById('encodeSize').textContent = `Fichier : ${formatSize(encodeFile.size)}`
+        document.getElementById('encodeB64Size').textContent = `Base64 : ${formatSize(b64.length)}`
+        document.getElementById('encodeResult').style.display = 'flex'
+      }
+      reader.readAsArrayBuffer(encodeFile)
+    })
+
+    document.getElementById('btnCopy').addEventListener('click', () => {
+      navigator.clipboard.writeText(document.getElementById('b64Output').value)
+        .then(() => showToast('Copié !'))
+        .catch(() => showToast('Échec de la copie', false))
+    })
+
+    document.getElementById('btnDownloadTxt').addEventListener('click', () => {
+      const b64 = document.getElementById('b64Output').value
+      if (!b64) return
+      const name = (encodeFile?.name ?? 'fichier') + '.b64.txt'
+      downloadText(b64, name, 'text/plain')
+    })
+
+    // ── Decode ────────────────────────────────────────────────────────
+    document.getElementById('btnDecode').addEventListener('click', () => {
+      const raw = document.getElementById('b64Input').value.trim()
+      if (!raw) { showToast('Coller du Base64 d\'abord', false); return }
+      const filename = document.getElementById('outputFilename').value.trim() || 'résultat.bin'
+      try {
+        const binary = atob(raw)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        const blob = new Blob([bytes])
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = filename; a.click()
+        setTimeout(() => URL.revokeObjectURL(url), 5000)
+        showToast('Téléchargement démarré')
+      } catch {
+        showToast('Base64 invalide', false)
+      }
+    })
+
+    // ── Helpers ───────────────────────────────────────────────────────
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' o'
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko'
+      return (bytes / (1024 * 1024)).toFixed(2) + ' Mo'
+    }
+
+    function downloadText(text, filename, mime) {
+      const blob = new Blob([text], { type: mime })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = filename; a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    }
+  </script>
+</body>
+</html>

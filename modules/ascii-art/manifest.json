@@ -1,0 +1,11 @@
+{
+  "id": "ascii-art",
+  "name": "ASCII Art",
+  "version": "1.0.0",
+  "description": "Transforme une image en ASCII Art",
+  "icon": "🎨",
+  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "permissions": [],
+  "database": {"type": "none"},
+  "dependencies": {"python": ["Pillow", "numpy"], "modules": []}
+}

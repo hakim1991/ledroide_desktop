@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Images → PDF</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    h1 { font-size: 1.125rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.25rem; }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: .875rem;
+      margin-bottom: 1rem;
+    }
+
+    label { font-size: .8125rem; color: #a1a1aa; font-weight: 500; }
+
+    .file-drop {
+      border: 2px dashed #3f3f46;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .file-drop:hover, .file-drop.dragover {
+      border-color: #6366f1;
+      background: rgba(99,102,241,.05);
+    }
+    .file-drop input { display: none; }
+    .file-drop-icon { font-size: 2rem; margin-bottom: .5rem; }
+    .file-drop-text { font-size: .875rem; color: #71717a; }
+    .file-drop-hint { font-size: .75rem; color: #52525b; margin-top: .25rem; }
+
+    .thumb-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: .5rem;
+    }
+
+    .thumb {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #09090b;
+      border: 1px solid #27272a;
+    }
+
+    .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .thumb-label {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,.7);
+      font-size: .6rem;
+      color: #a1a1aa;
+      padding: .2rem .3rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .thumb-remove {
+      position: absolute;
+      top: 3px; right: 3px;
+      background: rgba(239,68,68,.85);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 18px; height: 18px;
+      font-size: .65rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      padding: 0;
+    }
+    .thumb-remove:hover { background: #ef4444; }
+
+    .actions { display: flex; gap: .5rem; align-items: center; }
+    .count { font-size: .8125rem; color: #71717a; }
+
+    button {
+      padding: .5rem 1.25rem;
+      border-radius: 6px;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: opacity .15s;
+    }
+    button:hover { opacity: .85; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-ghost { background: transparent; color: #a1a1aa; border-color: #3f3f46; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #3f3f46;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status {
+      font-size: .8125rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+    .status.ok  { color: #4ade80; }
+    .status.err { color: #f87171; }
+  </style>
+</head>
+<body>
+  <h1>📄 Images → PDF</h1>
+
+  <div class="card">
+    <label>Ajouter des images</label>
+    <div class="file-drop" id="drop">
+      <input type="file" id="fileInput" accept="image/*" multiple />
+      <div class="file-drop-icon">🖼️</div>
+      <div class="file-drop-text">Glisser des images ou cliquer pour choisir</div>
+      <div class="file-drop-hint">PNG, JPG, WEBP, BMP… • Ordre de sélection = ordre dans le PDF</div>
+    </div>
+
+    <div id="thumbGrid" class="thumb-grid" style="display:none"></div>
+
+    <div class="actions">
+      <button class="btn-primary" id="btnMerge" disabled>Générer le PDF</button>
+      <button class="btn-ghost" id="btnClear" style="display:none">Tout effacer</button>
+      <span class="count" id="countLabel"></span>
+    </div>
+
+    <div id="statusLine" style="display:none" class="status"></div>
+  </div>
+
+  <script>
+    const PORT = parseInt(window.location.port) || 8765
+    const BASE = `http://127.0.0.1:${PORT}/modules/image-to-pdf/api`
+
+    let files = []
+
+    const drop      = document.getElementById('drop')
+    const fileInput = document.getElementById('fileInput')
+    const grid      = document.getElementById('thumbGrid')
+    const btnMerge  = document.getElementById('btnMerge')
+    const btnClear  = document.getElementById('btnClear')
+    const countLbl  = document.getElementById('countLabel')
+    const statusLine = document.getElementById('statusLine')
+
+    drop.addEventListener('click', () => fileInput.click())
+    fileInput.addEventListener('change', () => addFiles(fileInput.files))
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover') })
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'))
+    drop.addEventListener('drop', e => {
+      e.preventDefault(); drop.classList.remove('dragover')
+      addFiles(e.dataTransfer.files)
+    })
+
+    btnClear.addEventListener('click', () => { files = []; renderThumbs() })
+
+    function addFiles(fileList) {
+      for (const f of fileList) {
+        if (f.type.startsWith('image/')) files.push(f)
+      }
+      renderThumbs()
+    }
+
+    function renderThumbs() {
+      grid.innerHTML = ''
+      if (files.length === 0) {
+        grid.style.display = 'none'
+        btnMerge.disabled = true
+        btnClear.style.display = 'none'
+        countLbl.textContent = ''
+        return
+      }
+      grid.style.display = 'grid'
+      btnMerge.disabled = false
+      btnClear.style.display = ''
+      countLbl.textContent = `${files.length} image${files.length > 1 ? 's' : ''}`
+
+      files.forEach((f, i) => {
+        const div = document.createElement('div')
+        div.className = 'thumb'
+        const img = document.createElement('img')
+        img.src = URL.createObjectURL(f)
+        const lbl = document.createElement('div')
+        lbl.className = 'thumb-label'
+        lbl.textContent = `${i + 1}. ${f.name}`
+        const rm = document.createElement('button')
+        rm.className = 'thumb-remove'
+        rm.textContent = '✕'
+        rm.addEventListener('click', e => { e.stopPropagation(); files.splice(i, 1); renderThumbs() })
+        div.appendChild(img); div.appendChild(lbl); div.appendChild(rm)
+        grid.appendChild(div)
+      })
+    }
+
+    btnMerge.addEventListener('click', async () => {
+      if (!files.length) return
+      btnMerge.disabled = true
+      setStatus('loading', 'Conversion en cours…')
+
+      const fd = new FormData()
+      files.forEach(f => fd.append('files', f))
+
+      try {
+        const r = await fetch(`${BASE}/merge`, { method: 'POST', body: fd })
+        const d = await r.json()
+        if (!r.ok) throw new Error(d.detail?.error || `Erreur ${r.status}`)
+
+        const a = document.createElement('a')
+        a.href = `${BASE}/file/${d.filename}`
+        a.download = d.filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+
+        setStatus('ok', `PDF généré — téléchargement démarré`)
+      } catch (e) {
+        setStatus('err', e.message)
+      } finally {
+        btnMerge.disabled = files.length === 0
+      }
+    })
+
+    function setStatus(type, msg) {
+      statusLine.style.display = 'flex'
+      if (type === 'loading') {
+        statusLine.className = 'status'
+        statusLine.innerHTML = `<span class="spinner"></span> ${msg}`
+      } else {
+        statusLine.className = `status ${type}`
+        statusLine.textContent = type === 'ok' ? `✓ ${msg}` : `✕ ${msg}`
+      }
+    }
+  </script>
+</body>
+</html>

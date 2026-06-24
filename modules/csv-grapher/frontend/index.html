@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Graphique CSV</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.125rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.25rem; }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card-title {
+      font-size: .8125rem;
+      font-weight: 600;
+      color: #a1a1aa;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .875rem;
+    }
+
+    label { display: block; font-size: .8125rem; color: #a1a1aa; margin-bottom: .3rem; }
+
+    .drop-zone {
+      border: 2px dashed #3f3f46;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      color: #71717a;
+      font-size: .875rem;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #6366f1;
+      background: rgba(99,102,241,.05);
+      color: #a1a1aa;
+    }
+    .drop-zone input { display: none; }
+
+    .file-selected {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .875rem;
+      color: #a1a1aa;
+      margin-top: .75rem;
+    }
+    .file-selected strong { color: #e2e2e8; }
+
+    select, input[type="text"] {
+      width: 100%;
+      background: #09090b;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      color: #e2e2e8;
+      padding: .45rem .75rem;
+      font-size: .875rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    select:focus, input[type="text"]:focus { border-color: #6366f1; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+      margin-bottom: .75rem;
+    }
+    .form-group { margin-bottom: .75rem; }
+
+    .btn {
+      padding: .5rem 1.25rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .875rem;
+      font-weight: 500;
+      transition: opacity .15s;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid #3f3f46;
+      color: #a1a1aa;
+    }
+    .btn-ghost:hover:not(:disabled) { border-color: #6366f1; color: #e2e2e8; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #3f3f46;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .8rem;
+      overflow-x: auto;
+      display: block;
+    }
+    .preview-table th {
+      background: #27272a;
+      color: #a1a1aa;
+      padding: .4rem .65rem;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .preview-table td {
+      padding: .35rem .65rem;
+      border-bottom: 1px solid #27272a;
+      white-space: nowrap;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .preview-table tr:last-child td { border-bottom: none; }
+
+    .chart-types {
+      display: flex;
+      gap: .5rem;
+      flex-wrap: wrap;
+    }
+    .chart-type-btn {
+      padding: .4rem .9rem;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      background: transparent;
+      color: #a1a1aa;
+      cursor: pointer;
+      font-size: .8125rem;
+      transition: all .12s;
+    }
+    .chart-type-btn.active {
+      border-color: #6366f1;
+      background: rgba(99,102,241,.12);
+      color: #818cf8;
+    }
+
+    .result-img { width: 100%; border-radius: 6px; display: block; }
+    .row-info { font-size: .8rem; color: #52525b; margin-top: .5rem; }
+    .error { color: #f87171; font-size: .875rem; margin-top: .5rem; }
+    .actions { display: flex; gap: .5rem; margin-top: .75rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>📊 Graphique CSV</h1>
+
+  <!-- Étape 1 : upload -->
+  <div class="card">
+    <p class="card-title">1 — Charger un fichier CSV</p>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="csvFile" accept=".csv,.tsv,.txt" />
+      Glissez un fichier CSV ici ou <strong style="color:#818cf8">cliquez pour choisir</strong>
+    </div>
+    <div class="file-selected hidden" id="fileInfo"></div>
+    <p id="uploadError" class="error hidden"></p>
+  </div>
+
+  <!-- Étape 2 : config graphique -->
+  <div class="card hidden" id="configCard">
+    <p class="card-title">Aperçu des données</p>
+    <div style="overflow-x:auto; margin-bottom:1rem;">
+      <table class="preview-table" id="previewTable"></table>
+    </div>
+    <p class="row-info" id="rowInfo"></p>
+  </div>
+
+  <div class="card hidden" id="chartConfigCard">
+    <p class="card-title">2 — Configurer le graphique</p>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Colonne X (axe horizontal)</label>
+        <select id="xCol"></select>
+      </div>
+      <div class="form-group">
+        <label>Colonne Y (valeurs)</label>
+        <select id="yCol"></select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Type de graphique</label>
+      <div class="chart-types">
+        <button class="chart-type-btn active" data-type="bar">📊 Barres</button>
+        <button class="chart-type-btn" data-type="line">📈 Ligne</button>
+        <button class="chart-type-btn" data-type="pie">🥧 Camembert</button>
+        <button class="chart-type-btn" data-type="scatter">✦ Nuage de points</button>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:.75rem;">
+      <label>Titre (optionnel)</label>
+      <input type="text" id="chartTitle" placeholder="Mon graphique…" />
+    </div>
+
+    <button class="btn btn-primary" id="generateBtn" style="margin-top:.5rem;">
+      Générer le graphique
+    </button>
+    <p id="chartError" class="error hidden"></p>
+  </div>
+
+  <!-- Résultat -->
+  <div class="card hidden" id="resultCard">
+    <p class="card-title">Résultat</p>
+    <img id="chartImg" class="result-img" alt="Graphique généré" />
+    <div class="actions">
+      <button class="btn btn-primary" id="downloadBtn">Télécharger PNG</button>
+      <button class="btn btn-ghost" id="newChartBtn">Nouveau graphique</button>
+    </div>
+  </div>
+
+  <script>
+    const PORT = parseInt(window.location.port) || 8765
+    const BASE = `http://127.0.0.1:${PORT}/modules/csv-grapher/api`
+
+    let csvText = null
+    let columns = []
+    let selectedType = 'bar'
+
+    // Drop zone
+    const dropZone = document.getElementById('dropZone')
+    const csvFile  = document.getElementById('csvFile')
+
+    dropZone.addEventListener('click', () => csvFile.click())
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over') })
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'))
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault()
+      dropZone.classList.remove('drag-over')
+      const f = e.dataTransfer.files[0]
+      if (f) handleFile(f)
+    })
+    csvFile.addEventListener('change', () => { if (csvFile.files[0]) handleFile(csvFile.files[0]) })
+
+    async function handleFile(file) {
+      const info = document.getElementById('fileInfo')
+      info.innerHTML = `📄 <strong>${file.name}</strong> (${(file.size/1024).toFixed(1)} Ko)`
+      info.classList.remove('hidden')
+      hide('uploadError')
+
+      // Lire le texte pour envoi ultérieur
+      csvText = await file.text()
+
+      // Envoyer pour analyse
+      const fd = new FormData()
+      fd.append('file', file)
+      try {
+        const r = await fetch(`${BASE}/analyze`, { method: 'POST', body: fd })
+        const d = await r.json()
+        if (d.error) throw new Error(d.error)
+        columns = d.columns
+        buildPreview(d.preview, d.columns, d.row_count)
+        buildSelects(d.columns)
+        show('configCard')
+        show('chartConfigCard')
+      } catch(e) {
+        showError('uploadError', 'Erreur : ' + e.message)
+      }
+    }
+
+    function buildPreview(rows, cols, total) {
+      const table = document.getElementById('previewTable')
+      const thead = cols.map(c => `<th>${c}</th>`).join('')
+      const tbody = rows.map(row =>
+        `<tr>${cols.map(c => `<td title="${row[c] ?? ''}">${row[c] ?? ''}</td>`).join('')}</tr>`
+      ).join('')
+      table.innerHTML = `<thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody>`
+      document.getElementById('rowInfo').textContent = `${total} lignes au total — aperçu des 5 premières`
+    }
+
+    function buildSelects(cols) {
+      const opt = cols.map(c => `<option value="${c}">${c}</option>`).join('')
+      document.getElementById('xCol').innerHTML = opt
+      document.getElementById('yCol').innerHTML = opt
+      if (cols.length > 1) document.getElementById('yCol').selectedIndex = 1
+    }
+
+    // Chart type buttons
+    document.querySelectorAll('.chart-type-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.chart-type-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        selectedType = btn.dataset.type
+      })
+    })
+
+    // Generate
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('generateBtn')
+      btn.disabled = true
+      btn.innerHTML = '<span class="spinner"></span> Génération…'
+      hide('chartError')
+
+      const csvB64 = btoa(unescape(encodeURIComponent(csvText)))
+      try {
+        const r = await fetch(`${BASE}/chart`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            csv_b64: csvB64,
+            x_col: document.getElementById('xCol').value,
+            y_col: document.getElementById('yCol').value,
+            chart_type: selectedType,
+            title: document.getElementById('chartTitle').value,
+          })
+        })
+        const d = await r.json()
+        if (d.error) throw new Error(d.error)
+
+        const img = document.getElementById('chartImg')
+        img.src = `data:image/png;base64,${d.image}`
+        show('resultCard')
+        img.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      } catch(e) {
+        showError('chartError', 'Erreur : ' + e.message)
+      } finally {
+        btn.disabled = false
+        btn.textContent = 'Générer le graphique'
+      }
+    })
+
+    // Download
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      const img = document.getElementById('chartImg')
+      const a = document.createElement('a')
+      a.href = img.src
+      a.download = 'graphique.png'
+      a.click()
+    })
+
+    // Reset
+    document.getElementById('newChartBtn').addEventListener('click', () => {
+      hide('resultCard')
+      document.getElementById('chartTitle').value = ''
+    })
+
+    function show(id) { document.getElementById(id).classList.remove('hidden') }
+    function hide(id) { document.getElementById(id).classList.add('hidden') }
+    function showError(id, msg) {
+      const el = document.getElementById(id)
+      el.textContent = msg
+      el.classList.remove('hidden')
+    }
+  </script>
+</body>
+</html>

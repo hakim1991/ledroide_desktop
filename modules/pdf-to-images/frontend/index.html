@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>PDF → Images</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.5rem; }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .drop-zone {
+      border: 2px dashed #3f3f46;
+      border-radius: 8px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .drop-zone:hover, .drop-zone.over { border-color: #6366f1; background: rgba(99,102,241,.05); }
+    .drop-zone .icon { font-size: 2rem; margin-bottom: .5rem; }
+    .drop-zone p { color: #71717a; font-size: .875rem; }
+    .drop-zone strong { color: #a1a1aa; }
+
+    .file-info {
+      display: none;
+      align-items: center;
+      gap: .75rem;
+      margin-top: 1rem;
+      padding: .75rem;
+      background: #09090b;
+      border-radius: 6px;
+      font-size: .875rem;
+    }
+    .file-info.show { display: flex; }
+    .file-icon { font-size: 1.5rem; }
+    .file-name { font-weight: 600; color: #e2e2e8; }
+    .file-size { color: #71717a; font-size: .8rem; }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: .5rem 1.25rem;
+      font-size: .875rem;
+      font-weight: 500;
+      transition: opacity .15s;
+    }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-dl { background: #18181b; color: #6366f1; border: 1px solid #6366f1; margin-top: .75rem; padding: .5rem 1.25rem; }
+    .btn-dl:hover { background: rgba(99,102,241,.1); }
+
+    .actions { margin-top: 1rem; }
+
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid #3f3f46;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: .4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .result { display: none; }
+    .result.show { display: block; }
+
+    .result-msg {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .75rem 1rem;
+      background: rgba(99,102,241,.08);
+      border: 1px solid rgba(99,102,241,.2);
+      border-radius: 6px;
+      font-size: .875rem;
+      color: #a5b4fc;
+    }
+
+    .error-msg {
+      padding: .75rem 1rem;
+      background: rgba(239,68,68,.08);
+      border: 1px solid rgba(239,68,68,.2);
+      border-radius: 6px;
+      font-size: .875rem;
+      color: #fca5a5;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+    .error-msg a { color: #818cf8; }
+  </style>
+</head>
+<body>
+  <h1>🖼️ PDF → Images</h1>
+
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">📄</div>
+      <p><strong>Glissez un PDF ici</strong> ou cliquez pour sélectionner</p>
+      <p style="margin-top:.4rem;font-size:.8rem;">Fichiers PDF uniquement</p>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf" style="display:none" />
+
+    <div class="file-info" id="fileInfo">
+      <span class="file-icon">📄</span>
+      <div>
+        <div class="file-name" id="fileName"></div>
+        <div class="file-size" id="fileSize"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="convertBtn" disabled>Convertir en images</button>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="card result" id="result">
+    <div class="result-msg">
+      <span>✅</span>
+      <span id="resultText"></span>
+    </div>
+    <br>
+    <button class="btn-dl" id="dlBtn">⬇ Télécharger le ZIP</button>
+  </div>
+
+  <script>
+    const PORT   = parseInt(window.location.port) || 8765
+    const BASE   = `http://127.0.0.1:${PORT}/modules/pdf-to-images/api`
+
+    const dropZone   = document.getElementById('dropZone')
+    const fileInput  = document.getElementById('fileInput')
+    const fileInfo   = document.getElementById('fileInfo')
+    const fileName   = document.getElementById('fileName')
+    const fileSize   = document.getElementById('fileSize')
+    const convertBtn = document.getElementById('convertBtn')
+    const result     = document.getElementById('result')
+    const resultText = document.getElementById('resultText')
+    const dlBtn      = document.getElementById('dlBtn')
+    const errorMsg   = document.getElementById('errorMsg')
+
+    let selectedFile = null
+    let dlFilename   = null
+
+    function fmtSize(b) {
+      if (b < 1024) return b + ' o'
+      if (b < 1024*1024) return (b/1024).toFixed(1) + ' Ko'
+      return (b/1024/1024).toFixed(1) + ' Mo'
+    }
+
+    function setFile(f) {
+      selectedFile = f
+      fileName.textContent = f.name
+      fileSize.textContent = fmtSize(f.size)
+      fileInfo.classList.add('show')
+      convertBtn.disabled = false
+      result.classList.remove('show')
+      errorMsg.classList.remove('show')
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click())
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]) })
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('over') })
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'))
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault(); dropZone.classList.remove('over')
+      const f = e.dataTransfer.files[0]
+      if (f && f.type === 'application/pdf') setFile(f)
+    })
+
+    convertBtn.addEventListener('click', async () => {
+      if (!selectedFile) return
+      convertBtn.disabled = true
+      convertBtn.innerHTML = '<span class="spinner"></span> Conversion…'
+      result.classList.remove('show')
+      errorMsg.classList.remove('show')
+
+      try {
+        const fd = new FormData()
+        fd.append('file', selectedFile)
+        const r = await fetch(`${BASE}/convert`, { method: 'POST', body: fd })
+        const d = await r.json()
+
+        if (d.error) {
+          let html = `⚠️ ${d.error}`
+          if (d.code === 'POPPLER_MISSING') {
+            html += ` <a href="https://github.com/oschwartz10612/poppler-windows/releases" target="_blank">Télécharger Poppler →</a>`
+          }
+          errorMsg.innerHTML = html
+          errorMsg.classList.add('show')
+        } else {
+          dlFilename = d.filename
+          resultText.textContent = `${d.page_count} page(s) converties avec succès`
+          result.classList.add('show')
+        }
+      } catch (e) {
+        errorMsg.textContent = 'Erreur de connexion au backend.'
+        errorMsg.classList.add('show')
+      } finally {
+        convertBtn.disabled = false
+        convertBtn.textContent = 'Convertir en images'
+      }
+    })
+
+    dlBtn.addEventListener('click', () => {
+      if (!dlFilename) return
+      const a = document.createElement('a')
+      a.href = `${BASE}/file/${dlFilename}`
+      a.download = dlFilename
+      a.click()
+    })
+  </script>
+</body>
+</html>
