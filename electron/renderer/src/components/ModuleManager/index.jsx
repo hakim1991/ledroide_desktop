@@ -10,7 +10,8 @@ const TABS = [
   { id: 'available', label: 'Disponibles' },
 ]
 
-export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeactivated, showToast }) {
+export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeactivated, showToast, onHotReload, onRestartBackend, op }) {
+  const busy = !!op
   const [tab, setTab] = useState('installed')
 
   const filtered = modules.filter((m) =>
@@ -51,7 +52,25 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
     <div className="cp-layout">
       <header className="cp-header">
         <h2 className="cp-title">Catalogue</h2>
-        <button className="btn btn-ghost cp-close" onClick={onClose}>✕ Fermer</button>
+        <div className="cp-header-actions">
+          <button
+            className="btn btn-ghost cp-sys-btn"
+            onClick={onHotReload}
+            disabled={busy}
+            title="Recharger les modules sans redémarrer le backend"
+          >
+            {op === 'reloading' ? <span className="cp-spinner" /> : '↺'} Recharger
+          </button>
+          <button
+            className="btn btn-ghost cp-sys-btn cp-sys-restart"
+            onClick={onRestartBackend}
+            disabled={busy}
+            title="Redémarrer le process Python"
+          >
+            {op === 'restarting' ? <span className="cp-spinner" /> : '⟳'} Redémarrer
+          </button>
+          <button className="btn btn-ghost cp-close" onClick={onClose}>✕</button>
+        </div>
       </header>
 
       <nav className="cp-tabs">

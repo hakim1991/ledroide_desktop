@@ -22,9 +22,51 @@
   color: var(--text-hi);
 }
 
+.cp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.cp-sys-btn {
+  font-size: .8rem;
+  padding: .35rem .75rem;
+  gap: .35rem;
+}
+
+.cp-sys-restart {
+  color: #f97316;
+  border-color: #431407;
+}
+
+.cp-sys-restart:hover:not(:disabled) {
+  color: #fb923c;
+  border-color: #7c2d12;
+  background: rgba(249,115,22,.06);
+  opacity: 1;
+}
+
+.cp-sys-btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+.cp-spinner {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--bg-border);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: cp-spin .7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes cp-spin { to { transform: rotate(360deg); } }
+
 .cp-close {
   font-size: .8rem;
-  padding: .3rem .7rem;
+  padding: .3rem .6rem;
 }
 
 /* ── Tabs ── */

@@ -84,13 +84,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar
-        view={view}
-        op={op}
-        onNavigate={setView}
-        onHotReload={hotReload}
-        onRestartBackend={restartBackend}
-      />
+      <Sidebar view={view} onNavigate={setView} />
 
       <main className="app-main">
         {toast && (
@@ -121,6 +115,9 @@ export default function App() {
             onClose={() => setView('modules')}
             onModuleDeactivated={handleModuleDeactivated}
             showToast={showToast}
+            onHotReload={hotReload}
+            onRestartBackend={restartBackend}
+            op={op}
           />
         )}
       </main>
