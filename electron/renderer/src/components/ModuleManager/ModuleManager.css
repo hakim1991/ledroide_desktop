@@ -114,9 +114,8 @@
 }
 
 .cc-icon {
-  font-size: 1.6rem;
-  line-height: 1;
   flex-shrink: 0;
+  border-radius: 8px;
 }
 
 .cc-info {

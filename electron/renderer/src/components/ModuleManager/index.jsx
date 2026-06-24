@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import './ModuleManager.css'
+import ModuleIcon from '../ModuleIcon'
 
 const BACKEND_PORT = window.ledroide?.backendPort ?? 8765
 const API = `http://127.0.0.1:${BACKEND_PORT}`
@@ -112,7 +113,7 @@ function CatalogCard({ mod, onInstall, onDeactivate, onUninstall, showToast }) {
   return (
     <div className={`cc ${mod.status}`}>
       <div className="cc-top">
-        <span className="cc-icon">{mod.icon ?? '⬡'}</span>
+        <ModuleIcon id={mod.id} fallback={mod.icon} size={40} className="cc-icon" />
         <div className="cc-info">
           <span className="cc-name">{mod.name}</span>
           <span className="cc-version">v{mod.version}</span>

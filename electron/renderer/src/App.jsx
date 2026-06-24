@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
+import ModulesGrid from './components/ModulesGrid'
 import ModuleFrame from './components/ModuleFrame'
 import CatalogPanel from './components/ModuleManager'
 
@@ -7,11 +8,11 @@ const BACKEND_PORT = window.ledroide?.backendPort ?? 8765
 const API = `http://127.0.0.1:${BACKEND_PORT}`
 
 export default function App() {
-  const [modules, setModules]           = useState([])
+  const [modules, setModules]               = useState([])
   const [activeModuleId, setActiveModuleId] = useState(null)
-  const [view, setView]                 = useState('welcome') // 'welcome' | 'module' | 'catalog'
-  const [toast, setToast]               = useState(null)
-  const [op, setOp]                     = useState(null)      // 'reloading' | 'restarting'
+  const [view, setView]                     = useState('modules') // 'modules' | 'module' | 'catalog'
+  const [toast, setToast]                   = useState(null)
+  const [op, setOp]                         = useState(null)      // 'reloading' | 'restarting'
 
   const fetchModules = useCallback(async () => {
     try {
@@ -30,7 +31,7 @@ export default function App() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  async function handleSelectModule(mod) {
+  async function handleOpenModule(mod) {
     if (mod.status === 'installed') {
       await fetch(`${API}/modules/${mod.id}/activate`, { method: 'POST' })
       await fetchModules()
@@ -74,22 +75,19 @@ export default function App() {
   function handleModuleDeactivated(modId) {
     if (activeModuleId === modId) {
       setActiveModuleId(null)
-      setView('welcome')
+      setView('modules')
     }
   }
 
-  const sidebarModules = modules.filter((m) => m.status === 'installed')
-  const activeModule = modules.find((m) => m.id === activeModuleId)
+  const installedModules = modules.filter((m) => m.status === 'installed')
+  const activeModule     = modules.find((m) => m.id === activeModuleId)
 
   return (
     <div className="app">
       <Sidebar
-        modules={sidebarModules}
-        activeModuleId={view === 'module' ? activeModuleId : null}
-        catalogActive={view === 'catalog'}
+        view={view}
         op={op}
-        onSelectModule={handleSelectModule}
-        onOpenCatalog={() => setView('catalog')}
+        onNavigate={setView}
         onHotReload={hotReload}
         onRestartBackend={restartBackend}
       />
@@ -101,13 +99,10 @@ export default function App() {
           </div>
         )}
 
-        {view === 'catalog' && (
-          <CatalogPanel
-            modules={modules}
-            onRefresh={fetchModules}
-            onClose={() => setView(activeModule ? 'module' : 'welcome')}
-            onModuleDeactivated={handleModuleDeactivated}
-            showToast={showToast}
+        {view === 'modules' && (
+          <ModulesGrid
+            modules={installedModules}
+            onOpen={handleOpenModule}
           />
         )}
 
@@ -115,14 +110,18 @@ export default function App() {
           <ModuleFrame module={activeModule} />
         )}
 
-        {(view === 'welcome' || (view === 'module' && !activeModule)) && (
-          <div className="app-welcome">
-            <div className="app-welcome-icon">⬡</div>
-            <p className="app-welcome-title">LedroideDesktop</p>
-            <p className="app-welcome-sub">
-              Sélectionnez un module ou ouvrez le catalogue.
-            </p>
-          </div>
+        {view === 'module' && !activeModule && (
+          <ModulesGrid modules={installedModules} onOpen={handleOpenModule} />
+        )}
+
+        {view === 'catalog' && (
+          <CatalogPanel
+            modules={modules}
+            onRefresh={fetchModules}
+            onClose={() => setView('modules')}
+            onModuleDeactivated={handleModuleDeactivated}
+            showToast={showToast}
+          />
         )}
       </main>
     </div>

@@ -115,6 +115,18 @@ button.btn-primary   { background: var(--accent);  color: #fff; }
 button.btn-secondary { background: var(--success); color: #fff; }
 button.btn-ghost     { background: transparent; color: var(--text-mid); border-color: var(--bg-border); }
 
+/* ── Module icon ── */
+.module-icon-img {
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.module-icon-emoji {
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar       { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

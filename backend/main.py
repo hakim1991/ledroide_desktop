@@ -119,6 +119,16 @@ async def uninstall_module(module_id: str):
     return await registry.uninstall(module_id)
 
 
+@app.get("/modules/{module_id}/icon")
+async def module_icon(module_id: str):
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+    icon_path = Path(__file__).parent.parent / "modules" / module_id / "icon.png"
+    if not icon_path.exists():
+        return Response(status_code=404)
+    return FileResponse(str(icon_path), media_type="image/png")
+
+
 @app.post("/modules/{module_id}/deps")
 async def install_deps(module_id: str):
     return await registry.install_deps(module_id)

@@ -1,22 +1,19 @@
 import React from 'react'
 import './Sidebar.css'
 
+const NAV = [
+  { id: 'modules', icon: '⊞', label: 'Modules' },
+  { id: 'catalog', icon: '🗂', label: 'Catalogue' },
+]
+
 const OP_TITLE = {
   reloading:  'Rechargement…',
   restarting: 'Redémarrage…',
 }
 
-export default function Sidebar({
-  modules,
-  activeModuleId,
-  catalogActive,
-  op,
-  onSelectModule,
-  onOpenCatalog,
-  onHotReload,
-  onRestartBackend,
-}) {
-  const busy = !!op
+export default function Sidebar({ view, op, onNavigate, onHotReload, onRestartBackend }) {
+  const busy       = !!op
+  const activeNav  = view === 'module' ? 'modules' : view
 
   return (
     <aside className="sidebar">
@@ -27,34 +24,19 @@ export default function Sidebar({
       </div>
 
       <nav className="sb-nav">
-        <span className="sb-section-label">Modules</span>
-
-        {modules.length === 0 && (
-          <p className="sb-empty">Aucun module installé</p>
-        )}
-
-        {modules.map((mod) => (
+        {NAV.map(({ id, icon, label }) => (
           <button
-            key={mod.id}
-            className={`sb-item ${activeModuleId === mod.id ? 'active' : ''}`}
-            onClick={() => onSelectModule(mod)}
-            title={mod.name}
+            key={id}
+            className={`sb-item ${activeNav === id ? 'active' : ''}`}
+            onClick={() => onNavigate(id)}
           >
-            <span className="sb-item-icon">{mod.icon ?? '⬡'}</span>
-            <span className="sb-item-name">{mod.name}</span>
+            <span className="sb-item-icon">{icon}</span>
+            <span className="sb-item-label">{label}</span>
           </button>
         ))}
       </nav>
 
       <div className="sb-bottom">
-        <button
-          className={`sb-catalog-btn ${catalogActive ? 'active' : ''}`}
-          onClick={onOpenCatalog}
-        >
-          <span>🗂</span>
-          <span>Catalogue</span>
-        </button>
-
         <div className="sb-sys-row">
           <button
             className="sb-sys-btn"
