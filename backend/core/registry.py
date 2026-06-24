@@ -189,6 +189,13 @@ class ModuleRegistry:
     async def uninstall(self, module_id: str) -> dict:
         await self.deactivate(module_id)
         self._modules.pop(module_id, None)
+
+        module_dir = MODULES_DIR / module_id
+        if module_dir.exists():
+            import shutil
+            shutil.rmtree(module_dir)
+            print(f"[Registry] deleted: {module_dir}")
+
         return {"status": "uninstalled", "id": module_id}
 
     # ── Config ───────────────────────────────────────────────────────────────
