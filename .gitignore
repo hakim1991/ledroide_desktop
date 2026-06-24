@@ -10,3 +10,5 @@ backend/configs.json
 backend/state.json
 .env
 *.log
+
+modules_backup/
