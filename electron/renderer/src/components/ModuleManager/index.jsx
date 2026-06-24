@@ -163,17 +163,35 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
 }
 
 function CatalogCard({ mod, onActivate, onInstall, onDeactivate, onUninstall }) {
+  const [busy, setBusy]           = useState(false)
+  const [statusMsg, setStatusMsg] = useState('')
   const pythonDeps = mod.dependencies?.python ?? []
 
+  async function run(msg, fn) {
+    setBusy(true)
+    setStatusMsg(msg)
+    try {
+      await fn()
+    } finally {
+      setBusy(false)
+      setStatusMsg('')
+    }
+  }
+
+  const activateMsg = pythonDeps.length > 0
+    ? `Installation des dépendances (${pythonDeps.length})…`
+    : 'Activation…'
+
   return (
-    <div className={`cc ${mod.status}`}>
+    <div className={`cc ${mod.status}${busy ? ' cc-busy' : ''}`}>
       <div className="cc-top">
         <ModuleIcon id={mod.id} fallback={mod.icon} size={40} className="cc-icon" />
         <div className="cc-info">
           <span className="cc-name">{mod.name}</span>
           <span className="cc-version">v{mod.version}</span>
         </div>
-        {mod.status === 'active' && <span className="cc-badge-active">Actif</span>}
+        {mod.status === 'active' && !busy && <span className="cc-badge-active">Actif</span>}
+        {busy && <span className="cc-badge-busy">En cours</span>}
       </div>
 
       <p className="cc-desc">{mod.description}</p>
@@ -193,27 +211,36 @@ function CatalogCard({ mod, onActivate, onInstall, onDeactivate, onUninstall }) 
       </div>
 
       <div className="cc-actions">
-        {mod.status === 'available' && (
-          <button className="btn btn-secondary" onClick={() => onInstall(mod)}>
-            Installer
-          </button>
-        )}
-
-        {(mod.status === 'installed' || mod.status === 'active') && (
+        {busy ? (
+          <div className="cc-loading">
+            <span className="cp-spinner cc-spinner" />
+            <span className="cc-loading-msg">{statusMsg}</span>
+          </div>
+        ) : (
           <>
-            {mod.status === 'installed' && (
-              <button className="btn btn-primary" onClick={() => onActivate(mod)}>
-                Activer
+            {mod.status === 'available' && (
+              <button className="btn btn-secondary" onClick={() => run('Installation…', () => onInstall(mod))}>
+                Installer
               </button>
             )}
-            {mod.status === 'active' && (
-              <button className="btn btn-ghost" onClick={() => onDeactivate(mod)}>
-                Désactiver
-              </button>
+
+            {(mod.status === 'installed' || mod.status === 'active') && (
+              <>
+                {mod.status === 'installed' && (
+                  <button className="btn btn-primary" onClick={() => run(activateMsg, () => onActivate(mod))}>
+                    Activer
+                  </button>
+                )}
+                {mod.status === 'active' && (
+                  <button className="btn btn-ghost" onClick={() => run('Désactivation…', () => onDeactivate(mod))}>
+                    Désactiver
+                  </button>
+                )}
+                <button className="btn btn-ghost cc-uninstall" onClick={() => run('Désinstallation…', () => onUninstall(mod))}>
+                  Désinstaller
+                </button>
+              </>
             )}
-            <button className="btn btn-ghost cc-uninstall" onClick={() => onUninstall(mod)}>
-              Désinstaller
-            </button>
           </>
         )}
       </div>
