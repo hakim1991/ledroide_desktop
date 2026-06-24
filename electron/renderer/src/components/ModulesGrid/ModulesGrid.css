@@ -1,6 +1,9 @@
 .mg-layout {
   flex: 1;
   overflow-y: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 2.5rem 2rem;
 }
 
@@ -9,6 +12,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 1.5rem 1.25rem;
+  justify-content: center;
+  max-width: 700px;
 }
 
 /* ── Tile ── */

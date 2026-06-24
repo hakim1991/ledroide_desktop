@@ -12,17 +12,27 @@ const TABS = [
 
 export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeactivated, showToast, onHotReload, onRestartBackend, op }) {
   const busy = !!op
-  const [tab, setTab] = useState('installed')
+  const [tab, setTab]       = useState('installed')
+  const [search, setSearch] = useState('')
 
-  const filtered = modules.filter((m) =>
-    tab === 'installed'
+  const query    = search.trim().toLowerCase()
+  const filtered = modules.filter((m) => {
+    const matchTab = tab === 'installed'
       ? m.status === 'installed' || m.status === 'active'
-      : m.status === 'available',
-  )
+      : m.status === 'available'
+    const matchSearch = !query || m.name.toLowerCase().includes(query) || m.description?.toLowerCase().includes(query)
+    return matchTab && matchSearch
+  })
 
   const counts = {
     installed: modules.filter((m) => m.status === 'installed' || m.status === 'active').length,
     available: modules.filter((m) => m.status === 'available').length,
+  }
+
+  async function handleActivate(mod) {
+    await fetch(`${API}/modules/${mod.id}/activate`, { method: 'POST' })
+    await onRefresh()
+    showToast(`${mod.name} activé`)
   }
 
   async function handleInstall(mod) {
@@ -73,6 +83,21 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
         </div>
       </header>
 
+      <div className="cp-search-bar">
+        <span className="cp-search-icon">⌕</span>
+        <input
+          className="cp-search-input"
+          type="text"
+          placeholder="Rechercher un module…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          autoFocus
+        />
+        {search && (
+          <button className="cp-search-clear" onClick={() => setSearch('')}>✕</button>
+        )}
+      </div>
+
       <nav className="cp-tabs">
         {TABS.map(({ id, label }) => (
           <button
@@ -100,6 +125,7 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
             <CatalogCard
               key={mod.id}
               mod={mod}
+              onActivate={handleActivate}
               onInstall={handleInstall}
               onDeactivate={handleDeactivate}
               onUninstall={handleUninstall}
@@ -112,7 +138,7 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
   )
 }
 
-function CatalogCard({ mod, onInstall, onDeactivate, onUninstall, showToast }) {
+function CatalogCard({ mod, onActivate, onInstall, onDeactivate, onUninstall, showToast }) {
   const [depsState, setDepsState] = useState(null) // null | 'installing' | 'ok' | 'error'
   const pythonDeps = mod.dependencies?.python ?? []
 
@@ -165,6 +191,11 @@ function CatalogCard({ mod, onInstall, onDeactivate, onUninstall, showToast }) {
 
         {(mod.status === 'installed' || mod.status === 'active') && (
           <>
+            {mod.status === 'installed' && (
+              <button className="btn btn-primary" onClick={() => onActivate(mod)}>
+                Activer
+              </button>
+            )}
             {mod.status === 'active' && (
               <button className="btn btn-ghost" onClick={() => onDeactivate(mod)}>
                 Désactiver

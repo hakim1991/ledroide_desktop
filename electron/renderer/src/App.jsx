@@ -31,11 +31,7 @@ export default function App() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  async function handleOpenModule(mod) {
-    if (mod.status === 'installed') {
-      await fetch(`${API}/modules/${mod.id}/activate`, { method: 'POST' })
-      await fetchModules()
-    }
+  function handleOpenModule(mod) {
     setActiveModuleId(mod.id)
     setView('module')
   }
@@ -79,7 +75,7 @@ export default function App() {
     }
   }
 
-  const installedModules = modules.filter((m) => m.status === 'installed')
+  const installedModules = modules.filter((m) => m.status === 'active')
   const activeModule     = modules.find((m) => m.id === activeModuleId)
 
   return (
