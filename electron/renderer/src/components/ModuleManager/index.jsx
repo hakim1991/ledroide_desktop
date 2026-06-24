@@ -30,9 +30,33 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
   }
 
   async function handleActivate(mod) {
+    const pythonDeps = mod.dependencies?.python ?? []
+
+    if (pythonDeps.length > 0) {
+      showToast(`Installation des dépendances de ${mod.name}…`)
+      try {
+        const r = await fetch(`${API}/modules/${mod.id}/deps`, { method: 'POST' })
+        const d = await r.json()
+        if (!d.ok) {
+          showToast(`Échec de l'installation des dépendances`, false)
+          return
+        }
+      } catch {
+        showToast(`Erreur lors de l'installation des dépendances`, false)
+        return
+      }
+    }
+
+    // Activate avant le restart pour que state.json soit à jour
     await fetch(`${API}/modules/${mod.id}/activate`, { method: 'POST' })
-    await onRefresh()
-    showToast(`${mod.name} activé`)
+
+    if (pythonDeps.length > 0) {
+      // Le backend doit redémarrer pour importer les nouveaux packages
+      await onRestartBackend()
+    } else {
+      await onRefresh()
+      showToast(`${mod.name} activé`)
+    }
   }
 
   async function handleInstall(mod) {
@@ -138,22 +162,8 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
   )
 }
 
-function CatalogCard({ mod, onActivate, onInstall, onDeactivate, onUninstall, showToast }) {
-  const [depsState, setDepsState] = useState(null) // null | 'installing' | 'ok' | 'error'
+function CatalogCard({ mod, onActivate, onInstall, onDeactivate, onUninstall }) {
   const pythonDeps = mod.dependencies?.python ?? []
-
-  async function handleInstallDeps() {
-    setDepsState('installing')
-    try {
-      const r = await fetch(`${API}/modules/${mod.id}/deps`, { method: 'POST' })
-      const d = await r.json()
-      setDepsState(d.ok ? 'ok' : 'error')
-      setTimeout(() => setDepsState(null), 4000)
-    } catch {
-      setDepsState('error')
-      setTimeout(() => setDepsState(null), 4000)
-    }
-  }
 
   return (
     <div className={`cc ${mod.status}`}>
@@ -199,19 +209,6 @@ function CatalogCard({ mod, onActivate, onInstall, onDeactivate, onUninstall, sh
             {mod.status === 'active' && (
               <button className="btn btn-ghost" onClick={() => onDeactivate(mod)}>
                 Désactiver
-              </button>
-            )}
-            {pythonDeps.length > 0 && (
-              <button
-                className="btn btn-ghost"
-                onClick={handleInstallDeps}
-                disabled={depsState === 'installing'}
-                title={`Installer : ${pythonDeps.join(', ')}`}
-              >
-                {depsState === 'installing' && '⏳ Dépendances…'}
-                {depsState === 'ok'         && '✓ Installées'}
-                {depsState === 'error'      && '✕ Erreur'}
-                {depsState === null         && '📦 Dépendances'}
               </button>
             )}
             <button className="btn btn-ghost cc-uninstall" onClick={() => onUninstall(mod)}>
