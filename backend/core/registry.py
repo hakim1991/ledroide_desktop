@@ -162,6 +162,30 @@ class ModuleRegistry:
         mod["status"] = "installed"
         return {"status": "installed", "id": module_id}
 
+    async def install_deps(self, module_id: str) -> dict:
+        mod = self._modules.get(module_id)
+        if not mod:
+            return {"error": "MODULE_NOT_FOUND"}
+        deps = mod.get("dependencies", {}).get("python", [])
+        if not deps:
+            return {"ok": True, "results": [], "message": "Aucune dépendance Python déclarée"}
+
+        import asyncio, sys
+        results = []
+        for pkg in deps:
+            print(f"[Registry] pip install {pkg}...")
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "pip", "install", pkg,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            ok = proc.returncode == 0
+            print(f"[Registry] pip install {pkg}: {'OK' if ok else 'ERREUR'}")
+            results.append({"package": pkg, "ok": ok, "output": (stdout + stderr).decode()})
+
+        return {"ok": all(r["ok"] for r in results), "results": results}
+
     async def uninstall(self, module_id: str) -> dict:
         await self.deactivate(module_id)
         self._modules.pop(module_id, None)
@@ -191,19 +215,32 @@ class ModuleRegistry:
         payload    = data.get("payload", {})
         request_id = data.get("request_id")
 
+        print(f"[WS] ← {module_id}.{action}  payload={payload}")
+
+        result = {"ok": True}
         instance = self._module_instances.get(module_id)
-        if instance:
+        if not instance:
+            print(f"[WS] ✗ aucune instance pour le module '{module_id}'")
+            result = {"error": f"Module '{module_id}' non actif", "code": "MODULE_NOT_ACTIVE"}
+        else:
             try:
-                await instance.dispatch(action, payload)
+                dispatched = await instance.dispatch(action, payload)
+                if dispatched is not None:
+                    result = dispatched
+                    print(f"[WS] → {module_id}.{action}  result={result}")
+                else:
+                    print(f"[WS] ✗ {module_id}.{action} — aucun handler enregistré pour cette action")
+                    result = {"error": f"Action '{action}' inconnue", "code": "UNKNOWN_ACTION"}
             except Exception as exc:
-                print(f"[Registry] dispatch error in {module_id}.{action}: {exc}")
+                print(f"[WS] ✗ dispatch error in {module_id}.{action}: {exc}")
+                result = {"error": str(exc), "code": "DISPATCH_ERROR"}
 
         await ws.send_json({
             "type": "response",
             "module_id": module_id,
             "action": action,
             "request_id": request_id,
-            "payload": {"ok": True},
+            "payload": result,
         })
 
     async def broadcast(self, module_id: str, event: str, payload: dict):

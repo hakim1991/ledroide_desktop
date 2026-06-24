@@ -25,10 +25,74 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-#root, .app {
+#root {
   height: 100vh;
 }
 
+/* ── App layout ── */
+.app {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+}
+
+/* ── Toast ── */
+.app-toast {
+  position: absolute;
+  top: .75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: .4rem 1rem;
+  border-radius: var(--radius);
+  font-size: .8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.app-toast.ok   { background: rgba(34,197,94,.12);  color: #4ade80; border: 1px solid rgba(34,197,94,.2); }
+.app-toast.fail { background: rgba(239,68,68,.12);  color: #f87171; border: 1px solid rgba(239,68,68,.2); }
+
+/* ── Welcome screen ── */
+.app-welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  user-select: none;
+}
+
+.app-welcome-icon {
+  font-size: 2.5rem;
+  opacity: .12;
+  margin-bottom: .25rem;
+}
+
+.app-welcome-title {
+  font-size: .9375rem;
+  font-weight: 600;
+  color: var(--text-lo);
+}
+
+.app-welcome-sub {
+  font-size: .8125rem;
+  color: var(--text-lo);
+  opacity: .65;
+}
+
+/* ── Buttons ── */
 button.btn {
   display: inline-flex;
   align-items: center;
@@ -44,13 +108,14 @@ button.btn {
   white-space: nowrap;
 }
 
-button.btn:hover { opacity: .85; }
+button.btn:hover  { opacity: .85; }
 button.btn:active { opacity: .7; }
 
-button.btn-primary   { background: var(--accent);   color: #fff; }
-button.btn-secondary { background: var(--success);  color: #fff; }
+button.btn-primary   { background: var(--accent);  color: #fff; }
+button.btn-secondary { background: var(--success); color: #fff; }
 button.btn-ghost     { background: transparent; color: var(--text-mid); border-color: var(--bg-border); }
 
-::-webkit-scrollbar { width: 6px; }
+/* ── Scrollbar ── */
+::-webkit-scrollbar       { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-border); border-radius: 3px; }

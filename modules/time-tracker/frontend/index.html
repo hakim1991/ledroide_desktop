@@ -212,6 +212,30 @@
 
     .empty { text-align: center; padding: 3rem 1rem; color: #3f3f46; font-size: .875rem; }
 
+    /* ── Checkboxes ──────────────────────────────────────────── */
+    input[type="checkbox"] {
+      width: 15px; height: 15px;
+      accent-color: #6366f1;
+      cursor: pointer;
+    }
+    td.c-check, th.c-check { width: 36px; text-align: center; padding-left: .5rem; }
+
+    /* ── Bulk action bar ─────────────────────────────────────── */
+    .bulk-bar {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      background: #1e1b4b;
+      border: 1px solid #3730a3;
+      border-radius: 8px;
+      padding: .5rem .875rem;
+      font-size: .8125rem;
+      color: #a5b4fc;
+      margin-bottom: .875rem;
+    }
+    .bulk-bar span { flex: 1; }
+    .bulk-bar.hidden { display: none; }
+
     /* ── Toast ───────────────────────────────────────────── */
     #toast {
       position: fixed;
@@ -320,6 +344,11 @@
       </select>
       <p class="summary" id="summary"></p>
       <button class="btn-ghost btn-sm" onclick="loadAll()">↺</button>
+    </div>
+    <div class="bulk-bar hidden" id="bulk-bar">
+      <span id="bulk-label">0 sélectionnée(s)</span>
+      <button class="btn-danger btn-sm" onclick="deleteSelected()">🗑 Supprimer la sélection</button>
+      <button class="btn-ghost btn-sm" onclick="clearSelection()">✕ Désélectionner</button>
     </div>
     <div id="table-wrap"><div class="empty">Chargement…</div></div>
   </div>
@@ -522,6 +551,26 @@
 
   let allEntries = []
   let filterProject = ''
+  let selectedIds = new Set()
+
+  function updateBulkBar() {
+    const bar = document.getElementById('bulk-bar')
+    if (selectedIds.size === 0) {
+      bar.classList.add('hidden')
+    } else {
+      bar.classList.remove('hidden')
+      document.getElementById('bulk-label').textContent =
+        `${selectedIds.size} entrée${selectedIds.size > 1 ? 's' : ''} sélectionnée${selectedIds.size > 1 ? 's' : ''}`
+    }
+  }
+
+  function clearSelection() {
+    selectedIds.clear()
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = false)
+    const allCb = document.getElementById('check-all')
+    if (allCb) allCb.checked = false
+    updateBulkBar()
+  }
 
   async function loadEntries() {
     allEntries = await api('GET', '/entries')
@@ -571,7 +620,8 @@
     }
 
     const trs = rows.map(e => `
-      <tr>
+      <tr data-id="${e.id}">
+        <td class="c-check"><input type="checkbox" class="row-check" data-id="${e.id}" ${selectedIds.has(e.id) ? 'checked' : ''}></td>
         <td class="c-date">${esc(e.date)}</td>
         <td class="c-proj">${e.project ? `<span class="tag blue">${esc(e.project)}</span>` : '<span style="color:#3f3f46">—</span>'}</td>
         <td class="c-task">${esc(e.task) || '<span style="color:#3f3f46">—</span>'}</td>
@@ -584,10 +634,12 @@
       </tr>
     `).join('')
 
+    const allChecked = rows.length > 0 && rows.every(e => selectedIds.has(e.id))
     wrap.innerHTML = `
       <table>
         <thead>
           <tr>
+            <th class="c-check"><input type="checkbox" id="check-all" ${allChecked ? 'checked' : ''} title="Tout sélectionner"></th>
             <th>Date</th><th>Projet</th><th>Tâche</th>
             <th>Description</th><th style="text-align:right">Heures</th><th></th>
           </tr>
@@ -595,6 +647,7 @@
         <tbody>${trs}</tbody>
         <tfoot>
           <tr>
+            <td></td>
             <td colspan="4" class="tf-label">Total</td>
             <td class="tf-total">${total.toFixed(2)}h</td>
             <td></td>
@@ -602,14 +655,50 @@
         </tfoot>
       </table>
     `
+
+    document.getElementById('check-all').addEventListener('change', function () {
+      rows.forEach(e => {
+        if (this.checked) selectedIds.add(e.id)
+        else selectedIds.delete(e.id)
+      })
+      document.querySelectorAll('.row-check').forEach(cb => cb.checked = this.checked)
+      updateBulkBar()
+    })
+
+    document.querySelectorAll('.row-check').forEach(cb => {
+      cb.addEventListener('change', function () {
+        const id = parseInt(this.dataset.id)
+        if (this.checked) selectedIds.add(id)
+        else selectedIds.delete(id)
+        const allCb = document.getElementById('check-all')
+        if (allCb) allCb.checked = rows.every(e => selectedIds.has(e.id))
+        updateBulkBar()
+      })
+    })
   }
 
   async function deleteEntry(id) {
     if (!confirm('Supprimer cette entrée ?')) return
     try {
       await api('DELETE', `/entries/${id}`)
+      selectedIds.delete(id)
       toast('Entrée supprimée')
       await loadAll()
+      updateBulkBar()
+    } catch (err) {
+      toast('Erreur : ' + err.message, 'err')
+    }
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Supprimer ${selectedIds.size} entrée${selectedIds.size > 1 ? 's' : ''} ?`)) return
+    try {
+      await Promise.all([...selectedIds].map(id => api('DELETE', `/entries/${id}`)))
+      toast(`${selectedIds.size} entrée${selectedIds.size > 1 ? 's' : ''} supprimée${selectedIds.size > 1 ? 's' : ''}`)
+      selectedIds.clear()
+      await loadAll()
+      updateBulkBar()
     } catch (err) {
       toast('Erreur : ' + err.message, 'err')
     }

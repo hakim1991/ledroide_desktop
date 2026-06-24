@@ -106,6 +106,25 @@ ipcMain.handle('restart-backend', async () => {
 })
 
 app.whenReady().then(async () => {
+  const { session, dialog } = require('electron')
+  await session.defaultSession.clearCache()
+
+  session.defaultSession.on('will-download', (event, item) => {
+    const defaultPath = require('path').join(app.getPath('downloads'), item.getFilename())
+    const savePath = dialog.showSaveDialogSync(mainWindow, {
+      defaultPath,
+      filters: [
+        { name: 'Fichiers Excel', extensions: ['xlsx'] },
+        { name: 'Tous les fichiers', extensions: ['*'] },
+      ],
+    })
+    if (savePath) {
+      item.setSavePath(savePath)
+    } else {
+      item.cancel()
+    }
+  })
+
   startPythonBackend()
   await waitForBackend()
   createWindow()

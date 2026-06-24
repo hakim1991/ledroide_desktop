@@ -4,6 +4,60 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sticky Notes</title>
+  <script>
+  /* ledroide bridge — inlined */
+  (function () {
+    var pending   = new Map();
+    var listeners = new Map();
+
+    window.addEventListener('message', function (e) {
+      var d = e.data;
+      if (d && d.type === 'ledroide:response' && pending.has(d.requestId)) {
+        var p = pending.get(d.requestId);
+        clearTimeout(p.timer);
+        pending.delete(d.requestId);
+        if (d.payload && d.payload.error) p.reject(new Error(d.payload.error));
+        else p.resolve(d.payload);
+      }
+      if (d && d.type === 'ledroide:event') {
+        var key = d.moduleId + ':' + d.action;
+        var cbs = listeners.get(key);
+        if (cbs) cbs.forEach(function (cb) { cb(d.payload); });
+      }
+    });
+
+    window.ledroide = {
+      backendPort: parseInt(window.location.port) || 8765,
+      call: function (moduleId, action, payload) {
+        payload = payload || {};
+        return new Promise(function (resolve, reject) {
+          var rid   = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          var timer = setTimeout(function () {
+            pending.delete(rid);
+            reject(new Error('RPC timeout'));
+          }, 10000);
+          pending.set(rid, { resolve: resolve, reject: reject, timer: timer });
+          window.parent.postMessage(
+            { type: 'ledroide:call', moduleId: moduleId, action: action, payload: payload, requestId: rid },
+            '*'
+          );
+        });
+      },
+      on: function (moduleId, event, callback) {
+        var key = moduleId + ':' + event;
+        if (!listeners.has(key)) listeners.set(key, new Set());
+        listeners.get(key).add(callback);
+        window.parent.postMessage({ type: 'ledroide:subscribe', moduleId: moduleId, event: event }, '*');
+      },
+      off: function (moduleId, event, callback) {
+        var key = moduleId + ':' + event;
+        var cbs = listeners.get(key);
+        if (cbs) cbs.delete(callback);
+      },
+    };
+    console.log('[sticky-notes] bridge inline OK');
+  })();
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -61,6 +115,19 @@
     }
     #btn-add:hover { background: #74c7ec; }
 
+    #btn-clear {
+      background: transparent;
+      color: #f38ba8;
+      border: 1px solid #f38ba8;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #btn-clear:hover { background: rgba(243,139,168,0.15); }
+
     #board {
       position: absolute;
       top: 52px; left: 0; right: 0; bottom: 0;
@@ -79,16 +146,16 @@
     .note {
       position: absolute;
       width: 220px;
-      min-height: 160px;
+      height: 200px;
       border-radius: 4px 4px 4px 4px;
-      padding: 10px 12px 12px;
+      padding: 10px 12px 8px;
       box-shadow: 3px 4px 14px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.3);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
       cursor: grab;
+      overflow: hidden;
       transition: box-shadow 0.15s, transform 0.1s;
-      /* tape effect top */
       background-clip: padding-box;
     }
     .note::before {
@@ -144,13 +211,54 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 4px;
+      flex-shrink: 0;
     }
 
     .note-date {
       font-size: 10px;
       color: rgba(0,0,0,0.35);
     }
+
+    .note-color-btn {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid rgba(0,0,0,0.3);
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      transition: transform 0.12s, border-color 0.12s;
+    }
+    .note-color-btn:hover { transform: scale(1.15); border-color: rgba(0,0,0,0.6); }
+
+    .note-color-picker {
+      position: absolute;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e1e2e;
+      border: 1px solid #45475a;
+      border-radius: 12px;
+      padding: 8px 10px;
+      display: none;
+      gap: 7px;
+      align-items: center;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+      z-index: 200;
+    }
+    .note-color-picker.open { display: flex; }
+
+    .picker-swatch {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform 0.12s, border-color 0.12s;
+      flex-shrink: 0;
+    }
+    .picker-swatch:hover { transform: scale(1.2); }
+    .picker-swatch.active { border-color: #cdd6f4; transform: scale(1.1); }
 
     .btn-delete {
       background: none;
@@ -162,11 +270,28 @@
       padding: 2px 4px;
       border-radius: 4px;
       transition: color 0.15s, background 0.15s;
+      flex-shrink: 0;
     }
     .btn-delete:hover {
       color: rgba(180,0,0,0.7);
       background: rgba(0,0,0,0.08);
     }
+
+    .note-resize-handle {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      width: 14px;
+      height: 14px;
+      cursor: nwse-resize;
+      color: rgba(0,0,0,0.25);
+      font-size: 12px;
+      line-height: 14px;
+      text-align: center;
+      user-select: none;
+      transition: color 0.12s;
+    }
+    .note-resize-handle:hover { color: rgba(0,0,0,0.55); }
 
     #empty {
       position: fixed;
@@ -202,6 +327,7 @@
   <h1>Sticky Notes</h1>
   <div id="swatches"></div>
   <button id="btn-add">+ Nouvelle note</button>
+  <button id="btn-clear">🗑 Tout supprimer</button>
 </div>
 
 <div id="board">
@@ -270,6 +396,7 @@ function makeDraggable(el, noteId) {
 
   el.addEventListener('mousedown', (e) => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'BUTTON') return;
+    if (e.target.classList.contains('note-resize-handle') || e.target.classList.contains('note-color-dot')) return;
     dragging = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -300,6 +427,38 @@ function makeDraggable(el, noteId) {
   });
 }
 
+// ── Resize logic ──────────────────────────────────────────────────────
+function makeResizable(el, handle, noteId) {
+  let startX, startY, origW, origH, resizing = false;
+
+  handle.addEventListener('mousedown', (e) => {
+    resizing = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    origW = el.offsetWidth;
+    origH = el.offsetHeight;
+    e.stopPropagation();
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!resizing) return;
+    el.style.width  = Math.max(160, origW + (e.clientX - startX)) + 'px';
+    el.style.height = Math.max(120, origH + (e.clientY - startY)) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!resizing) return;
+    resizing = false;
+    const data = notes[noteId]?.data;
+    if (data) {
+      data.width  = el.offsetWidth;
+      data.height = el.offsetHeight;
+      debounceSave(noteId);
+    }
+  });
+}
+
 // ── Debounced save ────────────────────────────────────────────────────
 function debounceSave(noteId) {
   clearTimeout(saveTimer);
@@ -318,6 +477,8 @@ async function saveNote(noteId) {
         color:   entry.data.color,
         pos_x:   entry.data.pos_x,
         pos_y:   entry.data.pos_y,
+        width:   entry.data.width,
+        height:  entry.data.height,
       }
     });
     if (updated && !updated.error) Object.assign(entry.data, updated);
@@ -331,9 +492,11 @@ function renderNote(data) {
   const el = document.createElement('div');
   el.className = 'note';
   el.style.cssText = `
-    left: ${data.pos_x || 20}px;
-    top:  ${data.pos_y || 20}px;
-    background: ${data.color || '#fef08a'};
+    left:       ${data.pos_x  || 20}px;
+    top:        ${data.pos_y  || 20}px;
+    width:      ${data.width  || 220}px;
+    height:     ${data.height || 200}px;
+    background: ${data.color  || '#fef08a'};
   `;
 
   const titleTA = document.createElement('textarea');
@@ -355,6 +518,38 @@ function renderNote(data) {
     debounceSave(data.id);
   });
 
+  // Color picker popover
+  const colorPicker = document.createElement('div');
+  colorPicker.className = 'note-color-picker';
+  COLORS.forEach(c => {
+    const swatch = document.createElement('div');
+    swatch.className = 'picker-swatch' + (c.hex === (data.color || '#fef08a') ? ' active' : '');
+    swatch.style.background = c.hex;
+    swatch.title = c.label;
+    swatch.addEventListener('mousedown', (e) => e.stopPropagation());
+    swatch.addEventListener('click', () => {
+      data.color = c.hex;
+      el.style.background = c.hex;
+      colorBtn.style.background = c.hex;
+      colorPicker.querySelectorAll('.picker-swatch').forEach(s => s.classList.remove('active'));
+      swatch.classList.add('active');
+      colorPicker.classList.remove('open');
+      debounceSave(data.id);
+    });
+    colorPicker.appendChild(swatch);
+  });
+  el.appendChild(colorPicker);
+
+  // Color button (shows current color, toggles picker)
+  const colorBtn = document.createElement('button');
+  colorBtn.className = 'note-color-btn';
+  colorBtn.style.background = data.color || '#fef08a';
+  colorBtn.title = 'Changer la couleur';
+  colorBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    colorPicker.classList.toggle('open');
+  });
+
   const footer = document.createElement('div');
   footer.className = 'note-footer';
 
@@ -369,13 +564,21 @@ function renderNote(data) {
   delBtn.addEventListener('click', () => deleteNote(data.id));
 
   footer.appendChild(dateSpan);
+  footer.appendChild(colorBtn);
   footer.appendChild(delBtn);
   el.appendChild(titleTA);
   el.appendChild(contentTA);
   el.appendChild(footer);
 
+  // Resize handle
+  const resizeHandle = document.createElement('div');
+  resizeHandle.className = 'note-resize-handle';
+  resizeHandle.textContent = '⌟';
+  el.appendChild(resizeHandle);
+
   document.getElementById('canvas').appendChild(el);
   makeDraggable(el, data.id);
+  makeResizable(el, resizeHandle, data.id);
   notes[data.id] = { el, data };
   updateEmpty();
   return el;
@@ -383,11 +586,14 @@ function renderNote(data) {
 
 // ── API calls ─────────────────────────────────────────────────────────
 async function loadNotes() {
+  console.log('[sticky-notes] loadNotes() — appel list_notes');
   try {
     const result = await window.ledroide.call(MODULE_ID, 'list_notes', {});
+    console.log('[sticky-notes] list_notes réponse:', result);
     (result.notes || []).forEach(n => renderNote(n));
     updateEmpty();
   } catch (e) {
+    console.error('[sticky-notes] exception list_notes:', e);
     showToast('Impossible de charger les notes');
   }
 }
@@ -397,15 +603,20 @@ async function addNote() {
   const pos_x = board.scrollLeft + 40 + Math.random() * 120 | 0;
   const pos_y = board.scrollTop  + 80 + Math.random() * 80  | 0;
 
+  console.log('[sticky-notes] addNote() — appel create_note', { pos_x, pos_y, color: selectedColor });
   try {
     const note = await window.ledroide.call(MODULE_ID, 'create_note', {
-      payload: { title: '', content: '', color: selectedColor, pos_x, pos_y }
+      payload: { title: '', content: '', color: selectedColor, pos_x, pos_y, width: 220, height: 200 }
     });
+    console.log('[sticky-notes] create_note réponse:', note);
     if (note && !note.error) {
       const el = renderNote(note);
       el.querySelector('.note-title').focus();
+    } else {
+      console.error('[sticky-notes] erreur create_note:', note);
     }
   } catch (e) {
+    console.error('[sticky-notes] exception create_note:', e);
     showToast('Impossible de créer la note');
   }
 }
@@ -438,8 +649,26 @@ window.ledroide.on(MODULE_ID, 'note_deleted', ({ id }) => {
   if (entry) { entry.el.remove(); delete notes[id]; updateEmpty(); }
 });
 
+async function clearAllNotes() {
+  if (!confirm('Supprimer toutes les notes ?')) return;
+  try {
+    await window.ledroide.call(MODULE_ID, 'delete_all_notes', {});
+    Object.values(notes).forEach(({ el }) => el.remove());
+    notes = {};
+    updateEmpty();
+  } catch (e) {
+    showToast('Erreur lors de la suppression');
+  }
+}
+
+// ── Fermer les pickers ouverts au clic extérieur ──────────────────────
+document.addEventListener('click', () => {
+  document.querySelectorAll('.note-color-picker.open').forEach(p => p.classList.remove('open'));
+});
+
 // ── Init ──────────────────────────────────────────────────────────────
 document.getElementById('btn-add').addEventListener('click', addNote);
+document.getElementById('btn-clear').addEventListener('click', clearAllNotes);
 loadNotes();
 </script>
 </body>

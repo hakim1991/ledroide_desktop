@@ -1,233 +1,172 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState } from 'react'
 import './ModuleManager.css'
 
 const BACKEND_PORT = window.ledroide?.backendPort ?? 8765
 const API = `http://127.0.0.1:${BACKEND_PORT}`
 
 const TABS = [
-  { id: 'active',    label: 'Actifs' },
   { id: 'installed', label: 'Installés' },
   { id: 'available', label: 'Disponibles' },
 ]
 
-// op: null | 'reloading' | 'restarting'
-const OP_LABEL = {
-  reloading:  'Rechargement des modules...',
-  restarting: 'Redémarrage du backend Python...',
-}
+export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeactivated, showToast }) {
+  const [tab, setTab] = useState('installed')
 
-export default function ModuleManager({ onOpen }) {
-  const [tab, setTab]       = useState('active')
-  const [modules, setModules] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState(null)
-  const [op, setOp]         = useState(null)   // current operation in progress
-  const [toast, setToast]   = useState(null)   // { text, ok }
+  const filtered = modules.filter((m) =>
+    tab === 'installed'
+      ? m.status === 'installed' || m.status === 'active'
+      : m.status === 'available',
+  )
 
-  const fetchModules = useCallback(() => {
-    setLoading(true)
-    fetch(`${API}/modules`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((data) => { setModules(data); setError(null) })
-      .catch((err) => setError(`Backend injoignable sur le port ${BACKEND_PORT} — ${err.message}`))
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => { fetchModules() }, [fetchModules])
-
-  function showToast(text, ok = true) {
-    setToast({ text, ok })
-    setTimeout(() => setToast(null), 3000)
+  const counts = {
+    installed: modules.filter((m) => m.status === 'installed' || m.status === 'active').length,
+    available: modules.filter((m) => m.status === 'available').length,
   }
 
-  async function hotReload() {
-    setOp('reloading')
-    try {
-      const r = await fetch(`${API}/system/reload`, { method: 'POST' })
-      const d = await r.json()
-      const n = d.new_modules?.length ?? 0
-      fetchModules()
-      showToast(n > 0 ? `${n} nouveau(x) module(s) détecté(s)` : 'Aucun nouveau module')
-    } catch {
-      showToast('Échec du rechargement', false)
-    } finally {
-      setOp(null)
-    }
-  }
-
-  async function restartBackend() {
-    if (!window.ledroide?.restartBackend) {
-      showToast('Redémarrage non disponible hors Electron', false)
-      return
-    }
-    setOp('restarting')
-    try {
-      await window.ledroide.restartBackend()
-      fetchModules()
-      showToast('Backend redémarré')
-    } catch (err) {
-      showToast(`Erreur : ${err.message}`, false)
-    } finally {
-      setOp(null)
-    }
-  }
-
-  const busy    = !!op
-  const filtered = modules.filter((m) => m.status === tab)
-  const counts   = modules.reduce((acc, m) => ({ ...acc, [m.status]: (acc[m.status] || 0) + 1 }), {})
-
-  async function handleActivate(mod) {
-    await fetch(`${API}/modules/${mod.id}/activate`, { method: 'POST' })
-    fetchModules()
-    onOpen(mod)
+  async function handleInstall(mod) {
+    await fetch(`${API}/modules/${mod.id}/install`, { method: 'POST' })
+    await onRefresh()
+    showToast(`${mod.name} installé`)
   }
 
   async function handleDeactivate(mod) {
     await fetch(`${API}/modules/${mod.id}/deactivate`, { method: 'POST' })
-    fetchModules()
+    onModuleDeactivated(mod.id)
+    await onRefresh()
+    showToast(`${mod.name} désactivé`)
   }
 
-  async function handleInstall(mod) {
-    setModules((prev) => prev.map((m) => m.id === mod.id ? { ...m, installing: true } : m))
-    await fetch(`${API}/modules/${mod.id}/install`, { method: 'POST' })
-    fetchModules()
+  async function handleUninstall(mod) {
+    if (mod.status === 'active') {
+      await fetch(`${API}/modules/${mod.id}/deactivate`, { method: 'POST' })
+      onModuleDeactivated(mod.id)
+    }
+    await fetch(`${API}/modules/${mod.id}`, { method: 'DELETE' })
+    await onRefresh()
+    showToast(`${mod.name} désinstallé`)
   }
 
   return (
-    <div className="mm-layout">
-      <header className="mm-header">
-        <div className="mm-logo">
-          <span className={`mm-logo-dot ${busy ? 'pulse' : ''}`} />
-          <span className="mm-logo-text">LedroideDesktop</span>
-        </div>
-
-        {op && (
-          <div className="mm-op-banner">
-            <span className="mm-spinner" />
-            <span>{OP_LABEL[op]}</span>
-          </div>
-        )}
-
-        <div className="mm-header-actions">
-          <button
-            className="btn btn-ghost mm-action-btn"
-            onClick={hotReload}
-            disabled={busy}
-            title="Recharger les modules sans redémarrer le backend"
-          >
-            ↺ Recharger
-          </button>
-          <button
-            className="btn btn-ghost mm-action-btn mm-action-restart"
-            onClick={restartBackend}
-            disabled={busy}
-            title="Arrêter et relancer le process Python (prend en compte les changements de code)"
-          >
-            ⟳ Redémarrer
-          </button>
-        </div>
+    <div className="cp-layout">
+      <header className="cp-header">
+        <h2 className="cp-title">Catalogue</h2>
+        <button className="btn btn-ghost cp-close" onClick={onClose}>✕ Fermer</button>
       </header>
 
-      {toast && (
-        <div className={`mm-toast ${toast.ok ? 'ok' : 'fail'}`}>
-          {toast.ok ? '✓' : '✕'} {toast.text}
-        </div>
-      )}
-
-      <nav className="mm-tabs">
+      <nav className="cp-tabs">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
-            className={`mm-tab ${tab === id ? 'active' : ''}`}
+            className={`cp-tab ${tab === id ? 'active' : ''}`}
             onClick={() => setTab(id)}
           >
             {label}
-            {counts[id] > 0 && <span className="mm-badge-count">{counts[id]}</span>}
+            {counts[id] > 0 && <span className="cp-badge">{counts[id]}</span>}
           </button>
         ))}
       </nav>
 
-      <main className="mm-content">
-        {error && (
-          <div className="mm-error">
-            <div>
-              <strong>Backend Python injoignable</strong>
-              <br />
-              <small>{error}</small>
-              <br />
-              <small style={{ color: '#6b7280', marginTop: '.4rem', display: 'block' }}>
-                Vérifiez que le backend tourne : <code>python backend/main.py</code>
-              </small>
-            </div>
-            <button className="btn btn-ghost" onClick={fetchModules} style={{ flexShrink: 0 }}>
-              Réessayer
-            </button>
-          </div>
-        )}
-
-        {!error && loading && <p className="mm-empty">Connexion au backend...</p>}
-
-        {!error && !loading && filtered.length === 0 && (
-          <p className="mm-empty">
-            {tab === 'active'    && 'Aucun module actif.'}
-            {tab === 'installed' && 'Aucun module installé.'}
-            {tab === 'available' && 'Aucun module disponible dans le catalogue.'}
+      <div className="cp-content">
+        {filtered.length === 0 && (
+          <p className="cp-empty">
+            {tab === 'installed'
+              ? 'Aucun module installé.'
+              : 'Aucun module disponible dans le catalogue.'}
           </p>
         )}
 
-        <div className="mm-grid">
+        <div className="cp-grid">
           {filtered.map((mod) => (
-            <ModuleCard
+            <CatalogCard
               key={mod.id}
               mod={mod}
-              onActivate={handleActivate}
-              onDeactivate={handleDeactivate}
               onInstall={handleInstall}
-              onOpen={onOpen}
+              onDeactivate={handleDeactivate}
+              onUninstall={handleUninstall}
+              showToast={showToast}
             />
           ))}
         </div>
-      </main>
+      </div>
     </div>
   )
 }
 
-function ModuleCard({ mod, onActivate, onDeactivate, onInstall, onOpen }) {
+function CatalogCard({ mod, onInstall, onDeactivate, onUninstall, showToast }) {
+  const [depsState, setDepsState] = useState(null) // null | 'installing' | 'ok' | 'error'
+  const pythonDeps = mod.dependencies?.python ?? []
+
+  async function handleInstallDeps() {
+    setDepsState('installing')
+    try {
+      const r = await fetch(`${API}/modules/${mod.id}/deps`, { method: 'POST' })
+      const d = await r.json()
+      setDepsState(d.ok ? 'ok' : 'error')
+      setTimeout(() => setDepsState(null), 4000)
+    } catch {
+      setDepsState('error')
+      setTimeout(() => setDepsState(null), 4000)
+    }
+  }
+
   return (
-    <div className={`mc ${mod.status}`}>
-      <div className="mc-top">
-        <span className="mc-name">{mod.name}</span>
-        <span className="mc-version">v{mod.version}</span>
+    <div className={`cc ${mod.status}`}>
+      <div className="cc-top">
+        <span className="cc-icon">{mod.icon ?? '⬡'}</span>
+        <div className="cc-info">
+          <span className="cc-name">{mod.name}</span>
+          <span className="cc-version">v{mod.version}</span>
+        </div>
+        {mod.status === 'active' && <span className="cc-badge-active">Actif</span>}
       </div>
 
-      <p className="mc-desc">{mod.description}</p>
+      <p className="cc-desc">{mod.description}</p>
 
-      <div className="mc-meta">
+      <div className="cc-meta">
         {mod.database?.type && mod.database.type !== 'none' && (
-          <span className="mc-tag db">{mod.database.type}</span>
+          <span className="cc-tag db">{mod.database.type}</span>
         )}
         {mod.permissions?.map((p) => (
-          <span key={p} className="mc-tag">{p}</span>
+          <span key={p} className="cc-tag">{p}</span>
         ))}
+        {pythonDeps.length > 0 && (
+          <span className="cc-tag" title={pythonDeps.join(', ')}>
+            📦 {pythonDeps.length} dép.
+          </span>
+        )}
       </div>
 
-      <div className="mc-actions">
-        {mod.status === 'active' && (
-          <>
-            <button className="btn btn-primary" onClick={() => onOpen(mod)}>Ouvrir</button>
-            <button className="btn btn-ghost" onClick={() => onDeactivate(mod)}>Désactiver</button>
-          </>
-        )}
-        {mod.status === 'installed' && (
-          <button className="btn btn-primary" onClick={() => onActivate(mod)}>Activer</button>
-        )}
+      <div className="cc-actions">
         {mod.status === 'available' && (
-          <button className="btn btn-secondary" onClick={() => onInstall(mod)} disabled={mod.installing}>
-            {mod.installing ? 'Installation...' : 'Installer'}
+          <button className="btn btn-secondary" onClick={() => onInstall(mod)}>
+            Installer
           </button>
+        )}
+
+        {(mod.status === 'installed' || mod.status === 'active') && (
+          <>
+            {mod.status === 'active' && (
+              <button className="btn btn-ghost" onClick={() => onDeactivate(mod)}>
+                Désactiver
+              </button>
+            )}
+            {pythonDeps.length > 0 && (
+              <button
+                className="btn btn-ghost"
+                onClick={handleInstallDeps}
+                disabled={depsState === 'installing'}
+                title={`Installer : ${pythonDeps.join(', ')}`}
+              >
+                {depsState === 'installing' && '⏳ Dépendances…'}
+                {depsState === 'ok'         && '✓ Installées'}
+                {depsState === 'error'      && '✕ Erreur'}
+                {depsState === null         && '📦 Dépendances'}
+              </button>
+            )}
+            <button className="btn btn-ghost cc-uninstall" onClick={() => onUninstall(mod)}>
+              Désinstaller
+            </button>
+          </>
         )}
       </div>
     </div>

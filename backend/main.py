@@ -1,7 +1,66 @@
 import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 import uvicorn
+
+_BRIDGE_JS = r"""
+(function () {
+  var pending   = new Map();
+  var listeners = new Map();
+
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (d.type === 'ledroide:response' && pending.has(d.requestId)) {
+      var p = pending.get(d.requestId);
+      clearTimeout(p.timer);
+      pending.delete(d.requestId);
+      if (d.payload && d.payload.error) p.reject(new Error(d.payload.error));
+      else p.resolve(d.payload);
+    }
+    if (d.type === 'ledroide:event') {
+      var key = d.moduleId + ':' + d.action;
+      var cbs = listeners.get(key);
+      if (cbs) cbs.forEach(function (cb) { cb(d.payload); });
+    }
+  });
+
+  window.ledroide = {
+    backendPort: parseInt(window.location.port) || 8765,
+
+    call: function (moduleId, action, payload) {
+      payload = payload || {};
+      return new Promise(function (resolve, reject) {
+        var rid   = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        var timer = setTimeout(function () {
+          pending.delete(rid);
+          reject(new Error('RPC timeout'));
+        }, 10000);
+        pending.set(rid, { resolve: resolve, reject: reject, timer: timer });
+        window.parent.postMessage(
+          { type: 'ledroide:call', moduleId: moduleId, action: action, payload: payload, requestId: rid },
+          '*'
+        );
+      });
+    },
+
+    on: function (moduleId, event, callback) {
+      var key = moduleId + ':' + event;
+      if (!listeners.has(key)) listeners.set(key, new Set());
+      listeners.get(key).add(callback);
+      window.parent.postMessage({ type: 'ledroide:subscribe', moduleId: moduleId, event: event }, '*');
+    },
+
+    off: function (moduleId, event, callback) {
+      var key = moduleId + ':' + event;
+      var cbs = listeners.get(key);
+      if (cbs) cbs.delete(callback);
+    },
+  };
+})();
+"""
 
 from core.registry import ModuleRegistry
 
@@ -15,6 +74,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class NoCacheModuleFrontend(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        if "/frontend/" in request.url.path:
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+app.add_middleware(NoCacheModuleFrontend)
 
 registry = ModuleRegistry(app)
 
@@ -51,6 +119,11 @@ async def uninstall_module(module_id: str):
     return await registry.uninstall(module_id)
 
 
+@app.post("/modules/{module_id}/deps")
+async def install_deps(module_id: str):
+    return await registry.install_deps(module_id)
+
+
 @app.get("/modules/{module_id}/config")
 async def get_config(module_id: str):
     return registry.get_config(module_id)
@@ -76,6 +149,13 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as exc:
         registry.remove_connection(websocket)
         print(f"[WS] error: {exc}")
+
+
+# ── Bridge SDK ──────────────────────────────────────────────────────────────
+
+@app.get("/ledroide-bridge.js")
+async def ledroide_bridge():
+    return Response(content=_BRIDGE_JS, media_type="application/javascript")
 
 
 # ── System ───────────────────────────────────────────────────────────────────

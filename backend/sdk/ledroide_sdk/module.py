@@ -9,8 +9,9 @@ class Module:
     Reads the manifest, registers lifecycle hooks, and wires SDK singletons.
     """
 
-    def __init__(self):
-        self.manifest = self._find_manifest()
+    def __init__(self, caller_file: str = None):
+        start = Path(caller_file).resolve() if caller_file else Path(__file__).resolve()
+        self.manifest = self._find_manifest(start)
         self._handlers: dict[str, list[Callable]] = {}
         # Expose singletons for injection by the registry
         from . import db, events, config
@@ -31,12 +32,14 @@ class Module:
 
     async def dispatch(self, event: str, payload: dict):
         """Called by the registry when a WebSocket 'call' message arrives."""
+        result = None
         for handler in self._handlers.get(event, []):
-            await handler(payload)
+            result = await handler(payload)
+        return result
 
     @staticmethod
-    def _find_manifest() -> dict:
-        current = Path(__file__).resolve()
+    def _find_manifest(start: Path) -> dict:
+        current = start
         for _ in range(8):
             candidate = current.parent / "manifest.json"
             if candidate.exists():

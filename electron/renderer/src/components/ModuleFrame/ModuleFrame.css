@@ -1,57 +1,7 @@
-.mf-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: var(--bg-base);
-}
-
-.mf-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: .6rem 1.25rem;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--bg-border);
-  flex-shrink: 0;
-}
-
-.mf-back {
-  flex-shrink: 0;
-}
-
-.mf-title-group {
-  display: flex;
-  align-items: baseline;
-  gap: .5rem;
-  flex: 1;
-}
-
-.mf-name {
-  font-weight: 600;
-  font-size: .9375rem;
-  color: var(--text-hi);
-}
-
-.mf-version {
-  font-size: .75rem;
-  color: var(--text-lo);
-}
-
-.mf-status {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.mf-status.active {
-  background: #22c55e;
-  box-shadow: 0 0 6px #22c55e;
-}
-
 .mf-iframe {
-  flex: 1;
-  border: none;
+  display: block;
   width: 100%;
+  height: 100%;
+  border: none;
   background: var(--bg-base);
 }

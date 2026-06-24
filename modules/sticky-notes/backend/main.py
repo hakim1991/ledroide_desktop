@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ledroide_sdk import Module, events
 
 router = APIRouter()
-module = Module()
+module = Module(__file__)
 
 DB_PATH = Path(__file__).parent / "notes.db"
 
@@ -38,10 +38,17 @@ def _init():
                 color      TEXT    NOT NULL DEFAULT '#fef08a',
                 pos_x      REAL    NOT NULL DEFAULT 0,
                 pos_y      REAL    NOT NULL DEFAULT 0,
+                width      REAL    NOT NULL DEFAULT 220,
+                height     REAL    NOT NULL DEFAULT 200,
                 created_at TEXT    NOT NULL,
                 updated_at TEXT    NOT NULL
             )
         """)
+        for col, default in [('width', 220), ('height', 200)]:
+            try:
+                conn.execute(f"ALTER TABLE notes ADD COLUMN {col} REAL NOT NULL DEFAULT {default}")
+            except Exception:
+                pass
 
 
 _init()
@@ -61,6 +68,8 @@ class NoteCreate(BaseModel):
     color:   str   = "#fef08a"
     pos_x:   float = 0
     pos_y:   float = 0
+    width:   float = 220
+    height:  float = 200
 
 
 class NoteUpdate(BaseModel):
@@ -69,6 +78,89 @@ class NoteUpdate(BaseModel):
     color:   Optional[str]   = None
     pos_x:   Optional[float] = None
     pos_y:   Optional[float] = None
+    width:   Optional[float] = None
+    height:  Optional[float] = None
+
+
+@module.on('list_notes')
+async def handle_list_notes(payload: dict):
+    print("[sticky-notes] list_notes")
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM notes ORDER BY created_at DESC"
+        ).fetchall()
+    result = {"notes": [_row_to_dict(r) for r in rows]}
+    print(f"[sticky-notes] list_notes → {len(result['notes'])} note(s)")
+    return result
+
+
+@module.on('create_note')
+async def handle_create_note(payload: dict):
+    print(f"[sticky-notes] create_note payload={payload}")
+    import uuid
+    p = payload.get('payload', payload)
+    note_id = str(uuid.uuid4())
+    now = _now()
+    with _db() as conn:
+        conn.execute(
+            "INSERT INTO notes (id, title, content, color, pos_x, pos_y, width, height, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (note_id, p.get('title', ''), p.get('content', ''),
+             p.get('color', '#fef08a'), p.get('pos_x', 0), p.get('pos_y', 0),
+             p.get('width', 220), p.get('height', 200), now, now),
+        )
+        row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+    note = _row_to_dict(row)
+    print(f"[sticky-notes] create_note → {note}")
+    await events.emit("note_created", note)
+    return note
+
+
+@module.on('update_note')
+async def handle_update_note(payload: dict):
+    note_id = payload.get('note_id')
+    p = payload.get('payload', {})
+    changes = {k: v for k, v in p.items() if v is not None}
+    if not changes:
+        with _db() as conn:
+            row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+        if not row:
+            return {"error": "Note introuvable", "code": "NOT_FOUND"}
+        return _row_to_dict(row)
+
+    changes["updated_at"] = _now()
+    set_clause = ", ".join(f"{k}=?" for k in changes)
+    values = list(changes.values()) + [note_id]
+    with _db() as conn:
+        conn.execute(f"UPDATE notes SET {set_clause} WHERE id=?", values)
+        row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+    if not row:
+        return {"error": "Note introuvable", "code": "NOT_FOUND"}
+    note = _row_to_dict(row)
+    await events.emit("note_updated", note)
+    return note
+
+
+@module.on('delete_all_notes')
+async def handle_delete_all_notes(payload: dict):
+    with _db() as conn:
+        conn.execute("DELETE FROM notes")
+    await events.emit("all_notes_deleted", {})
+    return {"ok": True}
+
+
+@module.on('delete_note')
+async def handle_delete_note(payload: dict):
+    note_id = payload.get('note_id')
+    with _db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM notes WHERE id=?", (note_id,)
+        ).fetchone()
+        if not existing:
+            return {"error": "Note introuvable", "code": "NOT_FOUND"}
+        conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
+    await events.emit("note_deleted", {"id": note_id})
+    return {"ok": True}
 
 
 @router.get("/notes")

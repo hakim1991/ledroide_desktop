@@ -9,6 +9,9 @@
     "frontend": "frontend/index.html"
   },
   "permissions": [],
+  "dependencies": {
+    "python": ["openpyxl"]
+  },
   "database": {
     "type": "sqlite"
   }
