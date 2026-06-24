@@ -18,6 +18,8 @@ class ModuleRegistry:
         self._configs: dict[str, dict] = self._load_configs()
         self._state: dict = self._load_state()
         self._module_instances: dict[str, object] = {}
+        # Track which modules have routes mounted to prevent duplicates on re-activation
+        self._mounted_routers: set[str] = set()
 
     # ── Persistence ──────────────────────────────────────────────────────────
 
@@ -132,6 +134,10 @@ class ModuleRegistry:
             return {"error": "MODULE_NOT_FOUND"}
         mod["status"] = "installed"
         self._module_instances.pop(module_id, None)
+        self._mounted_routers.discard(module_id)
+
+        # Clean up Python module cache so next activation gets a fresh load
+        sys.modules.pop(f"module_{module_id}", None)
 
         # Remove API routes registered by this module
         api_prefix = f"/modules/{module_id}/api"
@@ -279,22 +285,32 @@ class ModuleRegistry:
             mod_py = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod_py)
 
-            # Mount the module's FastAPI router under /modules/{id}/api
-            if hasattr(mod_py, "router"):
-                from fastapi import APIRouter
+            # Mount the module's FastAPI router — guard against duplicates on re-activation
+            if hasattr(mod_py, "router") and module_id not in self._mounted_routers:
                 self.app.include_router(
                     mod_py.router,
                     prefix=f"/modules/{module_id}/api",
                     tags=[module_id],
                 )
+                self._mounted_routers.add(module_id)
 
             if hasattr(mod_py, "module"):
-                # Inject broadcast into the module's events singleton
                 instance = mod_py.module
+                # Wire per-instance broadcast so each module emits under its own id
                 if hasattr(instance, "_events"):
                     instance._events._inject(
-                        lambda ev, pl: self.broadcast(module_id, ev, pl)
+                        lambda ev, pl, _id=module_id: self.broadcast(_id, ev, pl)
                     )
+                    if hasattr(mod_py, "events"):
+                        mod_py.events = instance._events
+                # Wire per-instance config with persisted values
+                if hasattr(instance, "_config"):
+                    instance._config._inject(
+                        self._configs.get(module_id, {}),
+                        lambda vals, _id=module_id: self.set_config(_id, vals),
+                    )
+                    if hasattr(mod_py, "config"):
+                        mod_py.config = instance._config
                 self._module_instances[module_id] = instance
 
         except Exception as exc:

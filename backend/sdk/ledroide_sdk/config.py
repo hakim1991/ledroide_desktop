@@ -4,8 +4,9 @@ from typing import Any, Callable
 class _Config:
     """Read/write module config persisted by the registry in backend/configs.json."""
 
-    _values: dict = {}
-    _save_fn: Callable = None
+    def __init__(self):
+        self._values: dict = {}
+        self._save_fn: Callable = None
 
     def _inject(self, values: dict, save_fn: Callable):
         self._values = values

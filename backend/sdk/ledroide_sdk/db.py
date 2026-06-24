@@ -7,7 +7,8 @@ class _DB:
     Routes calls to the appropriate adapter (CouchDB / PostgreSQL) — Phase 3.
     """
 
-    _proxy = None
+    def __init__(self):
+        self._proxy = None
 
     def _inject(self, proxy):
         self._proxy = proxy

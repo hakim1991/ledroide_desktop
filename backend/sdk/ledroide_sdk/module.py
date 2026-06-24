@@ -13,11 +13,13 @@ class Module:
         start = Path(caller_file).resolve() if caller_file else Path(__file__).resolve()
         self.manifest = self._find_manifest(start)
         self._handlers: dict[str, list[Callable]] = {}
-        # Expose singletons for injection by the registry
-        from . import db, events, config
-        self._db = db
-        self._events = events
-        self._config = config
+        # Per-instance SDK objects — never shared between modules
+        from .events import _Events
+        from .config import _Config
+        from .db import _DB
+        self._events = _Events()
+        self._config = _Config()
+        self._db = _DB()
 
     @property
     def id(self) -> str:

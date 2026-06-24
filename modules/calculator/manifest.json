@@ -8,5 +8,8 @@
     "backend": "backend/main.py",
     "frontend": "frontend/index.html"
   },
-  "permissions": []
+  "permissions": [],
+  "database": {
+    "type": "sqlite"
+  }
 }

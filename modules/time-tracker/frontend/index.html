@@ -396,8 +396,9 @@
 
   // ── Chrono ──────────────────────────────────────────────────────────────────
 
+  // C.elapsed   = seconds accumulated before the current run (persisted backend-side)
+  // C.startedAt = JS timestamp (ms) when the current run started, null otherwise
   const C = { state: 'idle', elapsed: 0, startedAt: null, iv: null }
-  // states: idle | running | paused | done
 
   function fmtSec(s) {
     const h = Math.floor(s / 3600)
@@ -446,11 +447,29 @@
     }
   }
 
+  // Restore timer state from backend (called on page load)
+  async function restoreTimer() {
+    try {
+      const t = await api('GET', '/timer')
+      C.state     = t.state
+      C.elapsed   = t.elapsed ?? 0
+      C.startedAt = t.started_at ? t.started_at * 1000 : null
+      if (C.state === 'running') {
+        C.iv = setInterval(renderChrono, 1000)
+      }
+    } catch {
+      // leave defaults
+    }
+    renderChrono()
+  }
+
   function cStart() {
     C.state = 'running'
+    C.elapsed = 0
     C.startedAt = Date.now()
     C.iv = setInterval(renderChrono, 1000)
     renderChrono()
+    api('POST', '/timer/start').catch(() => {})
   }
 
   function cPause() {
@@ -459,6 +478,7 @@
     C.state = 'paused'
     clearInterval(C.iv)
     renderChrono()
+    api('POST', '/timer/pause').catch(() => {})
   }
 
   function cResume() {
@@ -466,6 +486,7 @@
     C.startedAt = Date.now()
     C.iv = setInterval(renderChrono, 1000)
     renderChrono()
+    api('POST', '/timer/resume').catch(() => {})
   }
 
   function cStop() {
@@ -476,12 +497,14 @@
     }
     C.state = 'done'
     renderChrono()
+    api('POST', '/timer/stop').catch(() => {})
   }
 
   function cReset() {
     clearInterval(C.iv)
     C.state = 'idle'; C.elapsed = 0; C.startedAt = null; C.iv = null
     renderChrono()
+    api('DELETE', '/timer').catch(() => {})
   }
 
   function useTime() {
@@ -736,7 +759,7 @@
   }
 
   document.getElementById('f-date').value = todayISO()
-  renderChrono()
+  restoreTimer()
   loadAll()
 </script>
 </body>

@@ -644,9 +644,40 @@
     window.parent.ledroide.on('password-generator', 'generated', () => { refreshHistory(); refreshLogs() })
   }
 
-  // Init
-  generate()
-  refreshLogs()
+  // Apply config defaults then generate
+  async function applyDefaults() {
+    try {
+      const r = await fetch(`${BASE}/config/defaults`)
+      if (!r.ok) return
+      const d = await r.json()
+
+      const slider = document.getElementById('lengthSlider')
+      slider.value = d.default_length
+      document.getElementById('lengthVal').textContent = d.default_length
+
+      function applyToggle(id, checked) {
+        const label = document.getElementById(id)
+        const cb    = label.querySelector('input')
+        const dot   = label.querySelector('.toggle-dot')
+        cb.checked = checked
+        label.classList.toggle('on', checked)
+        dot.textContent = checked ? '✓' : ''
+      }
+      applyToggle('tUpper',   d.uppercase)
+      applyToggle('tLower',   d.lowercase)
+      applyToggle('tNumbers', d.numbers)
+      applyToggle('tSymbols', d.symbols)
+    } catch {}
+  }
+
+  async function init() {
+    await applyDefaults()
+    await refreshLogs()
+    await refreshHistory()
+    generate()
+  }
+
+  init()
 </script>
 </body>
 </html>

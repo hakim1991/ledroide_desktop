@@ -1,3 +1,4 @@
+import asyncio
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -82,36 +83,40 @@ class NoteUpdate(BaseModel):
     height:  Optional[float] = None
 
 
+# ── WebSocket handlers ────────────────────────────────────────────────────────
+
 @module.on('list_notes')
 async def handle_list_notes(payload: dict):
-    print("[sticky-notes] list_notes")
-    with _db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM notes ORDER BY created_at DESC"
-        ).fetchall()
-    result = {"notes": [_row_to_dict(r) for r in rows]}
-    print(f"[sticky-notes] list_notes → {len(result['notes'])} note(s)")
-    return result
+    def _q():
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT * FROM notes ORDER BY created_at DESC"
+            ).fetchall()
+            return [_row_to_dict(r) for r in rows]
+
+    notes = await asyncio.to_thread(_q)
+    return {"notes": notes}
 
 
 @module.on('create_note')
 async def handle_create_note(payload: dict):
-    print(f"[sticky-notes] create_note payload={payload}")
     import uuid
-    p = payload.get('payload', payload)
     note_id = str(uuid.uuid4())
     now = _now()
-    with _db() as conn:
-        conn.execute(
-            "INSERT INTO notes (id, title, content, color, pos_x, pos_y, width, height, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (note_id, p.get('title', ''), p.get('content', ''),
-             p.get('color', '#fef08a'), p.get('pos_x', 0), p.get('pos_y', 0),
-             p.get('width', 220), p.get('height', 200), now, now),
-        )
-        row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
-    note = _row_to_dict(row)
-    print(f"[sticky-notes] create_note → {note}")
+
+    def _q():
+        with _db() as conn:
+            conn.execute(
+                "INSERT INTO notes (id, title, content, color, pos_x, pos_y, width, height, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (note_id, payload.get('title', ''), payload.get('content', ''),
+                 payload.get('color', '#fef08a'), payload.get('pos_x', 0), payload.get('pos_y', 0),
+                 payload.get('width', 220), payload.get('height', 200), now, now),
+            )
+            row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+            return _row_to_dict(row)
+
+    note = await asyncio.to_thread(_q)
     await events.emit("note_created", note)
     return note
 
@@ -121,55 +126,85 @@ async def handle_update_note(payload: dict):
     note_id = payload.get('note_id')
     p = payload.get('payload', {})
     changes = {k: v for k, v in p.items() if v is not None}
-    if not changes:
-        with _db() as conn:
-            row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
-        if not row:
-            return {"error": "Note introuvable", "code": "NOT_FOUND"}
-        return _row_to_dict(row)
 
-    changes["updated_at"] = _now()
-    set_clause = ", ".join(f"{k}=?" for k in changes)
-    values = list(changes.values()) + [note_id]
-    with _db() as conn:
-        conn.execute(f"UPDATE notes SET {set_clause} WHERE id=?", values)
-        row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
-    if not row:
+    def _q():
+        with _db() as conn:
+            if not changes:
+                row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+                return _row_to_dict(row) if row else None
+            ch = {**changes, "updated_at": _now()}
+            set_clause = ", ".join(f"{k}=?" for k in ch)
+            values = list(ch.values()) + [note_id]
+            conn.execute(f"UPDATE notes SET {set_clause} WHERE id=?", values)
+            row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+            return _row_to_dict(row) if row else None
+
+    note = await asyncio.to_thread(_q)
+    if note is None:
         return {"error": "Note introuvable", "code": "NOT_FOUND"}
-    note = _row_to_dict(row)
     await events.emit("note_updated", note)
     return note
 
 
 @module.on('delete_all_notes')
 async def handle_delete_all_notes(payload: dict):
-    with _db() as conn:
-        conn.execute("DELETE FROM notes")
+    await asyncio.to_thread(lambda: _delete_all_sync())
     await events.emit("all_notes_deleted", {})
     return {"ok": True}
+
+
+def _delete_all_sync():
+    with _db() as conn:
+        conn.execute("DELETE FROM notes")
 
 
 @module.on('delete_note')
 async def handle_delete_note(payload: dict):
     note_id = payload.get('note_id')
-    with _db() as conn:
-        existing = conn.execute(
-            "SELECT id FROM notes WHERE id=?", (note_id,)
-        ).fetchone()
-        if not existing:
-            return {"error": "Note introuvable", "code": "NOT_FOUND"}
-        conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
+
+    def _q():
+        with _db() as conn:
+            existing = conn.execute(
+                "SELECT id FROM notes WHERE id=?", (note_id,)
+            ).fetchone()
+            if not existing:
+                return False
+            conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
+            return True
+
+    deleted = await asyncio.to_thread(_q)
+    if not deleted:
+        return {"error": "Note introuvable", "code": "NOT_FOUND"}
     await events.emit("note_deleted", {"id": note_id})
     return {"ok": True}
 
 
+# ── REST endpoints ────────────────────────────────────────────────────────────
+
+@router.get("/notes/{note_id}")
+async def get_note(note_id: str):
+    def _q():
+        with _db() as conn:
+            row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+            return _row_to_dict(row) if row else None
+
+    note = await asyncio.to_thread(_q)
+    if note is None:
+        from fastapi import HTTPException
+        raise HTTPException(404, detail={"error": "Note introuvable", "code": "NOT_FOUND"})
+    return note
+
+
 @router.get("/notes")
 async def list_notes():
-    with _db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM notes ORDER BY created_at DESC"
-        ).fetchall()
-    return {"notes": [_row_to_dict(r) for r in rows]}
+    def _q():
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT * FROM notes ORDER BY created_at DESC"
+            ).fetchall()
+            return [_row_to_dict(r) for r in rows]
+
+    return {"notes": await asyncio.to_thread(_q)}
 
 
 @router.post("/notes")
@@ -177,15 +212,19 @@ async def create_note(payload: NoteCreate):
     import uuid
     note_id = str(uuid.uuid4())
     now = _now()
-    with _db() as conn:
-        conn.execute(
-            "INSERT INTO notes (id, title, content, color, pos_x, pos_y, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (note_id, payload.title, payload.content, payload.color,
-             payload.pos_x, payload.pos_y, now, now),
-        )
-        row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
-    note = _row_to_dict(row)
+
+    def _q():
+        with _db() as conn:
+            conn.execute(
+                "INSERT INTO notes (id, title, content, color, pos_x, pos_y, width, height, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (note_id, payload.title, payload.content, payload.color,
+                 payload.pos_x, payload.pos_y, payload.width, payload.height, now, now),
+            )
+            row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+            return _row_to_dict(row)
+
+    note = await asyncio.to_thread(_q)
     await events.emit("note_created", note)
     return note
 
@@ -193,36 +232,40 @@ async def create_note(payload: NoteCreate):
 @router.put("/notes/{note_id}")
 async def update_note(note_id: str, payload: NoteUpdate):
     changes = {k: v for k, v in payload.model_dump().items() if v is not None}
-    if not changes:
+
+    def _q():
         with _db() as conn:
+            if not changes:
+                row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+                return _row_to_dict(row) if row else None
+            ch = {**changes, "updated_at": _now()}
+            set_clause = ", ".join(f"{k}=?" for k in ch)
+            values = list(ch.values()) + [note_id]
+            conn.execute(f"UPDATE notes SET {set_clause} WHERE id=?", values)
             row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
-        if not row:
-            return {"error": "Note introuvable", "code": "NOT_FOUND"}
-        return _row_to_dict(row)
+            return _row_to_dict(row) if row else None
 
-    changes["updated_at"] = _now()
-    set_clause = ", ".join(f"{k}=?" for k in changes)
-    values = list(changes.values()) + [note_id]
-
-    with _db() as conn:
-        conn.execute(f"UPDATE notes SET {set_clause} WHERE id=?", values)
-        row = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
-
-    if not row:
+    note = await asyncio.to_thread(_q)
+    if note is None:
         return {"error": "Note introuvable", "code": "NOT_FOUND"}
-    note = _row_to_dict(row)
     await events.emit("note_updated", note)
     return note
 
 
 @router.delete("/notes/{note_id}")
 async def delete_note(note_id: str):
-    with _db() as conn:
-        existing = conn.execute(
-            "SELECT id FROM notes WHERE id=?", (note_id,)
-        ).fetchone()
-        if not existing:
-            return {"error": "Note introuvable", "code": "NOT_FOUND"}
-        conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
+    def _q():
+        with _db() as conn:
+            existing = conn.execute(
+                "SELECT id FROM notes WHERE id=?", (note_id,)
+            ).fetchone()
+            if not existing:
+                return False
+            conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
+            return True
+
+    deleted = await asyncio.to_thread(_q)
+    if not deleted:
+        return {"error": "Note introuvable", "code": "NOT_FOUND"}
     await events.emit("note_deleted", {"id": note_id})
     return {"ok": True}

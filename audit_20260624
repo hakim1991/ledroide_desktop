@@ -1,0 +1,79 @@
+Voici le rapport complet de l'audit :
+
+---
+🔴 Bugs sévères
+
+1. Singletons SDK partagés entre tous les modules (backend/sdk/ledroide_sdk/)
+Les classes _Events, _Config, _DB utilisent des attributs de classe — pas d'instance. Résultat : quand le module B est activé, il écrase le broadcast du module A. Seul le dernier module activé peut émettre des événements WebSocket.
+
+2. Routes doublées à chaque réactivation (registry.py:285)
+include_router() ajoute les routes sans vérifier si elles existent déjà. Désactiver + réactiver un module 3 fois → 3 copies des mêmes endpoints.
+
+---
+🟠 Bugs moyens
+
+3. SQLite bloquant dans l'event loop (sticky-notes/main.py:19, time-tracker/main.py:17)
+sqlite3.connect() est synchrone dans des handlers async. Sous charge, toute l'app se fige.
+
+4. POST /notes REST ne sauvegarde pas width et height (sticky-notes/main.py:18
+Les notes créées via REST auront des dimensions nulles en base.
+
+---
+🟡 Bugs mineurs
+
+5. Historique calculator/password perdu au redémarrage — stocké en mémoire vive uniquement
+6. Double extraction payload incohérente dans sticky-notes (payload.get('paylo
+7. 4 modules sans instance SDK — calculator, demo, password-generator, time-tr en REST, sans intégration cycle de vie
+8. Modules non déchargés de sys.modules à la désactivation — réactiver sans redémarrer utilise l'ancienne version en cache
+
+---
+Améliorations socle prioritaires
+
+┌──────────┬──────────────────────────────────────────────────────────────────────────┐
+│ Priorité │                                  Action
+├──────────┼──────────────────────────────────────────────────────────────────
+│ 🔴       │ Rendre _Events/_Config/_DB instanciés par module, pas singletons
+├──────────┼──────────────────────────────────────────────────────────────────
+│ 🔴       │ Garder un registre des routers montés pour éviter les doublons           │
+├──────────┼──────────────────────────────────────────────────────────────────────────┤
+│ 🟠       │ Wrapper les appels SQLite dans asyncio.to_thread()
+├──────────┼──────────────────────────────────────────────────────────────────
+│ 🟠       │ Nettoyer sys.modules à la désactivation
+├──────────┼──────────────────────────────────────────────────────────────────────────┤
+│ 🟡       │ Valider le manifest avant activation (champs obligatoires)               │
+├──────────┼──────────────────────────────────────────────────────────────────
+│ 🟡       │ Endpoint GET /system/status pour le frontend
+└──────────┴──────────────────────────────────────────────────────────────────
+
+---
+Améliorations modules existants
+
+- Calculator — persister l'historique en SQLite, ajouter mode scientifique
+- Password Generator — persister l'historique, lire la config depuis le SDK
+- Sticky Notes — corriger le bug width/height, ajouter GET /notes/{id}
+- Time Tracker — stocker timer_start côté backend (actuellement perdu au refresh)
+- Demo — peut être retiré (utile uniquement comme template)
+
+---
+Idées de nouveaux modules
+
+┌──────────────────────┬────────────────────────────────────────────────────────────────┐
+│        Module        │                            Intérêt                             │
+├──────────────────────┼──────────────────────────────────────────────────────
+│ Presse-papiers       │ Historique copies texte/image, épingle, recherche              │
+├──────────────────────┼──────────────────────────────────────────────────────
+│ Pomodoro             │ Timer avec stats de sessions persistées                        │
+├──────────────────────┼──────────────────────────────────────────────────────
+│ Moniteur système     │ CPU/RAM/disque en temps réel via WebSocket (psutil)            │
+├──────────────────────┼──────────────────────────────────────────────────────
+│ Snippets             │ Bibliothèque de code avec coloration syntaxique                │
+├──────────────────────┼──────────────────────────────────────────────────────
+│ Notes Markdown       │ Éditeur markdown + preview, alternative riche aux sticky notes │
+├──────────────────────┼──────────────────────────────────────────────────────
+│ Lanceur de commandes │ Scripts shell prédéfinis avec logs en temps réel               │
+├──────────────────────┼──────────────────────────────────────────────────────
+│ Convertisseur        │ Unités, devises, bases numériques                              │
+└──────────────────────┴──────────────────────────────────────────────────────
+
+---
+Tu veux que je commence par corriger les bugs critiques (singletons SDK + doublons de routes), ou que je crée un des nouveaux modules ?

@@ -1,38 +1,84 @@
-from datetime import datetime
+import asyncio
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-router = APIRouter()
+router  = APIRouter()
+DB_PATH = Path(__file__).parent / "calculator.db"
 
-_history: list[dict] = []
-MAX_HIST = 100
+
+@contextmanager
+def _db():
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _init():
+    with _db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS history (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                expression  TEXT    NOT NULL,
+                result      TEXT    NOT NULL,
+                ts          TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+            )
+        """)
+
+
+_init()
 
 
 class Calc(BaseModel):
     expression: str
-    result: str
+    result:     str
 
 
 @router.get("/history")
 async def get_history():
-    return _history
+    def _q():
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT * FROM history ORDER BY id DESC LIMIT 100"
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    return await asyncio.to_thread(_q)
 
 
 @router.post("/history")
 async def add_history(c: Calc):
-    entry = {
-        "id": len(_history),
-        "expression": c.expression,
-        "result": c.result,
-        "ts": datetime.now().isoformat(timespec="seconds"),
-    }
-    _history.insert(0, entry)
-    del _history[MAX_HIST:]
-    return entry
+    def _q():
+        with _db() as conn:
+            cur = conn.execute(
+                "INSERT INTO history (expression, result) VALUES (?, ?)",
+                (c.expression, c.result),
+            )
+            row = conn.execute(
+                "SELECT * FROM history WHERE id=?", (cur.lastrowid,)
+            ).fetchone()
+            return dict(row)
+
+    return await asyncio.to_thread(_q)
 
 
 @router.delete("/history")
 async def clear_history():
-    n = len(_history)
-    _history.clear()
+    def _q():
+        with _db() as conn:
+            n = conn.execute("SELECT COUNT(*) FROM history").fetchone()[0]
+            conn.execute("DELETE FROM history")
+            return n
+
+    n = await asyncio.to_thread(_q)
     return {"cleared": n}

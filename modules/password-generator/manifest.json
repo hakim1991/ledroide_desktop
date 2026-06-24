@@ -10,7 +10,7 @@
   },
   "permissions": [],
   "database": {
-    "type": "none"
+    "type": "sqlite"
   },
   "dependencies": {
     "python": [],

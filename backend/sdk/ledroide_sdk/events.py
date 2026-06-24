@@ -4,7 +4,8 @@ from typing import Callable, Coroutine
 class _Events:
     """Sends events to all connected Electron windows via the registry broadcast."""
 
-    _broadcast_fn: Callable = None
+    def __init__(self):
+        self._broadcast_fn: Callable = None
 
     def _inject(self, fn: Callable):
         self._broadcast_fn = fn
