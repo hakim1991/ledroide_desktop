@@ -1,0 +1,14 @@
+{
+  "id": "gamepad-tester",
+  "name": "Testeur de manette",
+  "version": "1.0.0",
+  "description": "Visualise en temps réel les axes, boutons et D-pad d'une manette connectée",
+  "icon": "🎮",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": { "type": "none" },
+  "dependencies": { "python": [], "modules": [] }
+}

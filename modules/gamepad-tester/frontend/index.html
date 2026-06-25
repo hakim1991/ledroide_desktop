@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Testeur de manette</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f12;
+      color: #e2e2e8;
+      min-height: 100vh;
+      padding: 1.25rem;
+    }
+
+    h1 { font-size: 1.125rem; font-weight: 700; color: #f4f4f5; margin-bottom: .25rem; }
+    .subtitle { font-size: .8125rem; color: #52525b; margin-bottom: 1.25rem; }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .75rem 1rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      margin-bottom: 1.25rem;
+      font-size: .875rem;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #52525b;
+      flex-shrink: 0;
+      transition: background .2s;
+    }
+    .status-dot.connected { background: #22c55e; box-shadow: 0 0 6px #22c55e80; }
+    .status-dot.disconnected { background: #ef4444; }
+    .status-name { color: #a1a1aa; }
+    .status-name strong { color: #e2e2e8; }
+    .status-index { margin-left: auto; font-size: .75rem; color: #52525b; }
+
+    /* ── Layout ── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .card-title {
+      font-size: .75rem;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: .875rem;
+    }
+
+    /* ── Axes ── */
+    .axes-list { display: flex; flex-direction: column; gap: .75rem; }
+
+    .axis-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+
+    .axis-label {
+      font-size: .75rem;
+      color: #71717a;
+      width: 48px;
+      flex-shrink: 0;
+    }
+
+    .axis-track {
+      flex: 1;
+      height: 6px;
+      background: #27272a;
+      border-radius: 3px;
+      position: relative;
+      overflow: visible;
+    }
+
+    .axis-center {
+      position: absolute;
+      left: 50%; top: -2px;
+      width: 1px; height: 10px;
+      background: #3f3f46;
+      transform: translateX(-50%);
+    }
+
+    .axis-fill {
+      position: absolute;
+      height: 100%;
+      border-radius: 3px;
+      background: #6366f1;
+      transition: width .05s, left .05s;
+    }
+
+    .axis-thumb {
+      position: absolute;
+      width: 12px; height: 12px;
+      background: #818cf8;
+      border-radius: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      transition: left .05s;
+      box-shadow: 0 0 6px #6366f140;
+    }
+
+    .axis-val {
+      font-size: .75rem;
+      font-family: monospace;
+      color: #a1a1aa;
+      width: 44px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* ── Buttons ── */
+    .buttons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+      gap: .5rem;
+    }
+
+    .btn-indicator {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .3rem;
+    }
+
+    .btn-circle {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: #27272a;
+      border: 2px solid #3f3f46;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .65rem;
+      font-weight: 700;
+      color: #52525b;
+      transition: background .05s, border-color .05s, color .05s, box-shadow .05s;
+    }
+
+    .btn-circle.pressed {
+      background: #6366f1;
+      border-color: #818cf8;
+      color: #fff;
+      box-shadow: 0 0 10px #6366f180;
+    }
+
+    .btn-circle.analog {
+      background: #1e1b4b;
+      border-color: #3730a3;
+      color: #818cf8;
+    }
+
+    .btn-label {
+      font-size: .6rem;
+      color: #52525b;
+      text-align: center;
+      max-width: 44px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── Sticks ── */
+    .sticks-row {
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .stick-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .stick-label {
+      font-size: .75rem;
+      color: #71717a;
+    }
+
+    .stick-zone {
+      width: 100px; height: 100px;
+      background: #0f0f12;
+      border: 2px solid #27272a;
+      border-radius: 50%;
+      position: relative;
+    }
+
+    .stick-cross-h, .stick-cross-v {
+      position: absolute;
+      background: #27272a;
+    }
+    .stick-cross-h { width: 100%; height: 1px; top: 50%; left: 0; }
+    .stick-cross-v { width: 1px; height: 100%; left: 50%; top: 0; }
+
+    .stick-dot {
+      position: absolute;
+      width: 18px; height: 18px;
+      background: #6366f1;
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      transition: top .04s, left .04s;
+      box-shadow: 0 0 8px #6366f180;
+    }
+
+    .stick-vals {
+      font-size: .7rem;
+      font-family: monospace;
+      color: #52525b;
+      text-align: center;
+    }
+
+    /* ── D-pad ── */
+    .dpad-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .dpad {
+      display: grid;
+      grid-template-areas:
+        ". up ."
+        "left . right"
+        ". down .";
+      gap: 3px;
+      width: 90px;
+    }
+
+    .dpad-btn {
+      width: 26px; height: 26px;
+      background: #27272a;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .75rem;
+      color: #52525b;
+      transition: background .05s, color .05s;
+    }
+
+    .dpad-btn.pressed { background: #6366f1; color: #fff; }
+    .dpad-btn[data-dir="up"]    { grid-area: up; }
+    .dpad-btn[data-dir="down"]  { grid-area: down; }
+    .dpad-btn[data-dir="left"]  { grid-area: left; }
+    .dpad-btn[data-dir="right"] { grid-area: right; }
+
+    /* ── Waiting screen ── */
+    #waiting {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      min-height: 300px;
+      color: #52525b;
+    }
+
+    #waiting .icon { font-size: 3rem; }
+    #waiting p { font-size: .9rem; }
+    #waiting small { font-size: .8rem; color: #3f3f46; }
+
+    #dashboard { display: none; }
+  </style>
+</head>
+<body>
+
+  <h1>🎮 Testeur de manette</h1>
+  <p class="subtitle">Visualise axes, boutons et D-pad en temps réel via la Gamepad API</p>
+
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-name" id="statusName">En attente d'une manette…</span>
+    <span class="status-index" id="statusIndex"></span>
+  </div>
+
+  <div id="waiting">
+    <div class="icon">🎮</div>
+    <p>Branchez une manette et appuyez sur un bouton</p>
+    <small>La Gamepad API s'active au premier input détecté</small>
+  </div>
+
+  <div id="dashboard">
+    <div class="grid">
+
+      <!-- Axes -->
+      <div class="card">
+        <div class="card-title">Axes</div>
+        <div class="axes-list" id="axesList"></div>
+      </div>
+
+      <!-- Sticks -->
+      <div class="card">
+        <div class="card-title">Sticks analogiques</div>
+        <div class="sticks-row">
+          <div class="stick-wrap">
+            <span class="stick-label">Stick gauche</span>
+            <div class="stick-zone" id="stickL">
+              <div class="stick-cross-h"></div>
+              <div class="stick-cross-v"></div>
+              <div class="stick-dot" id="dotL"></div>
+            </div>
+            <div class="stick-vals" id="stickLVals">0.00 / 0.00</div>
+          </div>
+          <div class="stick-wrap">
+            <span class="stick-label">Stick droit</span>
+            <div class="stick-zone" id="stickR">
+              <div class="stick-cross-h"></div>
+              <div class="stick-cross-v"></div>
+              <div class="stick-dot" id="dotR"></div>
+            </div>
+            <div class="stick-vals" id="stickRVals">0.00 / 0.00</div>
+          </div>
+          <div class="dpad-wrap">
+            <span class="stick-label">D-pad</span>
+            <div class="dpad">
+              <div class="dpad-btn" data-dir="up"    id="dUp">▲</div>
+              <div class="dpad-btn" data-dir="left"  id="dLeft">◀</div>
+              <div class="dpad-btn" data-dir="right" id="dRight">▶</div>
+              <div class="dpad-btn" data-dir="down"  id="dDown">▼</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Boutons face + épaules -->
+      <div class="card" style="grid-column: span 2">
+        <div class="card-title">Boutons</div>
+        <div class="buttons-grid" id="buttonsGrid"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Labels standards pour manette Xbox/PS (mapping Standard Gamepad API)
+    const BTN_LABELS = [
+      'A / ×', 'B / ○', 'X / □', 'Y / △',
+      'LB', 'RB', 'LT', 'RT',
+      'Select', 'Start',
+      'L3', 'R3',
+      '↑', '↓', '←', '→',
+      'Home'
+    ]
+
+    const AXIS_LABELS = ['LX', 'LY', 'RX', 'RY']
+
+    let gpIndex = null
+    let rafId   = null
+    let axesDom     = []
+    let buttonsDom  = []
+    let builtFor    = -1  // nb boutons/axes la dernière fois qu'on a construit le DOM
+
+    // ── Event listeners ─────────────────────────────────────────────────────────
+
+    window.addEventListener('gamepadconnected', (e) => {
+      gpIndex = e.gamepad.index
+      document.getElementById('statusDot').className = 'status-dot connected'
+      document.getElementById('statusName').innerHTML =
+        `Connectée : <strong>${e.gamepad.id}</strong>`
+      document.getElementById('statusIndex').textContent = `Index ${e.gamepad.index}`
+      document.getElementById('waiting').style.display   = 'none'
+      document.getElementById('dashboard').style.display = 'block'
+      buildDOM(e.gamepad)
+      if (!rafId) rafId = requestAnimationFrame(loop)
+    })
+
+    window.addEventListener('gamepaddisconnected', (e) => {
+      if (e.gamepad.index !== gpIndex) return
+      gpIndex = null
+      cancelAnimationFrame(rafId); rafId = null
+      document.getElementById('statusDot').className  = 'status-dot disconnected'
+      document.getElementById('statusName').innerHTML = 'Manette déconnectée'
+      document.getElementById('statusIndex').textContent = ''
+      document.getElementById('waiting').style.display   = 'flex'
+      document.getElementById('dashboard').style.display = 'none'
+      builtFor = -1
+    })
+
+    // ── DOM construction ─────────────────────────────────────────────────────────
+
+    function buildDOM(gp) {
+      if (gp.buttons.length === builtFor) return
+      builtFor = gp.buttons.length
+
+      // Axes
+      const axesList = document.getElementById('axesList')
+      axesList.innerHTML = ''
+      axesDom = []
+      gp.axes.forEach((_, i) => {
+        const label = AXIS_LABELS[i] ?? `Axe ${i}`
+        const row = document.createElement('div')
+        row.className = 'axis-row'
+        row.innerHTML = `
+          <span class="axis-label">${label}</span>
+          <div class="axis-track">
+            <div class="axis-center"></div>
+            <div class="axis-fill" id="af${i}"></div>
+            <div class="axis-thumb" id="at${i}"></div>
+          </div>
+          <span class="axis-val" id="av${i}">0.00</span>
+        `
+        axesList.appendChild(row)
+        axesDom.push({
+          fill:  document.getElementById(`af${i}`),
+          thumb: document.getElementById(`at${i}`),
+          val:   document.getElementById(`av${i}`),
+        })
+      })
+
+      // Buttons
+      const grid = document.getElementById('buttonsGrid')
+      grid.innerHTML = ''
+      buttonsDom = []
+      gp.buttons.forEach((_, i) => {
+        const label = BTN_LABELS[i] ?? `B${i}`
+        const wrap  = document.createElement('div')
+        wrap.className = 'btn-indicator'
+        wrap.innerHTML = `
+          <div class="btn-circle" id="bc${i}">${i}</div>
+          <div class="btn-label">${label}</div>
+        `
+        grid.appendChild(wrap)
+        buttonsDom.push(document.getElementById(`bc${i}`))
+      })
+    }
+
+    // ── Main loop ────────────────────────────────────────────────────────────────
+
+    function loop() {
+      rafId = requestAnimationFrame(loop)
+
+      const gamepads = navigator.getGamepads()
+      if (gpIndex === null) return
+      const gp = gamepads[gpIndex]
+      if (!gp) return
+
+      // Rebuild DOM if layout changed (some drivers report axes count late)
+      buildDOM(gp)
+
+      // Axes
+      gp.axes.forEach((v, i) => {
+        const d = axesDom[i]
+        if (!d) return
+        const pct = ((v + 1) / 2) * 100            // 0% (gauche) → 100% (droite)
+        const center = 50
+        if (v >= 0) {
+          d.fill.style.left  = center + '%'
+          d.fill.style.width = (pct - center) + '%'
+        } else {
+          d.fill.style.left  = pct + '%'
+          d.fill.style.width = (center - pct) + '%'
+        }
+        d.thumb.style.left = pct + '%'
+        d.val.textContent  = v.toFixed(2)
+        const dead = Math.abs(v) < 0.05
+        d.fill.style.background  = dead ? '#3f3f46' : '#6366f1'
+        d.thumb.style.background = dead ? '#52525b' : '#818cf8'
+      })
+
+      // Sticks visuels
+      updateStick('dotL', 'stickLVals', gp.axes[0] ?? 0, gp.axes[1] ?? 0)
+      updateStick('dotR', 'stickRVals', gp.axes[2] ?? 0, gp.axes[3] ?? 0)
+
+      // Boutons
+      gp.buttons.forEach((btn, i) => {
+        const el = buttonsDom[i]
+        if (!el) return
+        const v = typeof btn === 'object' ? btn.value : btn
+        const pressed = typeof btn === 'object' ? btn.pressed : btn > 0.5
+        if (v > 0 && v < 1) {
+          el.className = 'btn-circle analog'
+          el.title = `${(v * 100).toFixed(0)}%`
+        } else {
+          el.className = pressed ? 'btn-circle pressed' : 'btn-circle'
+          el.title = ''
+        }
+      })
+
+      // D-pad (boutons 12-15 dans Standard Gamepad mapping)
+      toggleDpad('dUp',    gp.buttons[12])
+      toggleDpad('dDown',  gp.buttons[13])
+      toggleDpad('dLeft',  gp.buttons[14])
+      toggleDpad('dRight', gp.buttons[15])
+    }
+
+    function updateStick(dotId, valId, x, y) {
+      const dot  = document.getElementById(dotId)
+      const vals = document.getElementById(valId)
+      const r    = 38   // rayon max en px (zone = 100px → centre à 50, bord à 50-6=44)
+      dot.style.left = (50 + x * r) + 'px'
+      dot.style.top  = (50 + y * r) + 'px'
+      vals.textContent = `${x.toFixed(2)} / ${y.toFixed(2)}`
+    }
+
+    function toggleDpad(id, btn) {
+      if (!btn) return
+      const pressed = typeof btn === 'object' ? btn.pressed : btn > 0.5
+      document.getElementById(id)?.classList.toggle('pressed', pressed)
+    }
+  </script>
+</body>
+</html>

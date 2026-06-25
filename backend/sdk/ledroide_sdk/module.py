@@ -25,6 +25,13 @@ class Module:
     def id(self) -> str:
         return self.manifest["id"]
 
+    @property
+    def router(self):
+        from fastapi import APIRouter
+        if not hasattr(self, '_router'):
+            self._router = APIRouter()
+        return self._router
+
     def on(self, event: str):
         """Decorator — register an event handler triggered from the Electron UI."""
         def decorator(fn: Callable):
