@@ -10,12 +10,67 @@
     "build:renderer": "vite build",
     "build": "vite build",
     "backend": "python backend/main.py",
-    "start": "electron ."
+    "start": "electron .",
+    "setup-python": "node scripts/setup-python.js",
+    "dist": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "fr.bigapps.ledroide-desktop",
+    "productName": "LedroideDesktop",
+    "copyright": "Copyright © 2026 BigApps",
+    "asar": false,
+    "directories": {
+      "output": "dist/release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/renderer/**/*",
+      "backend/**/*",
+      "modules/**/*",
+      "!backend/python-dist/**",
+      "!backend/.venv/**",
+      "!backend/.venv_dell/**",
+      "!**/node_modules/**",
+      "!**/__pycache__/**",
+      "!**/*.pyc",
+      "!**/*.db",
+      "!**/state.json",
+      "!**/configs.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/python-dist",
+        "to": "python",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LedroideDesktop"
+    }
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",
     "concurrently": "^8.2.0",
     "electron": "^30.0.0",
+    "electron-builder": "^26.15.3",
     "playwright": "^1.61.1",
     "vite": "^5.2.0",
     "wait-on": "^7.2.0"

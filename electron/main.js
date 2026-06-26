@@ -11,15 +11,27 @@ let pythonProcess
 
 function resolvePython() {
   const root = path.join(__dirname, '..')
-  // Prefer venv Python so deps are guaranteed available
+
   const candidates = [
-    path.join(root, 'backend', '.venv', 'Scripts', 'python.exe'), // Windows venv
-    path.join(root, 'backend', '.venv', 'bin', 'python'),          // Unix venv
-    path.join(root, '.venv', 'Scripts', 'python.exe'),             // root venv Windows
-    path.join(root, '.venv', 'bin', 'python'),                     // root venv Unix
-    'python',                                                        // system PATH
+    // 1. Production: Python embeddable bundled via extraResources
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'python', 'python.exe')
+      : null,
+
+    // 2. Dev: local python-dist set up by scripts/setup-python.js
+    path.join(root, 'backend', 'python-dist', 'python.exe'),
+
+    // 3. Dev fallback: project venv
+    path.join(root, 'backend', '.venv', 'Scripts', 'python.exe'),
+    path.join(root, 'backend', '.venv', 'bin', 'python'),
+    path.join(root, '.venv', 'Scripts', 'python.exe'),
+    path.join(root, '.venv', 'bin', 'python'),
+
+    // 4. Last resort: system Python
+    'python',
     'python3',
-  ]
+  ].filter(Boolean)
+
   for (const p of candidates) {
     if (p === 'python' || p === 'python3') return p
     if (fs.existsSync(p)) return p

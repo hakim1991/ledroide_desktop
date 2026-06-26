@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+backend/.venv_dell/
+backend/python-dist/
+
 backend/sdk/*.egg-info/
 backend/sdk/ledroide_sdk.egg-info/
 backend/configs.json
@@ -11,6 +14,10 @@ backend/state.json
 .env
 *.log
 
-modules_backup/
+# Bases de données et état runtime des modules
+modules/**/*.db
+modules/**/state.json
+modules/**/configs.json
 
+modules_backup/
 steamlit_tools/
