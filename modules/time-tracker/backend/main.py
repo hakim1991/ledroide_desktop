@@ -4,14 +4,17 @@ import sqlite3
 import time as _time
 from contextlib import contextmanager
 from pathlib import Path
+
+from ledroide_sdk import Module, data_path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from ledroide_sdk.http import HTTPException, Query
+from ledroide_sdk.http import StreamingResponse
 from pydantic import BaseModel
 
-router  = APIRouter()
-DB_PATH = Path(__file__).parent / "timetracker.db"
+module = Module(__file__)
+router = module.router
+DB_PATH = data_path(__file__, "timetracker.db")
 
 
 @contextmanager

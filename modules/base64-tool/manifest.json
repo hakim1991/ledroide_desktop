@@ -3,12 +3,23 @@
   "name": "Base64",
   "version": "1.0.0",
   "description": "Encode ou décode n'importe quel fichier en Base64",
+  "category": "Développement",
+  "tags": [
+    "encodage",
+    "fichier",
+    "texte"
+  ],
   "icon": "🔐",
   "entry": {
     "backend": "backend/main.py",
     "frontend": "frontend/index.html"
   },
   "permissions": [],
-  "database": { "type": "none" },
-  "dependencies": { "python": [], "modules": [] }
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  }
 }

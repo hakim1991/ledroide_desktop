@@ -1,0 +1,30 @@
+{
+  "id": "network-tools",
+  "name": "Outils réseau",
+  "version": "1.0.0",
+  "description": "Infos réseau, IP publique, ping, DNS, scan de ports, traceroute et test de débit.",
+  "category": "Réseau",
+  "tags": [
+    "ping",
+    "ports",
+    "débit",
+    "diagnostic"
+  ],
+  "icon": "🌐",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "psutil"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

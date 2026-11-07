@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comparateur de texte</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  body { font-family: system-ui, sans-serif; background: #0f0f12; color: #e2e2e8; min-height: 100vh; padding: 1.5rem; font-size: 14px; }
+  h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.25rem; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  .muted { color: #71717a; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: .45rem .9rem; font-size: .83rem; font-weight: 500; font-family: inherit; transition: opacity .15s, background .15s; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  .btn-ghost { background: #27272a; color: #e2e2e8; }
+  .btn-ghost:hover:not(:disabled) { background: #3f3f46; }
+  .btn-sm { padding: .28rem .6rem; font-size: .76rem; }
+  input[type=checkbox] { accent-color: #6366f1; }
+  input[type=number] { background: #09090b; border: 1px solid #27272a; color: #e2e2e8; border-radius: 6px; padding: .25rem .4rem; font: inherit; width: 54px; }
+
+  .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 760px) { .inputs { grid-template-columns: 1fr; } }
+  .in-pane { background: #18181b; border: 1px solid #27272a; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; transition: border-color .15s; }
+  .in-pane.over { border-color: #6366f1; background: rgba(99,102,241,.05); }
+  .in-head { display: flex; align-items: center; gap: .5rem; padding: .5rem .65rem; border-bottom: 1px solid #27272a; }
+  .in-head .label { font-weight: 600; font-size: .85rem; }
+  .in-head .file { font-size: .75rem; color: #71717a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .in-pane textarea { border: none; background: #09090b; color: #e2e2e8; padding: .7rem .8rem; font: 12.5px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; resize: vertical; min-height: 180px; height: 230px; outline: none; tab-size: 4; white-space: pre; overflow: auto; }
+  .in-foot { font-size: .72rem; color: #71717a; padding: .3rem .65rem; border-top: 1px solid #27272a; }
+
+  .opts { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; }
+  .opts label { display: flex; align-items: center; gap: .35rem; font-size: .83rem; color: #d4d4d8; cursor: pointer; }
+  .seg { display: inline-flex; border: 1px solid #27272a; border-radius: 6px; overflow: hidden; }
+  .seg button { border-radius: 0; background: #09090b; color: #a1a1aa; padding: .35rem .7rem; font-size: .78rem; }
+  .seg button.active { background: rgba(99,102,241,.18); color: #e2e2e8; }
+  .grow { flex: 1; }
+
+  .stats { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .75rem; }
+  .pill { border-radius: 999px; padding: .2rem .65rem; font-size: .78rem; font-weight: 600; border: 1px solid #27272a; background: #09090b; }
+  .pill.add { color: #4ade80; border-color: rgba(74,222,128,.3); }
+  .pill.del { color: #f87171; border-color: rgba(248,113,113,.3); }
+  .pill.chg { color: #fbbf24; border-color: rgba(251,191,36,.3); }
+  .pill.ok { color: #a5b4fc; border-color: rgba(99,102,241,.35); }
+  .simbar { width: 90px; height: 6px; background: #27272a; border-radius: 999px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: .35rem; }
+  .simbar div { height: 100%; background: #6366f1; }
+
+  .diff-wrap { border: 1px solid #27272a; border-radius: 8px; overflow: auto; max-height: 70vh; background: #0b0b0e; }
+  table.diff { border-collapse: collapse; width: 100%; font: 12.5px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; table-layout: fixed; }
+  table.diff td { padding: 0 .5rem; vertical-align: top; white-space: pre-wrap; word-break: break-all; }
+  table.diff td.n { width: 52px; text-align: right; color: #52525b; user-select: none; background: #111114; border-right: 1px solid #1f1f23; font-size: 11.5px; padding-top: 1px; }
+  table.diff td.s { width: 20px; text-align: center; user-select: none; color: #71717a; padding: 0; }
+  table.diff.sbs td.l { border-right: 1px solid #27272a; }
+  tr.del td.c, td.c.del { background: rgba(248,113,113,.10); }
+  tr.add td.c, td.c.add { background: rgba(74,222,128,.09); }
+  td.c.empty { background: repeating-linear-gradient(45deg, #111114, #111114 4px, #0d0d10 4px, #0d0d10 8px); }
+  tr.del td.n, td.n.del { background: rgba(248,113,113,.14); color: #fca5a5; }
+  tr.add td.n, td.n.add { background: rgba(74,222,128,.12); color: #86efac; }
+  tr.del td.s { color: #f87171; } tr.add td.s { color: #4ade80; }
+  td.c.del mark { background: rgba(248,113,113,.45); color: #fff; border-radius: 2px; }
+  td.c.add mark { background: rgba(74,222,128,.38); color: #fff; border-radius: 2px; }
+  tr.soft td.c mark { background: rgba(161,161,170,.22); color: inherit; }
+  mark { color: inherit; }
+  tr.fold td { background: #141418; color: #818cf8; text-align: center; cursor: pointer; font-family: system-ui, sans-serif; font-size: .76rem; padding: .25rem; border-top: 1px solid #1f1f23; border-bottom: 1px solid #1f1f23; }
+  tr.fold:hover td { background: #1c1c22; }
+  tr.cur td { box-shadow: inset 0 1px 0 #6366f1, inset 0 -1px 0 #6366f1; }
+  .empty-state { padding: 2rem; text-align: center; color: #71717a; }
+
+  .msg { padding: .65rem .9rem; border-radius: 6px; font-size: .83rem; margin-bottom: 1rem; display: none; white-space: pre-wrap; }
+  .msg.show { display: block; }
+  .msg.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
+  .toast { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%) translateY(20px); background: #27272a; color: #e2e2e8; padding: .5rem 1rem; border-radius: 6px; font-size: .82rem; opacity: 0; transition: .2s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<h1>🔀 Comparateur de texte</h1>
+<div class="msg err" id="errorMsg"></div>
+
+<div class="inputs">
+  <div class="in-pane" id="paneA">
+    <div class="in-head">
+      <span class="label">Original</span><span class="file" id="fileA"></span>
+      <button class="btn-ghost btn-sm" data-open="A">📂 Ouvrir</button>
+      <button class="btn-ghost btn-sm" data-clear="A" title="Vider">✕</button>
+    </div>
+    <textarea id="textA" spellcheck="false" placeholder="Collez le texte original ou glissez un fichier ici…"></textarea>
+    <div class="in-foot" id="infoA">0 ligne</div>
+  </div>
+  <div class="in-pane" id="paneB">
+    <div class="in-head">
+      <span class="label">Modifié</span><span class="file" id="fileB"></span>
+      <button class="btn-ghost btn-sm" data-open="B">📂 Ouvrir</button>
+      <button class="btn-ghost btn-sm" data-clear="B" title="Vider">✕</button>
+    </div>
+    <textarea id="textB" spellcheck="false" placeholder="Collez le texte modifié ou glissez un fichier ici…"></textarea>
+    <div class="in-foot" id="infoB">0 ligne</div>
+  </div>
+</div>
+<input type="file" id="fileInput" style="display:none" />
+
+<div class="card" style="margin-top:1rem">
+  <div class="opts">
+    <div class="seg" id="viewSeg"><button data-v="sbs" class="active">Côte à côte</button><button data-v="unified">Unifié</button></div>
+    <div class="seg" id="granSeg"><button data-g="word" class="active">Mots</button><button data-g="char">Caractères</button></div>
+    <label><input type="checkbox" id="ignWs" /> Ignorer les espaces</label>
+    <label><input type="checkbox" id="ignCase" /> Ignorer la casse</label>
+    <label><input type="checkbox" id="fold" checked /> Replier les lignes identiques</label>
+    <label class="muted" style="cursor:default">Contexte <input type="number" id="ctx" min="0" max="50" value="3" /></label>
+    <span class="grow"></span>
+    <button class="btn-ghost btn-sm" id="swapBtn" title="Inverser les deux textes">⇄ Inverser</button>
+    <button class="btn-primary" id="cmpBtn">Comparer</button>
+  </div>
+</div>
+
+<div class="card hidden" id="resultCard">
+  <div class="stats" id="stats"></div>
+  <div class="diff-wrap" id="diffWrap"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/diff-viewer/api`
+const $ = id => document.getElementById(id)
+
+let view = 'sbs', gran = 'word'
+let result = null, names = { A: '', B: '' }
+let expanded = new Set()      // index de début des blocs repliés qu'on a dépliés
+let hunks = [], hunkIdx = -1
+let autoT = null, seq = 0
+
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+function showError(msg) { const e = $('errorMsg'); if (!msg) { e.classList.remove('show'); return } e.textContent = '⚠️ ' + msg; e.classList.add('show') }
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1600) }
+async function api(path, opts = {}) {
+  let r
+  try { r = await fetch(BASE + path, opts) } catch { throw { error: 'Erreur de connexion au backend.' } }
+  let d = {}
+  try { d = await r.json() } catch {}
+  if (!r.ok || d.error) throw { error: d.error || ('Erreur HTTP ' + r.status) }
+  return d
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); toast('Copié !'); return } catch {}
+  const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'
+  document.body.appendChild(ta); ta.select()
+  try { document.execCommand('copy'); toast('Copié !') } catch { toast('Copie impossible') }
+  ta.remove()
+}
+
+// ── entrées ──
+function updateInfo(k) {
+  const v = $('text' + k).value
+  const lines = v ? v.split(/\r\n|\r|\n/).length : 0
+  $('info' + k).textContent = `${lines} ligne${lines > 1 ? 's' : ''} · ${v.length} caractère${v.length > 1 ? 's' : ''}` + ($('info' + k).dataset.extra || '')
+}
+;['A', 'B'].forEach(k => {
+  const ta = $('text' + k), pane = $('pane' + k)
+  ta.addEventListener('input', () => { updateInfo(k); scheduleAuto() })
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Tab') { e.preventDefault(); const s = ta.selectionStart; ta.setRangeText('\t', s, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input')) }
+  })
+  pane.addEventListener('dragover', e => { e.preventDefault(); pane.classList.add('over') })
+  pane.addEventListener('dragleave', e => { if (!pane.contains(e.relatedTarget)) pane.classList.remove('over') })
+  pane.addEventListener('drop', e => {
+    e.preventDefault(); pane.classList.remove('over')
+    const files = [...e.dataTransfer.files]
+    if (files.length >= 2) { loadFile('A', files[0]); loadFile('B', files[1]); return }
+    if (files[0]) loadFile(k, files[0])
+    else { const t = e.dataTransfer.getData('text/plain'); if (t) { ta.value = t; ta.dispatchEvent(new Event('input')) } }
+  })
+})
+let openTarget = 'A'
+document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => { openTarget = b.dataset.open; $('fileInput').click() }))
+$('fileInput').addEventListener('change', () => { const f = $('fileInput').files[0]; $('fileInput').value = ''; if (f) loadFile(openTarget, f) })
+document.querySelectorAll('[data-clear]').forEach(b => b.addEventListener('click', () => {
+  const k = b.dataset.clear; $('text' + k).value = ''; $('file' + k).textContent = ''; names[k] = ''; $('info' + k).dataset.extra = ''; updateInfo(k); scheduleAuto()
+}))
+async function loadFile(k, f) {
+  showError(null)
+  const fd = new FormData(); fd.append('file', f, f.name)
+  try {
+    const d = await api('/read-file', { method: 'POST', body: fd })
+    $('text' + k).value = d.text; names[k] = d.name
+    $('file' + k).textContent = '📄 ' + d.name; $('file' + k).title = d.name
+    $('info' + k).dataset.extra = ` · ${d.encoding} · ${d.eol}`
+    updateInfo(k); compare()
+  } catch (e) { showError(`${f.name} : ${e.error}`) }
+}
+$('swapBtn').addEventListener('click', () => {
+  const a = $('textA').value; $('textA').value = $('textB').value; $('textB').value = a
+  ;[names.A, names.B] = [names.B, names.A]
+  const fa = $('fileA').textContent; $('fileA').textContent = $('fileB').textContent; $('fileB').textContent = fa
+  const ia = $('infoA').dataset.extra; $('infoA').dataset.extra = $('infoB').dataset.extra || ''; $('infoB').dataset.extra = ia || ''
+  updateInfo('A'); updateInfo('B'); compare()
+})
+
+// ── options ──
+$('viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; view = b.dataset.v; segActive('viewSeg', b); render() })
+$('granSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; gran = b.dataset.g; segActive('granSeg', b); compare() })
+function segActive(id, b) { $(id).querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b)) }
+$('ignWs').addEventListener('change', compare); $('ignCase').addEventListener('change', compare)
+$('fold').addEventListener('change', () => { expanded.clear(); render() })
+$('ctx').addEventListener('input', () => { expanded.clear(); if (result) compare() })
+$('cmpBtn').addEventListener('click', compare)
+function scheduleAuto() {
+  clearTimeout(autoT)
+  if ($('textA').value.length + $('textB').value.length < 300000) autoT = setTimeout(compare, 450)
+}
+
+async function compare() {
+  clearTimeout(autoT)
+  const a = $('textA').value, b = $('textB').value
+  if (!a && !b) { $('resultCard').classList.add('hidden'); result = null; return }
+  const my = ++seq
+  $('cmpBtn').disabled = true
+  try {
+    const d = await api('/diff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      a, b, name_a: names.A || 'original', name_b: names.B || 'modifié', ignore_ws: $('ignWs').checked, ignore_case: $('ignCase').checked,
+      granularity: gran, context: Math.max(0, Math.min(50, +$('ctx').value || 0)),
+    }) })
+    if (my !== seq) return
+    showError(null); result = d; expanded.clear(); hunkIdx = -1; render()
+  } catch (e) { if (my === seq) showError(e.error) }
+  finally { if (my === seq) $('cmpBtn').disabled = false }
+}
+
+// ── rendu ──
+const segHtml = segs => segs ? segs.map(([t, c]) => c ? `<mark>${esc(t)}</mark>` : esc(t)).join('') : ''
+function visibleItems(rows) {
+  // regroupe les longues séquences de lignes identiques
+  const ctx = Math.max(0, +$('ctx').value || 0), fold = $('fold').checked
+  if (!fold) return rows.map((r, i) => ({ row: r, i }))
+  const out = []
+  let i = 0
+  while (i < rows.length) {
+    if (rows[i].t !== 'equal') { out.push({ row: rows[i], i }); i++; continue }
+    let j = i; while (j < rows.length && rows[j].t === 'equal') j++
+    const start = i === 0 ? 0 : ctx, end = j === rows.length ? 0 : ctx
+    const len = j - i
+    if (len - start - end > 2 && !expanded.has(i)) {
+      for (let k = i; k < i + start; k++) out.push({ row: rows[k], i: k })
+      out.push({ fold: true, from: i, count: len - start - end })
+      for (let k = j - end; k < j; k++) out.push({ row: rows[k], i: k })
+    } else for (let k = i; k < j; k++) out.push({ row: rows[k], i: k })
+    i = j
+  }
+  return out
+}
+function render() {
+  if (!result) return
+  const s = result.stats
+  $('resultCard').classList.remove('hidden')
+  let st = ''
+  if (s.exact) st += `<span class="pill ok">✓ Textes identiques</span>`
+  else if (s.identical) st += `<span class="pill ok">✓ Identiques selon les options choisies</span>`
+  st += `<span class="pill add">+${s.added} ajoutée${s.added > 1 ? 's' : ''}</span><span class="pill del">−${s.removed} supprimée${s.removed > 1 ? 's' : ''}</span><span class="pill chg">~${s.changed} modifiée${s.changed > 1 ? 's' : ''}</span>`
+  st += `<span class="muted" style="font-size:.8rem">Similarité ${s.similarity} %<span class="simbar"><div style="width:${s.similarity}%"></div></span></span>`
+  st += `<span class="grow"></span><button class="btn-ghost btn-sm" id="prevH" title="Différence précédente">▲</button><button class="btn-ghost btn-sm" id="nextH" title="Différence suivante">▼</button>`
+  st += `<button class="btn-ghost btn-sm" id="copyPatch" ${result.unified ? '' : 'disabled'}>📋 Copier le diff</button><button class="btn-ghost btn-sm" id="dlPatch" ${result.unified ? '' : 'disabled'}>⬇ .patch</button>`
+  $('stats').innerHTML = st
+  $('prevH').onclick = () => gotoHunk(-1); $('nextH').onclick = () => gotoHunk(1)
+  $('copyPatch').onclick = () => copyText(result.unified)
+  $('dlPatch').onclick = () => {
+    const blob = new Blob([result.unified], { type: 'text/x-diff' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    a.download = ((names.B || names.A || 'comparaison').replace(/\.[^.]+$/, '')) + '.patch'
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+  }
+
+  if (!result.rows.length) { $('diffWrap').innerHTML = '<div class="empty-state">Aucun contenu à comparer.</div>'; return }
+  const items = visibleItems(result.rows)
+  const html = []
+  hunks = []
+  let prevChange = false
+  if (view === 'sbs') {
+    html.push('<table class="diff sbs"><colgroup><col style="width:52px"><col><col style="width:52px"><col></colgroup>')
+    for (const it of items) {
+      if (it.fold) { html.push(`<tr class="fold" data-from="${it.from}"><td colspan="4">⋯ ${it.count} ligne${it.count > 1 ? 's' : ''} identique${it.count > 1 ? 's' : ''} — cliquer pour afficher</td></tr>`); prevChange = false; continue }
+      const r = it.row, isCh = r.t !== 'equal'
+      const hid = isCh && !prevChange ? ` id="h${hunks.push(it.i) - 1}"` : ''
+      prevChange = isCh
+      const lc = r.t === 'del' || r.t === 'change' ? 'del' : '', rc = r.t === 'add' || r.t === 'change' ? 'add' : ''
+      html.push(`<tr${hid} class="${r.soft ? 'soft' : ''}">` +
+        `<td class="n ${lc}">${r.ln ?? ''}</td><td class="c l ${r.l ? lc : 'empty'}">${segHtml(r.l)}</td>` +
+        `<td class="n ${rc}">${r.rn ?? ''}</td><td class="c ${r.r ? rc : 'empty'}">${segHtml(r.r)}</td></tr>`)
+    }
+  } else {
+    html.push('<table class="diff uni"><colgroup><col style="width:52px"><col style="width:52px"><col style="width:20px"><col></colgroup>')
+    let pendingAdds = []
+    const flush = () => { for (const a of pendingAdds) html.push(a); pendingAdds = [] }
+    for (const it of items) {
+      if (it.fold) { flush(); html.push(`<tr class="fold" data-from="${it.from}"><td colspan="4">⋯ ${it.count} ligne${it.count > 1 ? 's' : ''} identique${it.count > 1 ? 's' : ''} — cliquer pour afficher</td></tr>`); prevChange = false; continue }
+      const r = it.row, isCh = r.t !== 'equal'
+      if (!isCh) { flush(); html.push(`<tr class="${r.soft ? 'soft' : ''}"><td class="n">${r.ln}</td><td class="n">${r.rn}</td><td class="s"></td><td class="c">${segHtml(r.r)}</td></tr>`); prevChange = false; continue }
+      const hid = !prevChange ? ` id="h${hunks.push(it.i) - 1}"` : ''
+      prevChange = true
+      if (r.l) html.push(`<tr class="del"${hid}><td class="n">${r.ln}</td><td class="n"></td><td class="s">−</td><td class="c del">${segHtml(r.l)}</td></tr>`)
+      if (r.r) pendingAdds.push(`<tr class="add"${r.l ? '' : hid}><td class="n"></td><td class="n">${r.rn}</td><td class="s">+</td><td class="c add">${segHtml(r.r)}</td></tr>`)
+    }
+    flush()
+  }
+  html.push('</table>')
+  $('diffWrap').innerHTML = html.join('')
+  $('prevH').disabled = $('nextH').disabled = !hunks.length
+}
+$('diffWrap').addEventListener('click', e => {
+  const f = e.target.closest('tr.fold'); if (!f) return
+  expanded.add(+f.dataset.from); render()
+})
+function gotoHunk(dir) {
+  if (!hunks.length) return
+  hunkIdx = (hunkIdx + dir + hunks.length) % hunks.length
+  document.querySelectorAll('tr.cur').forEach(t => t.classList.remove('cur'))
+  const el = $('h' + hunkIdx); if (!el) return
+  el.classList.add('cur')
+  const wrap = $('diffWrap')
+  wrap.scrollTop = el.offsetTop - wrap.clientHeight / 3
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+// exemple initial
+$('textA').value = `Le renard brun rapide\nsaute par-dessus le chien paresseux.\n\nLigne identique 1\nLigne identique 2\nCette ligne sera supprimée.\nFin du texte.`
+$('textB').value = `Le renard roux rapide\nsaute par-dessus le chien paresseux !\n\nLigne identique 1\nLigne identique 2\nUne ligne ajoutée.\nFin du texte.`
+updateInfo('A'); updateInfo('B'); compare()
+</script>
+</body>
+</html>

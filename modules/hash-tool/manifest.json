@@ -1,0 +1,27 @@
+{
+  "id": "hash-tool",
+  "name": "Hash & Checksum",
+  "version": "1.0.0",
+  "description": "Calculez MD5, SHA-1, SHA-256, SHA-512, SHA3, BLAKE2b, CRC32 et HMAC d'un texte ou d'un fichier, et vérifiez une somme de contrôle.",
+  "category": "Sécurité",
+  "tags": [
+    "hash",
+    "fichier",
+    "texte"
+  ],
+  "icon": "#️⃣",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

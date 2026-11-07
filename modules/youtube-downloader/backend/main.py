@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from pathlib import Path
 
-from fastapi import HTTPException
+from ledroide_sdk.http import HTTPException
 from pydantic import BaseModel
 
 from ledroide_sdk import Module

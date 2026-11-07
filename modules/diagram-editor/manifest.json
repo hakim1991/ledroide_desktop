@@ -1,0 +1,29 @@
+{
+  "id": "diagram-editor",
+  "name": "Schémas blocs",
+  "version": "1.0.0",
+  "description": "Créez des schémas blocs : formes variées, liaisons fléchées nommées, export PNG/SVG/JSON.",
+  "category": "Productivité",
+  "tags": [
+    "schéma",
+    "dessin",
+    "export"
+  ],
+  "icon": "🧩",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

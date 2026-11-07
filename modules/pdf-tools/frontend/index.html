@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Outils PDF</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  body { font-family: system-ui, sans-serif; background: #0f0f12; color: #e2e2e8; min-height: 100vh; padding: 1.5rem; font-size: .9rem; }
+  h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1rem; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+  .muted { color: #71717a; }
+  .tabs { display: flex; gap: .25rem; margin-bottom: 1rem; border-bottom: 1px solid #27272a; flex-wrap: wrap; }
+  .tab { background: none; border: none; color: #a1a1aa; padding: .6rem 1rem; cursor: pointer; font-size: .875rem; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 0; }
+  .tab:hover { color: #e2e2e8; }
+  .tab.active { color: #e2e2e8; border-bottom-color: #6366f1; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .drop-zone { border: 2px dashed #3f3f46; border-radius: 8px; padding: 1.75rem 1rem; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop-zone:hover, .drop-zone.over { border-color: #6366f1; background: rgba(99,102,241,.05); }
+  .drop-zone .icon { font-size: 1.8rem; margin-bottom: .4rem; }
+  .drop-zone p { color: #71717a; font-size: .85rem; }
+  .drop-zone strong { color: #a1a1aa; }
+
+  button { cursor: pointer; border: none; border-radius: 6px; padding: .5rem 1.1rem; font-size: .85rem; font-weight: 500; transition: opacity .15s, background .15s; font-family: inherit; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-ghost { background: #27272a; color: #e2e2e8; }
+  .btn-ghost:hover:not(:disabled) { background: #3f3f46; }
+  .btn-icon { background: transparent; color: #a1a1aa; padding: .25rem .45rem; font-size: .9rem; }
+  .btn-icon:hover { background: #27272a; color: #e2e2e8; }
+  .btn-dl { background: transparent; color: #a5b4fc; border: 1px solid #6366f1; }
+  .btn-dl:hover { background: rgba(99,102,241,.1); }
+  .actions { margin-top: 1rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+
+  .file-list { list-style: none; margin-top: 1rem; display: flex; flex-direction: column; gap: .4rem; }
+  .file-item { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem; background: #09090b; border: 1px solid #27272a; border-radius: 6px; }
+  .file-item.dragging { opacity: .4; }
+  .file-item.drop-before { border-top: 2px solid #6366f1; }
+  .file-item.drop-after { border-bottom: 2px solid #6366f1; }
+  .file-item .handle { cursor: grab; color: #52525b; user-select: none; }
+  .file-item .idx { color: #71717a; width: 1.5rem; text-align: right; font-variant-numeric: tabular-nums; }
+  .file-item .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-item .meta { color: #71717a; font-size: .8rem; white-space: nowrap; }
+  .file-item .bad { color: #fca5a5; font-size: .8rem; }
+
+  .info-line { margin-top: .9rem; padding: .6rem .8rem; background: #09090b; border-radius: 6px; display: none; gap: .6rem; align-items: center; }
+  .info-line.show { display: flex; }
+
+  label.opt { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; cursor: pointer; }
+  input[type=text], input[type=number] { background: #09090b; border: 1px solid #3f3f46; color: #e2e2e8; border-radius: 6px; padding: .45rem .6rem; font-size: .85rem; font-family: inherit; }
+  input[type=text]:focus, input[type=number]:focus { outline: none; border-color: #6366f1; }
+  input[type=range] { accent-color: #6366f1; }
+  input[type=checkbox], input[type=radio] { accent-color: #6366f1; }
+  .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-top: .75rem; }
+  .hint { font-size: .78rem; color: #71717a; margin-top: .3rem; }
+
+  .pages { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: .75rem; margin-top: 1rem; }
+  .pg { background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: .5rem; display: flex; flex-direction: column; align-items: center; gap: .4rem; cursor: grab; user-select: none; }
+  .pg.dragging { opacity: .4; }
+  .pg.drop-before { box-shadow: -3px 0 0 #6366f1; }
+  .pg.drop-after { box-shadow: 3px 0 0 #6366f1; }
+  .pg.deleted { opacity: .35; }
+  .pg .thumbwrap { width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; }
+  .pg .thumb { background: #e4e4e7; color: #18181b; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.5); position: relative; }
+  .pg .thumb::after { content: ''; position: absolute; top: 6px; left: 8px; right: 8px; height: 3px; background: #a1a1aa; border-radius: 2px; }
+  .pg .lbl { font-size: .75rem; color: #a1a1aa; }
+  .pg .btns { display: flex; gap: .1rem; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: .4rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .result { display: none; margin-top: 1rem; padding: .75rem 1rem; background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.25); border-radius: 6px; color: #c7d2fe; align-items: center; gap: .75rem; flex-wrap: wrap; }
+  .result.show { display: flex; }
+  .result .txt { flex: 1; min-width: 200px; }
+  .error-msg { display: none; margin-top: 1rem; padding: .75rem 1rem; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); border-radius: 6px; color: #fca5a5; }
+  .error-msg.show { display: block; }
+  .gain { color: #86efac; font-weight: 600; }
+  .loss { color: #fbbf24; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>📑 Outils PDF</h1>
+
+<div class="tabs">
+  <button class="tab active" data-tab="merge">Fusionner</button>
+  <button class="tab" data-tab="split">Découper</button>
+  <button class="tab" data-tab="reorg">Réorganiser / Pivoter</button>
+  <button class="tab" data-tab="compress">Compresser</button>
+</div>
+
+<!-- ─── Fusionner ─── -->
+<section class="panel active" id="panel-merge">
+  <div class="card">
+    <div class="drop-zone" id="mergeDrop">
+      <div class="icon">📚</div>
+      <p><strong>Glissez plusieurs PDF ici</strong> ou cliquez pour sélectionner</p>
+      <p class="hint">Réordonnez ensuite la liste par glisser-déposer.</p>
+    </div>
+    <input type="file" id="mergeInput" accept=".pdf,application/pdf" multiple hidden />
+    <ul class="file-list" id="mergeList"></ul>
+    <div class="actions">
+      <button class="btn-primary" id="mergeBtn" disabled>Fusionner</button>
+      <button class="btn-ghost" id="mergeClear" disabled>Vider la liste</button>
+      <span class="muted" id="mergeTotal"></span>
+    </div>
+    <div class="error-msg" id="mergeErr"></div>
+    <div class="result" id="mergeRes"></div>
+  </div>
+</section>
+
+<!-- ─── Découper ─── -->
+<section class="panel" id="panel-split">
+  <div class="card">
+    <div class="drop-zone" id="splitDrop">
+      <div class="icon">✂️</div>
+      <p><strong>Glissez un PDF ici</strong> ou cliquez pour sélectionner</p>
+    </div>
+    <input type="file" id="splitInput" accept=".pdf,application/pdf" hidden />
+    <div class="info-line" id="splitInfo"></div>
+
+    <label class="opt"><input type="radio" name="splitMode" value="ranges" checked /> Par plages de pages (un PDF par plage)</label>
+    <div style="margin-left:1.6rem">
+      <input type="text" id="splitRanges" placeholder="ex. 1-3,5,8-" style="width:min(320px,100%)" />
+      <div class="hint">Séparez les plages par des virgules. « 8- » = de la page 8 à la fin.</div>
+    </div>
+    <label class="opt"><input type="radio" name="splitMode" value="each" /> Extraire chaque page (un PDF par page)</label>
+
+    <div class="actions"><button class="btn-primary" id="splitBtn" disabled>Découper</button></div>
+    <div class="error-msg" id="splitErr"></div>
+    <div class="result" id="splitRes"></div>
+  </div>
+</section>
+
+<!-- ─── Réorganiser ─── -->
+<section class="panel" id="panel-reorg">
+  <div class="card">
+    <div class="drop-zone" id="reorgDrop">
+      <div class="icon">🔄</div>
+      <p><strong>Glissez un PDF ici</strong> ou cliquez pour sélectionner</p>
+    </div>
+    <input type="file" id="reorgInput" accept=".pdf,application/pdf" hidden />
+    <div class="info-line" id="reorgInfo"></div>
+    <div id="reorgTools" style="display:none">
+      <div class="actions">
+        <button class="btn-ghost" id="rotAllL">↺ Tout pivoter à gauche</button>
+        <button class="btn-ghost" id="rotAllR">↻ Tout pivoter à droite</button>
+        <button class="btn-ghost" id="reorgReset">Réinitialiser</button>
+      </div>
+      <p class="hint">Glissez les pages pour changer l'ordre. 🗑 marque une page comme supprimée (cliquez à nouveau pour la restaurer).</p>
+      <div class="pages" id="pages"></div>
+      <div class="actions"><button class="btn-primary" id="reorgBtn">Générer le nouveau PDF</button><span class="muted" id="reorgCount"></span></div>
+    </div>
+    <div class="error-msg" id="reorgErr"></div>
+    <div class="result" id="reorgRes"></div>
+  </div>
+</section>
+
+<!-- ─── Compresser ─── -->
+<section class="panel" id="panel-compress">
+  <div class="card">
+    <div class="drop-zone" id="compDrop">
+      <div class="icon">🗜️</div>
+      <p><strong>Glissez un PDF ici</strong> ou cliquez pour sélectionner</p>
+    </div>
+    <input type="file" id="compInput" accept=".pdf,application/pdf" hidden />
+    <div class="info-line" id="compInfo"></div>
+
+    <p class="hint" style="margin-top:1rem">Les flux de contenu sont toujours recompressés (sans perte) et les objets en double supprimés.</p>
+    <label class="opt"><input type="checkbox" id="compImages" /> Recompresser aussi les images (JPEG, avec perte)</label>
+    <div id="compImgOpts" style="margin-left:1.6rem;display:none">
+      <div class="row">
+        <label>Qualité : <strong id="compQVal">70</strong></label>
+        <input type="range" id="compQ" min="20" max="95" value="70" />
+      </div>
+      <div class="row">
+        <label for="compMax">Dimension max. des images (px, 0 = inchangée)</label>
+        <input type="number" id="compMax" value="2000" min="0" step="100" style="width:100px" />
+      </div>
+    </div>
+
+    <div class="actions"><button class="btn-primary" id="compBtn" disabled>Compresser</button></div>
+    <div class="error-msg" id="compErr"></div>
+    <div class="result" id="compRes"></div>
+  </div>
+</section>
+
+<script>
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/pdf-tools/api`
+const $ = id => document.getElementById(id)
+
+function fmtSize(b) {
+  if (b < 1024) return b + ' o'
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' Ko'
+  return (b / 1024 / 1024).toFixed(2) + ' Mo'
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
+function isPdf(f) { return f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) }
+
+function showError(el, d) {
+  let msg = (d && d.error) || 'Erreur inconnue.'
+  if (d && d.code === 'MISSING_DEP') msg = '⚠️ Dépendance manquante : ' + msg + ' — Installez les dépendances du module (bouton « Dépendances » dans le gestionnaire de modules), puis réessayez.'
+  else msg = '⚠️ ' + msg
+  el.textContent = msg
+  el.classList.add('show')
+}
+function hide(...els) { els.forEach(e => e.classList.remove('show')) }
+
+async function api(path, fd) {
+  let r
+  try { r = await fetch(BASE + path, { method: 'POST', body: fd }) }
+  catch (e) { return { error: 'Impossible de joindre le backend du module.' } }
+  try { return await r.json() } catch (e) { return { error: `Réponse invalide du serveur (HTTP ${r.status}).` } }
+}
+
+function download(filename) {
+  const a = document.createElement('a')
+  a.href = `${BASE}/file/${encodeURIComponent(filename)}`
+  a.download = filename
+  document.body.appendChild(a); a.click(); a.remove()
+}
+
+function showResult(el, html, filename) {
+  el.innerHTML = `<span>✅</span><span class="txt">${html}</span>`
+  const b = document.createElement('button')
+  b.className = 'btn-dl'; b.textContent = '⬇ Télécharger'
+  b.onclick = () => download(filename)
+  el.appendChild(b)
+  el.classList.add('show')
+}
+
+async function busy(btn, label, fn) {
+  const old = btn.textContent
+  btn.disabled = true
+  btn.innerHTML = `<span class="spinner"></span>${label}`
+  try { await fn() } finally { btn.textContent = old; btn.disabled = false }
+}
+
+function setupDrop(zone, input, onFiles) {
+  zone.addEventListener('click', () => input.click())
+  input.addEventListener('change', () => { if (input.files.length) onFiles([...input.files]); input.value = '' })
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over') })
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'))
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('over')
+    const files = [...e.dataTransfer.files].filter(isPdf)
+    if (files.length) onFiles(files)
+  })
+}
+
+async function getInfo(files) {
+  const fd = new FormData()
+  files.forEach(f => fd.append('files', f))
+  return api('/info', fd)
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t))
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + t.dataset.tab))
+}))
+
+// Generic reorder by drag for a container whose children have data-i
+function makeSortable(container, itemSel, horizontal, getArr, rerender) {
+  let from = null
+  container.addEventListener('dragstart', e => {
+    const it = e.target.closest(itemSel); if (!it) return
+    from = +it.dataset.i; it.classList.add('dragging')
+    e.dataTransfer.effectAllowed = 'move'
+    try { e.dataTransfer.setData('text/plain', String(from)) } catch (_) {}
+  })
+  container.addEventListener('dragend', () => { from = null; container.querySelectorAll(itemSel).forEach(x => x.classList.remove('dragging', 'drop-before', 'drop-after')) })
+  container.addEventListener('dragover', e => {
+    if (from === null) return
+    const it = e.target.closest(itemSel); if (!it) return
+    e.preventDefault()
+    const r = it.getBoundingClientRect()
+    const after = horizontal ? (e.clientX > r.left + r.width / 2) : (e.clientY > r.top + r.height / 2)
+    container.querySelectorAll(itemSel).forEach(x => x.classList.remove('drop-before', 'drop-after'))
+    it.classList.add(after ? 'drop-after' : 'drop-before')
+  })
+  container.addEventListener('drop', e => {
+    if (from === null) return
+    const it = e.target.closest(itemSel); if (!it) return
+    e.preventDefault(); e.stopPropagation()
+    const r = it.getBoundingClientRect()
+    const after = horizontal ? (e.clientX > r.left + r.width / 2) : (e.clientY > r.top + r.height / 2)
+    let to = +it.dataset.i + (after ? 1 : 0)
+    const arr = getArr()
+    const [moved] = arr.splice(from, 1)
+    if (to > from) to--
+    arr.splice(to, 0, moved)
+    from = null
+    rerender()
+  })
+}
+
+// ─── Fusionner ───
+let mergeFiles = [] // {file, pages, error}
+function renderMerge() {
+  const ul = $('mergeList')
+  ul.innerHTML = ''
+  mergeFiles.forEach((m, i) => {
+    const li = document.createElement('li')
+    li.className = 'file-item'; li.draggable = true; li.dataset.i = i
+    const meta = m.error ? `<span class="bad">${esc(m.error)}</span>` : `<span class="meta">${m.pages == null ? '…' : m.pages + ' page(s)'} · ${fmtSize(m.file.size)}</span>`
+    li.innerHTML = `<span class="handle">⠿</span><span class="idx">${i + 1}.</span><span class="name" title="${esc(m.file.name)}">${esc(m.file.name)}</span>${meta}`
+    const up = document.createElement('button'); up.className = 'btn-icon'; up.textContent = '↑'; up.title = 'Monter'; up.disabled = i === 0
+    up.onclick = () => { [mergeFiles[i - 1], mergeFiles[i]] = [mergeFiles[i], mergeFiles[i - 1]]; renderMerge() }
+    const dn = document.createElement('button'); dn.className = 'btn-icon'; dn.textContent = '↓'; dn.title = 'Descendre'; dn.disabled = i === mergeFiles.length - 1
+    dn.onclick = () => { [mergeFiles[i + 1], mergeFiles[i]] = [mergeFiles[i], mergeFiles[i + 1]]; renderMerge() }
+    const rm = document.createElement('button'); rm.className = 'btn-icon'; rm.textContent = '✕'; rm.title = 'Retirer'
+    rm.onclick = () => { mergeFiles.splice(i, 1); renderMerge() }
+    li.append(up, dn, rm)
+    ul.appendChild(li)
+  })
+  const valid = mergeFiles.filter(m => !m.error)
+  const total = valid.reduce((s, m) => s + (m.pages || 0), 0)
+  $('mergeTotal').textContent = mergeFiles.length ? `${mergeFiles.length} fichier(s) · ${total} page(s) au total` : ''
+  $('mergeBtn').disabled = valid.length < 2 || valid.length !== mergeFiles.length
+  $('mergeClear').disabled = !mergeFiles.length
+}
+makeSortable($('mergeList'), '.file-item', false, () => mergeFiles, renderMerge)
+setupDrop($('mergeDrop'), $('mergeInput'), async files => {
+  hide($('mergeErr'), $('mergeRes'))
+  const entries = files.map(f => ({ file: f, pages: null }))
+  mergeFiles.push(...entries); renderMerge()
+  const d = await getInfo(files)
+  if (d.error) { showError($('mergeErr'), d); entries.forEach(e => e.error = 'non analysé'); renderMerge(); return }
+  d.files.forEach((inf, k) => { entries[k].pages = inf.pages; entries[k].error = inf.error })
+  renderMerge()
+})
+$('mergeClear').onclick = () => { mergeFiles = []; renderMerge(); hide($('mergeErr'), $('mergeRes')) }
+$('mergeBtn').onclick = () => busy($('mergeBtn'), 'Fusion…', async () => {
+  hide($('mergeErr'), $('mergeRes'))
+  const fd = new FormData()
+  mergeFiles.forEach(m => fd.append('files', m.file))
+  const d = await api('/merge', fd)
+  if (d.error) return showError($('mergeErr'), d)
+  showResult($('mergeRes'), `PDF fusionné : <strong>${d.pages}</strong> page(s), ${fmtSize(d.size)}`, d.filename)
+}).then(renderMerge)
+
+// ─── Single-file helpers ───
+function singleLoader(zoneId, inputId, infoId, errId, resId, onLoaded) {
+  const state = { file: null, info: null }
+  setupDrop($(zoneId), $(inputId), async files => {
+    const f = files[0]
+    hide($(errId), $(resId))
+    state.file = f; state.info = null
+    const info = $(infoId)
+    info.innerHTML = `<span>📄</span><span><strong>${esc(f.name)}</strong> <span class="muted">· ${fmtSize(f.size)} · analyse…</span></span>`
+    info.classList.add('show')
+    const d = await getInfo([f])
+    if (d.error) { showError($(errId), d); onLoaded(state, false); return }
+    const inf = d.files[0]
+    if (inf.error) { showError($(errId), { error: inf.error }); state.file = null; onLoaded(state, false); return }
+    state.info = inf
+    info.innerHTML = `<span>📄</span><span><strong>${esc(f.name)}</strong> <span class="muted">· ${fmtSize(f.size)} · <strong style="color:#e2e2e8">${inf.pages}</strong> page(s)</span></span>`
+    onLoaded(state, true)
+  })
+  return state
+}
+
+// ─── Découper ───
+const splitState = singleLoader('splitDrop', 'splitInput', 'splitInfo', 'splitErr', 'splitRes', (s, ok) => {
+  $('splitBtn').disabled = !ok
+  if (ok && !$('splitRanges').value) $('splitRanges').value = s.info.pages > 1 ? `1-${Math.ceil(s.info.pages / 2)},${Math.ceil(s.info.pages / 2) + 1}-` : '1'
+})
+document.querySelectorAll('input[name=splitMode]').forEach(r => r.addEventListener('change', () => {
+  $('splitRanges').disabled = document.querySelector('input[name=splitMode]:checked').value !== 'ranges'
+}))
+$('splitBtn').onclick = () => busy($('splitBtn'), 'Découpage…', async () => {
+  hide($('splitErr'), $('splitRes'))
+  const fd = new FormData()
+  fd.append('file', splitState.file)
+  fd.append('mode', document.querySelector('input[name=splitMode]:checked').value)
+  fd.append('ranges', $('splitRanges').value)
+  const d = await api('/split', fd)
+  if (d.error) return showError($('splitErr'), d)
+  showResult($('splitRes'), `<strong>${d.parts}</strong> PDF créé(s), regroupés dans un ZIP (${fmtSize(d.size)})`, d.filename)
+})
+
+// ─── Réorganiser ───
+let pages = [] // {src, rot, del, w, h}
+let pagesOrig = []
+const reorgState = singleLoader('reorgDrop', 'reorgInput', 'reorgInfo', 'reorgErr', 'reorgRes', (s, ok) => {
+  $('reorgTools').style.display = ok ? 'block' : 'none'
+  if (!ok) return
+  pagesOrig = s.info.page_info.map((p, i) => ({ src: i + 1, rot: 0, del: false, w: p.w, h: p.h, baseRot: p.rotation }))
+  pages = pagesOrig.map(p => ({ ...p }))
+  renderPages()
+})
+function renderPages() {
+  const g = $('pages'); g.innerHTML = ''
+  pages.forEach((p, i) => {
+    const d = document.createElement('div')
+    d.className = 'pg' + (p.del ? ' deleted' : ''); d.draggable = true; d.dataset.i = i
+    let w = p.w || 595, h = p.h || 842
+    const sc = 70 / Math.max(w, h); w *= sc; h *= sc
+    d.innerHTML = `<div class="thumbwrap"><div class="thumb" style="width:${w}px;height:${h}px;transform:rotate(${p.baseRot + p.rot}deg)">${p.src}</div></div>
+      <div class="lbl">Position ${i + 1}${p.rot ? ' · ' + p.rot + '°' : ''}</div>`
+    const btns = document.createElement('div'); btns.className = 'btns'
+    const mk = (t, title, fn) => { const b = document.createElement('button'); b.className = 'btn-icon'; b.textContent = t; b.title = title; b.onclick = e => { e.stopPropagation(); fn(); renderPages() }; btns.appendChild(b) }
+    mk('↺', 'Pivoter à gauche', () => p.rot = (p.rot + 270) % 360)
+    mk('↻', 'Pivoter à droite', () => p.rot = (p.rot + 90) % 360)
+    mk(p.del ? '♻' : '🗑', p.del ? 'Restaurer' : 'Supprimer', () => p.del = !p.del)
+    d.appendChild(btns)
+    g.appendChild(d)
+  })
+  const kept = pages.filter(p => !p.del).length
+  $('reorgCount').textContent = `${kept} page(s) dans le nouveau PDF`
+  $('reorgBtn').disabled = kept === 0
+}
+makeSortable($('pages'), '.pg', true, () => pages, renderPages)
+$('rotAllL').onclick = () => { pages.forEach(p => p.rot = (p.rot + 270) % 360); renderPages() }
+$('rotAllR').onclick = () => { pages.forEach(p => p.rot = (p.rot + 90) % 360); renderPages() }
+$('reorgReset').onclick = () => { pages = pagesOrig.map(p => ({ ...p })); renderPages() }
+$('reorgBtn').onclick = () => busy($('reorgBtn'), 'Génération…', async () => {
+  hide($('reorgErr'), $('reorgRes'))
+  const spec = pages.filter(p => !p.del).map(p => ({ page: p.src, rotate: p.rot }))
+  const fd = new FormData()
+  fd.append('file', reorgState.file)
+  fd.append('pages', JSON.stringify(spec))
+  const d = await api('/reorganize', fd)
+  if (d.error) return showError($('reorgErr'), d)
+  showResult($('reorgRes'), `Nouveau PDF : <strong>${d.pages}</strong> page(s), ${fmtSize(d.size)}`, d.filename)
+}).then(renderPages)
+
+// ─── Compresser ───
+const compState = singleLoader('compDrop', 'compInput', 'compInfo', 'compErr', 'compRes', (s, ok) => { $('compBtn').disabled = !ok })
+$('compImages').onchange = () => $('compImgOpts').style.display = $('compImages').checked ? 'block' : 'none'
+$('compQ').oninput = () => $('compQVal').textContent = $('compQ').value
+$('compBtn').onclick = () => busy($('compBtn'), 'Compression…', async () => {
+  hide($('compErr'), $('compRes'))
+  const fd = new FormData()
+  fd.append('file', compState.file)
+  fd.append('images', $('compImages').checked ? 'true' : 'false')
+  fd.append('quality', $('compQ').value)
+  fd.append('max_dim', $('compMax').value || '0')
+  const d = await api('/compress', fd)
+  if (d.error) return showError($('compErr'), d)
+  const pct = d.before ? Math.round((1 - d.after / d.before) * 100) : 0
+  const gain = pct > 0 ? `<span class="gain">−${pct} %</span>` : `<span class="loss">aucun gain (${pct === 0 ? '0' : '+' + (-pct)} %)</span>`
+  let html = `${fmtSize(d.before)} → <strong>${fmtSize(d.after)}</strong> ${gain}`
+  if ($('compImages').checked) html += ` · ${d.images_recompressed} image(s) recompressée(s)`
+  if (d.note) html += `<br><span class="muted">${esc(d.note)}</span>`
+  showResult($('compRes'), html, d.filename)
+})
+</script>
+</body>
+</html>

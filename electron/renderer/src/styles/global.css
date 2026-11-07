@@ -131,3 +131,72 @@ button.btn-ghost     { background: transparent; color: var(--text-mid); border-c
 ::-webkit-scrollbar       { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-border); border-radius: 3px; }
+
+/* ── Module tabs ── */
+.app-tabs {
+  display: flex;
+  gap: 2px;
+  padding: .35rem .5rem 0;
+  border-bottom: 1px solid var(--bg-border);
+  background: var(--bg-surface);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.app-tab {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  max-width: 220px;
+  padding: .35rem .5rem .35rem .65rem;
+  border-radius: 6px 6px 0 0;
+  color: var(--text-mid);
+  font-size: .8125rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.app-tab:hover  { background: rgba(255,255,255,.04); }
+.app-tab.active { background: var(--bg-base); color: var(--text-hi); }
+
+.app-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-tab-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-lo);
+  cursor: pointer;
+  font-size: .75rem;
+  padding: 0 .15rem;
+  line-height: 1;
+}
+
+.app-tab-btn:hover { color: var(--text-hi); }
+
+.app-frames {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Backend banner ── */
+.app-banner {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem 1rem;
+  font-size: .8125rem;
+  border-bottom: 1px solid var(--bg-border);
+  flex-shrink: 0;
+}
+
+.app-banner.error { background: rgba(239,68,68,.1); color: #fca5a5; }
+.app-banner.info  { background: rgba(99,102,241,.1); color: #c7d2fe; }
+.app-banner-text  { flex: 1; }
+
+button.btn:disabled { opacity: .5; cursor: not-allowed; }

@@ -1,0 +1,30 @@
+{
+  "id": "json-formatter",
+  "name": "JSON / YAML",
+  "version": "1.0.0",
+  "description": "Formatez, validez, minifiez et convertissez JSON, YAML et CSV avec vue arborescente.",
+  "category": "Développement",
+  "tags": [
+    "json",
+    "yaml",
+    "csv",
+    "conversion"
+  ],
+  "icon": "🧾",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "PyYAML"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

@@ -1,8 +1,8 @@
 {
   "name": "ledroide-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Application desktop modulaire Electron + Python",
-  "main": "electron/main.js",
+  "main": "electron/main.mjs",
   "scripts": {
     "dev": "concurrently -n VITE,ELECTRON -c cyan,yellow \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dev:vite": "vite",
@@ -12,7 +12,10 @@
     "backend": "python backend/main.py",
     "start": "electron .",
     "setup-python": "node scripts/setup-python.js",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "test:backend": "backend/.venv/Scripts/python.exe -m pytest backend/tests -q",
+    "test:e2e": "vite build && node tests/e2e/smoke.mjs",
+    "test": "npm run test:backend && npm run test:e2e"
   },
   "build": {
     "appId": "fr.bigapps.ledroide-desktop",
@@ -35,7 +38,9 @@
       "!**/*.pyc",
       "!**/*.db",
       "!**/state.json",
-      "!**/configs.json"
+      "!**/configs.json",
+      "!backend/tests/**",
+      "!tests/**"
     ],
     "extraResources": [
       {

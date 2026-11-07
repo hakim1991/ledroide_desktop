@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Convertisseur d'images</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  body { font-family: system-ui, sans-serif; background: #0f0f12; color: #e2e2e8; min-height: 100vh; padding: 1.5rem; font-size: .9rem; }
+  h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1rem; }
+  h2 { font-size: .8rem; font-weight: 600; color: #a1a1aa; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+  .muted { color: #71717a; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(260px, 1fr); gap: 1rem; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+
+  .drop-zone { border: 2px dashed #3f3f46; border-radius: 8px; padding: 1.75rem 1rem; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop-zone:hover, .drop-zone.over { border-color: #6366f1; background: rgba(99,102,241,.05); }
+  .drop-zone .icon { font-size: 1.8rem; margin-bottom: .4rem; }
+  .drop-zone p { color: #71717a; font-size: .85rem; }
+  .drop-zone strong { color: #a1a1aa; }
+
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: .6rem; margin-top: 1rem; max-height: 340px; overflow-y: auto; }
+  .th { position: relative; background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: .35rem; }
+  .th img { width: 100%; height: 72px; object-fit: contain; display: block; background: repeating-conic-gradient(#1f1f23 0 25%, #141417 0 50%) 0 0/12px 12px; border-radius: 4px; }
+  .th .n { font-size: .7rem; margin-top: .25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .th .s { font-size: .68rem; color: #71717a; }
+  .th .x { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,.65); color: #e2e2e8; border-radius: 50%; width: 20px; height: 20px; padding: 0; font-size: .7rem; line-height: 20px; }
+
+  button { cursor: pointer; border: none; border-radius: 6px; padding: .5rem 1.1rem; font-size: .85rem; font-weight: 500; transition: opacity .15s, background .15s; font-family: inherit; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-ghost { background: #27272a; color: #e2e2e8; }
+  .btn-ghost:hover:not(:disabled) { background: #3f3f46; }
+  .btn-dl { background: transparent; color: #a5b4fc; border: 1px solid #6366f1; }
+  .btn-dl:hover { background: rgba(99,102,241,.1); }
+  .actions { margin-top: 1rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+
+  .seg { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .seg button { background: #09090b; border: 1px solid #3f3f46; color: #a1a1aa; padding: .4rem .8rem; }
+  .seg button.active { border-color: #6366f1; color: #fff; background: rgba(99,102,241,.18); }
+  .opt-block { margin-bottom: 1.1rem; }
+  label.opt { display: flex; align-items: center; gap: .5rem; margin: .35rem 0; cursor: pointer; }
+  input[type=number] { background: #09090b; border: 1px solid #3f3f46; color: #e2e2e8; border-radius: 6px; padding: .4rem .55rem; font-size: .85rem; width: 90px; font-family: inherit; }
+  input[type=number]:focus { outline: none; border-color: #6366f1; }
+  input[type=number]:disabled { opacity: .4; }
+  input[type=range] { accent-color: #6366f1; flex: 1; }
+  input[type=checkbox], input[type=radio] { accent-color: #6366f1; }
+  .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .3rem 0 .3rem 1.6rem; }
+  .hint { font-size: .76rem; color: #71717a; margin-top: .25rem; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: .4rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-msg { display: none; margin-top: 1rem; padding: .75rem 1rem; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); border-radius: 6px; color: #fca5a5; }
+  .error-msg.show { display: block; }
+
+  #result { display: none; }
+  #result.show { display: block; }
+  .summary { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: .75rem 1rem; background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.25); border-radius: 6px; color: #c7d2fe; }
+  .summary .txt { flex: 1; min-width: 200px; }
+  table { width: 100%; border-collapse: collapse; margin-top: .9rem; font-size: .82rem; }
+  th, td { padding: .45rem .5rem; text-align: left; border-bottom: 1px solid #27272a; }
+  th { color: #71717a; font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gain { color: #86efac; } .loss { color: #fbbf24; } .bad { color: #fca5a5; }
+  .tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>🖼️ Convertisseur d'images</h1>
+
+<div class="grid">
+  <div class="card">
+    <h2>Images</h2>
+    <div class="drop-zone" id="drop">
+      <div class="icon">🖼️</div>
+      <p><strong>Glissez des images ici</strong> ou cliquez pour sélectionner</p>
+      <p class="hint">PNG, JPG, WebP, BMP, GIF, TIFF, ICO…</p>
+    </div>
+    <input type="file" id="input" accept="image/*,.ico,.tif,.tiff,.webp" multiple hidden />
+    <div class="thumbs" id="thumbs"></div>
+    <div class="actions">
+      <span class="muted" id="count">Aucune image</span>
+      <button class="btn-ghost" id="clearBtn" disabled style="margin-left:auto">Vider</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Options</h2>
+    <div class="opt-block">
+      <div class="muted" style="margin-bottom:.4rem">Format de sortie</div>
+      <div class="seg" id="fmtSeg">
+        <button data-f="png" class="active">PNG</button>
+        <button data-f="jpg">JPG</button>
+        <button data-f="webp">WebP</button>
+        <button data-f="bmp">BMP</button>
+        <button data-f="ico">ICO</button>
+      </div>
+      <div class="hint" id="fmtHint"></div>
+    </div>
+
+    <div class="opt-block" id="qualityBlock" style="display:none">
+      <div style="display:flex;gap:.6rem;align-items:center">
+        <span class="muted">Qualité</span>
+        <input type="range" id="quality" min="10" max="100" value="85" />
+        <strong id="qualityVal" style="width:2.2rem;text-align:right">85</strong>
+      </div>
+    </div>
+
+    <div class="opt-block">
+      <div class="muted" style="margin-bottom:.2rem">Redimensionnement</div>
+      <label class="opt"><input type="radio" name="rs" value="none" checked /> Taille d'origine</label>
+      <label class="opt"><input type="radio" name="rs" value="max" /> Dimensions maximales (proportions conservées)</label>
+      <div class="row">
+        <input type="number" id="maxW" placeholder="Largeur" min="1" /> <span class="muted">×</span>
+        <input type="number" id="maxH" placeholder="Hauteur" min="1" /> <span class="muted">px</span>
+      </div>
+      <label class="opt"><input type="radio" name="rs" value="percent" /> Pourcentage</label>
+      <div class="row"><input type="number" id="pct" value="50" min="1" max="1000" /> <span class="muted">%</span></div>
+    </div>
+
+    <div class="opt-block">
+      <label class="opt"><input type="checkbox" id="strip" checked /> Supprimer les métadonnées EXIF (GPS, appareil…)</label>
+      <div class="hint">L'orientation de la photo est appliquée avant suppression.</div>
+    </div>
+
+    <button class="btn-primary" id="convertBtn" disabled style="width:100%">Convertir</button>
+  </div>
+</div>
+
+<div class="error-msg" id="err"></div>
+
+<div class="card" id="result">
+  <div class="summary"><span>✅</span><span class="txt" id="sumTxt"></span><button class="btn-dl" id="dlBtn">⬇ Télécharger</button></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Fichier</th><th>Dimensions</th><th class="num">Avant</th><th class="num">Après</th><th class="num">Écart</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/image-converter/api`
+const $ = id => document.getElementById(id)
+
+let files = [] // {file, url}
+let fmt = 'png'
+let dlName = null
+
+function fmtSize(b) {
+  if (b < 1024) return b + ' o'
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' Ko'
+  return (b / 1024 / 1024).toFixed(2) + ' Mo'
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
+function isImg(f) { return f.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif|tiff?|ico)$/i.test(f.name) }
+
+function showError(d) {
+  let msg = (d && d.error) || 'Erreur inconnue.'
+  if (d && d.code === 'MISSING_DEP') msg += ' — Installez les dépendances du module (bouton « Dépendances » dans le gestionnaire de modules).'
+  $('err').textContent = '⚠️ ' + msg
+  $('err').classList.add('show')
+}
+
+function render() {
+  const g = $('thumbs'); g.innerHTML = ''
+  files.forEach((f, i) => {
+    const d = document.createElement('div'); d.className = 'th'
+    d.innerHTML = `<img src="${f.url}" alt="" /><div class="n" title="${esc(f.file.name)}">${esc(f.file.name)}</div><div class="s">${fmtSize(f.file.size)}</div>`
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.title = 'Retirer'
+    x.onclick = () => { URL.revokeObjectURL(f.url); files.splice(i, 1); render() }
+    d.appendChild(x); g.appendChild(d)
+  })
+  const tot = files.reduce((s, f) => s + f.file.size, 0)
+  $('count').textContent = files.length ? `${files.length} image(s) · ${fmtSize(tot)}` : 'Aucune image'
+  $('convertBtn').disabled = !files.length
+  $('clearBtn').disabled = !files.length
+}
+function addFiles(list) {
+  list.filter(isImg).forEach(f => files.push({ file: f, url: URL.createObjectURL(f) }))
+  render()
+}
+$('drop').onclick = () => $('input').click()
+$('input').onchange = () => { addFiles([...$('input').files]); $('input').value = '' }
+$('drop').addEventListener('dragover', e => { e.preventDefault(); $('drop').classList.add('over') })
+$('drop').addEventListener('dragleave', () => $('drop').classList.remove('over'))
+$('drop').addEventListener('drop', e => { e.preventDefault(); $('drop').classList.remove('over'); addFiles([...e.dataTransfer.files]) })
+$('clearBtn').onclick = () => { files.forEach(f => URL.revokeObjectURL(f.url)); files = []; render(); $('result').classList.remove('show') }
+
+const HINTS = {
+  png: 'Sans perte, transparence conservée.',
+  jpg: 'Avec perte ; la transparence est remplacée par du blanc.',
+  webp: 'Moderne et compact, transparence conservée.',
+  bmp: 'Non compressé ; la transparence est remplacée par du blanc.',
+  ico: 'Icône Windows multi-tailles (16 à 256 px), image rendue carrée.',
+}
+document.querySelectorAll('#fmtSeg button').forEach(b => b.onclick = () => {
+  fmt = b.dataset.f
+  document.querySelectorAll('#fmtSeg button').forEach(x => x.classList.toggle('active', x === b))
+  $('qualityBlock').style.display = (fmt === 'jpg' || fmt === 'webp') ? 'block' : 'none'
+  $('fmtHint').textContent = HINTS[fmt]
+})
+$('fmtHint').textContent = HINTS.png
+$('quality').oninput = () => $('qualityVal').textContent = $('quality').value
+
+function syncResize() {
+  const m = document.querySelector('input[name=rs]:checked').value
+  $('maxW').disabled = $('maxH').disabled = m !== 'max'
+  $('pct').disabled = m !== 'percent'
+}
+document.querySelectorAll('input[name=rs]').forEach(r => r.onchange = syncResize)
+syncResize()
+
+$('convertBtn').onclick = async () => {
+  $('err').classList.remove('show'); $('result').classList.remove('show')
+  const mode = document.querySelector('input[name=rs]:checked').value
+  if (mode === 'max' && !$('maxW').value && !$('maxH').value) return showError({ error: 'Indiquez une largeur et/ou une hauteur maximale.' })
+  const fd = new FormData()
+  files.forEach(f => fd.append('files', f.file))
+  fd.append('format', fmt)
+  fd.append('resize_mode', mode)
+  fd.append('max_width', $('maxW').value || '0')
+  fd.append('max_height', $('maxH').value || '0')
+  fd.append('percent', $('pct').value || '100')
+  fd.append('quality', $('quality').value)
+  fd.append('strip_exif', $('strip').checked ? 'true' : 'false')
+
+  const btn = $('convertBtn')
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Conversion…'
+  let d
+  try {
+    const r = await fetch(`${BASE}/convert`, { method: 'POST', body: fd })
+    try { d = await r.json() } catch (_) { d = { error: `Réponse invalide du serveur (HTTP ${r.status}).` } }
+  } catch (e) {
+    d = { error: 'Impossible de joindre le backend du module.' }
+  }
+  btn.disabled = !files.length; btn.textContent = 'Convertir'
+  if (d.results) renderResults(d)
+  if (d.error) return showError(d)
+}
+
+function renderResults(d) {
+  const tb = $('tbody'); tb.innerHTML = ''
+  d.results.forEach(r => {
+    const tr = document.createElement('tr')
+    if (r.error) {
+      tr.innerHTML = `<td class="name" title="${esc(r.name)}">${esc(r.name)}</td><td colspan="4" class="bad">${esc(r.error)}</td>`
+    } else {
+      const delta = r.before ? Math.round((r.after / r.before - 1) * 100) : 0
+      const dims = (r.src_w === r.w && r.src_h === r.h) ? `${r.w}×${r.h}` : `${r.src_w}×${r.src_h} → ${r.w}×${r.h}`
+      tr.innerHTML = `<td class="name" title="${esc(r.name)} → ${esc(r.out_name)}">${esc(r.out_name)}</td><td>${dims}</td>
+        <td class="num">${fmtSize(r.before)}</td><td class="num">${fmtSize(r.after)}</td>
+        <td class="num ${delta <= 0 ? 'gain' : 'loss'}">${delta > 0 ? '+' : ''}${delta} %</td>`
+    }
+    tb.appendChild(tr)
+  })
+  if (d.filename) {
+    dlName = d.filename
+    const pct = d.total_before ? Math.round((d.total_after / d.total_before - 1) * 100) : 0
+    $('sumTxt').innerHTML = `<strong>${d.converted}</strong> image(s) convertie(s)${d.failed ? `, <span class="bad">${d.failed} échec(s)</span>` : ''} · ${fmtSize(d.total_before)} → <strong>${fmtSize(d.total_after)}</strong> (${pct > 0 ? '+' : ''}${pct} %)` +
+      (d.converted > 1 ? ' · archive ZIP' : '')
+    $('dlBtn').style.display = ''
+  } else {
+    $('sumTxt').textContent = 'Aucune image convertie.'
+    $('dlBtn').style.display = 'none'
+  }
+  $('result').classList.add('show')
+}
+$('dlBtn').onclick = () => {
+  if (!dlName) return
+  const a = document.createElement('a')
+  a.href = `${BASE}/file/${encodeURIComponent(dlName)}`
+  a.download = dlName
+  document.body.appendChild(a); a.click(); a.remove()
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "id": "pomodoro",
+  "name": "Pomodoro",
+  "version": "1.0.0",
+  "description": "Minuteur Pomodoro avec cycles travail/pauses, notifications, historique des sessions et statistiques.",
+  "category": "Productivité",
+  "tags": [
+    "minuteur",
+    "concentration"
+  ],
+  "icon": "🍅",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

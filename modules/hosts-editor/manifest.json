@@ -1,0 +1,27 @@
+{
+  "id": "hosts-editor",
+  "name": "Fichier hosts",
+  "version": "1.0.0",
+  "description": "Éditeur du fichier hosts : entrées en tableau ou texte brut, validation, sauvegardes automatiques et blocage de domaines.",
+  "category": "Système",
+  "tags": [
+    "windows",
+    "dns",
+    "admin"
+  ],
+  "icon": "📝",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inventaire système</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 7px 14px; white-space: nowrap; }
+  button:hover { background: #2a2a30; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #4f46e5; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; outline: none; min-width: 0; }
+  input:focus, select:focus { border-color: var(--accent); }
+  header { background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+  .top { display: flex; align-items: center; gap: 8px; padding: 10px 16px 6px; flex-wrap: wrap; }
+  .top h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 600; }
+  .top .sp { flex: 1; }
+  .tabs { display: flex; gap: 2px; padding: 0 12px; flex-wrap: wrap; }
+  .tab { border: none; background: transparent; border-radius: 6px 6px 0 0; padding: 8px 12px; color: var(--muted); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .tab:hover { color: var(--text); background: #222226; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #3f3f46; }
+  .dot.loading { background: var(--warn); animation: pulse 1s infinite; }
+  .dot.ok { background: var(--ok); }
+  .dot.err { background: var(--danger); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  main { padding: 16px; max-width: 1200px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .kv { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 0; font-size: 13px; }
+  .kv > div { padding: 6px 8px; border-bottom: 1px solid var(--border); word-break: break-word; }
+  .kv > div:nth-child(odd) { color: var(--muted); }
+  .stat { background: #111114; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .v { font-size: 16px; font-weight: 600; margin-top: 2px; word-break: break-word; }
+  .stat .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--card); }
+  th.sort { cursor: pointer; user-select: none; }
+  th.sort:hover { color: var(--text); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.wrap { word-break: break-all; }
+  .tblwrap { max-height: 62vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #27272a; color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .pill.ok { background: rgba(34,197,94,.15); color: #86efac; }
+  .pill.bad { background: rgba(239,68,68,.12); color: #fca5a5; }
+  .pill.warn { background: rgba(245,158,11,.14); color: #fcd34d; }
+  .pill.acc { background: rgba(99,102,241,.18); color: #c7d2fe; }
+  .bar { height: 8px; background: #111114; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; min-width: 90px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+  .bar > i.hi { background: var(--danger); }
+  .bar > i.mid { background: var(--warn); }
+  .vol { display: grid; grid-template-columns: 60px 1fr 1.5fr auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .vol:last-child { border-bottom: none; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .toolbar input { flex: 1; min-width: 200px; }
+  .err { color: #fecaca; background: rgba(239,68,68,.1); border: 1px solid var(--danger); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .loading { color: var(--muted); padding: 30px; text-align: center; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #3f3f46; border-top-color: var(--accent); border-radius: 50%; animation: rot .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .copy { cursor: pointer; }
+  .copy:hover { color: #a5b4fc; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+  @media (max-width: 640px) { .vol { grid-template-columns: 50px 1fr; } .kv { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>💻 Inventaire système</h1>
+    <span class="pill" id="adminBadge">…</span>
+    <span class="small muted" id="collected"></span>
+    <span class="sp"></span>
+    <button id="btnRefresh" title="Recollecter toutes les sections">↻ Actualiser</button>
+    <button id="btnHtml">Exporter HTML</button>
+    <button id="btnJson">Exporter JSON</button>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+</header>
+<main id="main"></main>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/system-info/api`;
+const $ = s => document.querySelector(s);
+const SECTIONS = [
+  ['system', 'Système'], ['hardware', 'Matériel'], ['storage', 'Stockage'], ['software', 'Logiciels installés'],
+  ['updates', 'Mises à jour'], ['startup', 'Démarrage'], ['env', "Variables d'environnement"],
+];
+const state = { data: {}, current: 'system', sw: { q: '', key: 'name', dir: 1 }, envQ: '', startQ: '' };
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function v(x) { return (x === null || x === undefined || x === '') ? '<span class="muted">–</span>' : esc(x); }
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3500); }
+function fmtB(b) { if (b === null || b === undefined || b === '' || isNaN(b)) return '–'; b = Number(b); const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return b.toFixed(i ? 1 : 0).replace('.', ',') + ' ' + u[i]; }
+function fmtDate(s) { if (!s) return '–'; const d = new Date(s); if (isNaN(d)) return s; return d.toLocaleDateString('fr-FR') + (String(s).includes('T') && !/T00:00:00/.test(s) ? ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''); }
+function fmtDur(s) { if (s == null) return '–'; const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + ' j ' : '') + h + ' h ' + m + ' min'; }
+function yn(b, okTxt = 'Activé', koTxt = 'Désactivé') { if (b === null || b === undefined) return '<span class="pill">Inconnu</span>'; return b ? `<span class="pill ok">${okTxt}</span>` : `<span class="pill bad">${koTxt}</span>`; }
+function kv(rows) { return '<div class="kv">' + rows.map(([k, val, raw]) => `<div>${esc(k)}</div><div>${raw ? val : v(val)}</div>`).join('') + '</div>'; }
+
+async function api(path, opts = {}) {
+  const o = { method: opts.method || 'GET', headers: {} };
+  if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  let r; try { r = await fetch(BASE + path, o); } catch (e) { throw new Error('Backend injoignable'); }
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok || (data && data.error)) {
+    const er = new Error((data && (data.error || (data.detail && 'Paramètres invalides'))) || ('Erreur ' + r.status));
+    er.code = data && data.code;
+    if (er.code === 'MISSING_DEP') er.message += ' — Installez les dépendances du module puis rechargez.';
+    throw er;
+  }
+  return data;
+}
+function copyText(t) {
+  const done = () => toast('Copié', true);
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+}
+document.addEventListener('click', e => { const el = e.target.closest('.copy'); if (el) copyText(el.dataset.copy || el.textContent.trim()); });
+function download(fn) { const a = document.createElement('a'); a.href = `${BASE}/file/${encodeURIComponent(fn)}`; a.download = fn; document.body.appendChild(a); a.click(); a.remove(); }
+
+/* ── Layout ── */
+$('#tabs').innerHTML = SECTIONS.map(([k, l]) => `<button class="tab${k === state.current ? ' active' : ''}" data-tab="${k}"><span class="dot" id="dot-${k}"></span>${l}</button>`).join('');
+$('#main').innerHTML = SECTIONS.map(([k]) => `<section class="panel${k === state.current ? ' active' : ''}" id="p-${k}"><div class="loading"><span class="spin"></span>Collecte en cours…</div></section>`).join('');
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  state.current = b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + state.current));
+  try { localStorage.setItem('sysinfo_tab', state.current); } catch (e) {}
+});
+try { const t = localStorage.getItem('sysinfo_tab'); if (t) { const b = document.querySelector(`.tab[data-tab="${t}"]`); if (b) b.click(); } } catch (e) {}
+
+async function loadSection(k, refresh) {
+  const dot = $('#dot-' + k); dot.className = 'dot loading';
+  if (!state.data[k]) $('#p-' + k).innerHTML = '<div class="loading"><span class="spin"></span>Collecte en cours…</div>';
+  try {
+    const r = await api(`/section/${k}${refresh ? '?refresh=true' : ''}`);
+    state.data[k] = r; dot.className = 'dot ok'; dot.title = `Collecté le ${fmtDate(r.collected_at)} en ${r.duration_ms} ms`;
+    render(k);
+    $('#collected').textContent = 'Données du ' + fmtDate(r.collected_at);
+  } catch (e) {
+    dot.className = 'dot err';
+    $('#p-' + k).innerHTML = `<div class="err">Impossible de charger « ${esc(SECTIONS.find(s => s[0] === k)[1])} » : ${esc(e.message)}</div><button onclick="loadSection('${k}', true)">Réessayer</button>`;
+  }
+}
+async function loadAll(refresh) {
+  $('#btnRefresh').disabled = true;
+  await Promise.all(SECTIONS.map(([k]) => loadSection(k, refresh)));
+  $('#btnRefresh').disabled = false;
+}
+function render(k) { const d = state.data[k] && state.data[k].data; if (!d) return; ({ system: rSystem, hardware: rHardware, storage: rStorage, software: rSoftware, updates: rUpdates, startup: rStartup, env: rEnv })[k](d); }
+
+/* ── Système ── */
+function rSystem(d) {
+  const act = d.activation;
+  const actHtml = act ? `<span class="pill ${act.status === 1 ? 'ok' : 'warn'}">${esc(act.label)}</span> <span class="small muted">${esc(act.channel || '')}</span>` : '<span class="muted">Indisponible</span>';
+  $('#p-system').innerHTML = `
+  <div class="stats">
+    <div class="stat"><div class="l">Nom d'hôte</div><div class="v copy" title="Copier">${v(d.hostname)}</div><div class="s">${d.part_of_domain ? 'Domaine : ' + esc(d.domain) : 'Groupe de travail : ' + esc(d.workgroup || d.domain || '–')}</div></div>
+    <div class="stat"><div class="l">Système</div><div class="v">${v(d.os_caption)}</div><div class="s">${esc(d.display_version || '')} · build ${esc(d.build)}${d.ubr ? '.' + esc(d.ubr) : ''} · ${esc(d.arch || '')}</div></div>
+    <div class="stat"><div class="l">Temps de fonctionnement</div><div class="v">${fmtDur(d.uptime_s)}</div><div class="s">Démarré le ${fmtDate(d.last_boot)}</div></div>
+    <div class="stat"><div class="l">Activation</div><div class="v">${actHtml}</div></div>
+  </div>
+  <div class="card"><h2>Détails</h2>${kv([
+    ['Nom d\'hôte (DNS)', d.dns_hostname], ['Domaine / groupe de travail', d.part_of_domain ? d.domain + ' (domaine)' : (d.workgroup || d.domain) + ' (groupe de travail)'],
+    ['Édition', d.os_caption + (d.edition_id ? ' — ' + d.edition_id : '')], ['Version', `${d.display_version || ''} (${d.os_version}${d.ubr ? '.' + d.ubr : ''})`],
+    ['Date d\'installation', fmtDate(d.install_date)], ['Dernier démarrage', fmtDate(d.last_boot)],
+    ['Utilisateur courant', d.current_user], ['Session console', d.session_user], ['Propriétaire enregistré', d.registered_user], ['Organisation', d.organization],
+    ['Fuseau horaire', d.timezone], ['Langue / région', [d.ui_language, d.locale].filter(Boolean).join(' / ')], ['Dossier Windows', d.windows_dir],
+  ])}</div>`;
+}
+
+/* ── Matériel ── */
+function rHardware(d) {
+  const tpm = d.tpm;
+  const tpmHtml = !tpm ? '<span class="pill">Inconnu</span>' : tpm.present ? `<span class="pill ok">Présent</span> <span class="small muted">${esc(tpm.spec_version ? 'v' + String(tpm.spec_version).split(',')[0] : tpm.name || '')}${tpm.manufacturer ? ' · ' + esc(tpm.manufacturer) : ''}</span>` : '<span class="pill bad">Non détecté</span>';
+  const cpus = d.cpus.map(c => `<div class="stat"><div class="l">Processeur</div><div class="v">${v(c.name)}</div><div class="s">${c.cores} cœurs · ${c.threads} threads · ${c.max_mhz ? (c.max_mhz / 1000).toFixed(2).replace('.', ',') + ' GHz' : '–'}${c.l3_kb ? ' · L3 ' + fmtB(c.l3_kb * 1024) : ''}${c.virtualization ? ' · VT activée' : ''}</div></div>`).join('');
+  const used = d.ram_modules.length;
+  $('#p-hardware').innerHTML = `
+  <div class="stats">
+    <div class="stat"><div class="l">Machine</div><div class="v">${v(d.manufacturer)} ${v(d.model)}</div><div class="s">${esc(d.system_family || '')}</div></div>
+    ${cpus}
+    <div class="stat"><div class="l">Mémoire vive</div><div class="v">${fmtB(d.ram_total)}</div><div class="s">${used} barrette(s)${d.ram_slots ? ' / ' + d.ram_slots + ' emplacements' : ''}</div></div>
+  </div>
+  <div class="card"><h2>Système & micrologiciel</h2>${kv([
+    ['Fabricant / modèle', `${v(d.manufacturer)} ${v(d.model)}`, true], ['Numéro de série', d.serial ? `<span class="copy mono" title="Copier">${esc(d.serial)}</span>` : v(null), true],
+    ['UUID', d.uuid], ['Carte mère', d.baseboard], ['Type de système', d.system_type],
+    ['BIOS / UEFI', `${d.bios_vendor || ''} ${d.bios_version || ''}`.trim()], ['Date du BIOS', fmtDate(d.bios_date)],
+    ['Mode de démarrage', d.firmware_type === 'UEFI' ? '<span class="pill acc">UEFI</span>' : v(d.firmware_type), true],
+    ['Secure Boot', yn(d.secure_boot), true], ['TPM', tpmHtml, true],
+  ])}</div>
+  <div class="card"><h2>Barrettes mémoire</h2><table><thead><tr><th>Emplacement</th><th>Banque</th><th class="num">Taille</th><th class="num">Vitesse</th><th>Fabricant</th><th>Référence</th></tr></thead><tbody>
+    ${d.ram_modules.map(m => `<tr><td>${v(m.slot)}</td><td>${v(m.bank)}</td><td class="num">${fmtB(m.size)}</td><td class="num">${m.configured_speed || m.speed ? (m.configured_speed || m.speed) + ' MT/s' : '–'}${m.speed && m.configured_speed && m.speed !== m.configured_speed ? ` <span class="muted small">(max ${m.speed})</span>` : ''}</td><td>${v(m.manufacturer)}</td><td class="mono">${v(m.part_number)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Aucune information</td></tr>'}
+  </tbody></table></div>
+  <div class="card"><h2>Cartes graphiques</h2><table><thead><tr><th>Nom</th><th>Version du pilote</th><th>Date du pilote</th><th>Résolution</th><th class="num">Mémoire*</th></tr></thead><tbody>
+    ${d.gpus.map(g => `<tr><td>${v(g.name)}</td><td class="mono">${v(g.driver_version)}</td><td>${fmtDate(g.driver_date)}</td><td>${v(g.resolution)}${g.refresh ? ' @ ' + g.refresh + ' Hz' : ''}</td><td class="num">${fmtB(g.vram)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Aucune</td></tr>'}
+  </tbody></table><div class="small muted" style="margin-top:6px">* Valeur WMI plafonnée à 4 Go pour les GPU récents.</div></div>
+  <div class="card"><h2>Moniteurs</h2><table><thead><tr><th>Nom</th><th>Fabricant</th><th class="num">Diagonale</th><th>N° de série</th><th class="num">Année</th></tr></thead><tbody>
+    ${d.monitors.map(m => `<tr><td>${m.name ? esc(m.name) : '<span class="muted">Écran intégré / générique</span>'}</td><td>${v(m.manufacturer)}</td><td class="num">${m.diagonal_in ? String(m.diagonal_in).replace('.', ',') + '"' : '–'}</td><td class="mono">${v(m.serial && m.serial !== '0' ? m.serial : '')}</td><td class="num">${v(m.year)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Aucun moniteur détecté</td></tr>'}
+  </tbody></table></div>`;
+}
+
+/* ── Stockage ── */
+function rStorage(d) {
+  const disks = d.disks.map(x => `<tr><td>${v(x.model)}</td><td class="num">${fmtB(x.size)}</td><td>${v(x.media)}</td><td>${v(x.bus)}</td><td><span class="pill ${x.health_ok ? 'ok' : 'bad'}">${esc(x.health)}</span></td><td class="mono small">${v(x.serial)}</td></tr>`).join('');
+  const vols = d.volumes.map(x => {
+    const p = x.used_pct;
+    const cls = p > 90 ? 'hi' : p > 75 ? 'mid' : '';
+    const bl = x.bitlocker ? `<span class="pill ${/Activé/.test(x.bitlocker) ? 'ok' : 'warn'}">🔒 ${esc(x.bitlocker)}</span>` : '<span class="pill">BitLocker : –</span>';
+    return `<div class="vol"><div style="font-weight:600;font-size:16px">${esc(x.letter)}</div>
+      <div><div>${x.label ? esc(x.label) : '<span class="muted">Sans nom</span>'}</div><div class="small muted">${esc(x.fs || '–')} · ${esc(x.drive_type_label)}</div></div>
+      <div>${p != null ? `<div class="bar"><i class="${cls}" style="width:${p}%"></i></div><div class="small muted" style="margin-top:3px">${fmtB(x.size - x.free)} utilisés sur ${fmtB(x.size)} · ${fmtB(x.free)} libres (${String(p).replace('.', ',')} %)</div>` : '<span class="muted small">Non monté</span>'}</div>
+      <div>${bl}</div></div>`;
+  }).join('');
+  $('#p-storage').innerHTML = `
+  <div class="card"><h2>Disques physiques</h2><table><thead><tr><th>Modèle</th><th class="num">Taille</th><th>Type</th><th>Bus</th><th>Santé</th><th>N° de série</th></tr></thead><tbody>${disks || '<tr><td colspan="6" class="muted">Aucun</td></tr>'}</tbody></table></div>
+  <div class="card"><h2>Volumes</h2>${vols || '<div class="muted">Aucun volume</div>'}
+  <div class="small muted" style="margin-top:8px">L'état BitLocker est lu via l'Explorateur (sans droits administrateur) ; « – » = non chiffrable ou non chiffré.</div></div>`;
+}
+
+/* ── Logiciels ── */
+function rSoftware(d) {
+  if (!$('#swList')) {
+    $('#p-software').innerHTML = `
+    <div class="card">
+      <div class="toolbar"><input id="swQ" placeholder="Rechercher un logiciel, un éditeur…" /><span class="small muted" id="swCount"></span><button id="swCsv">Exporter CSV</button></div>
+      <div class="tblwrap"><table><thead><tr>
+        <th class="sort" data-k="name">Nom</th><th class="sort" data-k="version">Version</th><th class="sort" data-k="publisher">Éditeur</th>
+        <th class="sort" data-k="install_date">Installé le</th><th class="sort num" data-k="size">Taille</th><th>Source</th>
+      </tr></thead><tbody id="swList"></tbody></table></div>
+    </div>`;
+    $('#swQ').value = state.sw.q;
+    $('#swQ').oninput = e => { state.sw.q = e.target.value; drawSoftware(); };
+    document.querySelectorAll('#p-software th.sort').forEach(th => th.onclick = () => {
+      const k = th.dataset.k; state.sw.dir = state.sw.key === k ? -state.sw.dir : (k === 'size' || k === 'install_date' ? -1 : 1); state.sw.key = k; drawSoftware();
+    });
+    $('#swCsv').onclick = () => doExport('software-csv', $('#swCsv'));
+  }
+  drawSoftware();
+}
+function drawSoftware() {
+  const d = state.data.software.data; const q = state.sw.q.trim().toLowerCase(); const { key, dir } = state.sw;
+  let items = d.items.filter(i => !q || (i.name + ' ' + i.publisher + ' ' + i.version).toLowerCase().includes(q));
+  items = items.slice().sort((a, b) => { const x = a[key] ?? '', y = b[key] ?? ''; if (key === 'size') return ((x || 0) - (y || 0)) * dir; return String(x).localeCompare(String(y), 'fr', { numeric: true, sensitivity: 'base' }) * dir; });
+  const total = items.reduce((s, i) => s + (i.size || 0), 0);
+  $('#swCount').textContent = `${items.length} / ${d.items.length} logiciels · ${fmtB(total)}`;
+  document.querySelectorAll('#p-software th.sort').forEach(th => { th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (th.dataset.k === key ? (dir > 0 ? ' ▲' : ' ▼') : ''); });
+  $('#swList').innerHTML = items.map(i => `<tr title="${esc(i.location || i.uninstall || '')}"><td>${esc(i.name)}</td><td class="mono">${v(i.version)}</td><td>${v(i.publisher)}</td><td>${i.install_date ? fmtDate(i.install_date) : '–'}</td><td class="num">${i.size ? fmtB(i.size) : '–'}</td><td><span class="pill">${esc(i.source)}</span></td></tr>`).join('') || '<tr><td colspan="6" class="muted">Aucun résultat</td></tr>';
+}
+
+/* ── Mises à jour ── */
+function rUpdates(d) {
+  $('#p-updates').innerHTML = `<div class="card"><h2>Correctifs installés <span class="pill">${d.hotfixes.length}</span></h2>
+    <div class="tblwrap"><table><thead><tr><th>KB</th><th>Type</th><th>Installé le</th><th>Installé par</th></tr></thead><tbody>
+    ${d.hotfixes.map(h => `<tr><td class="mono"><span class="copy" title="Copier">${esc(h.id)}</span></td><td>${v(h.description)}</td><td>${fmtDate(h.installed_on)}</td><td>${v(h.installed_by)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Aucun correctif listé</td></tr>'}
+    </tbody></table></div><div class="small muted" style="margin-top:8px">Source : Get-HotFix (correctifs Windows/QFE ; les mises à jour du Store et les pilotes n'y figurent pas).</div></div>`;
+}
+
+/* ── Démarrage ── */
+function rStartup(d) {
+  if (!$('#stList')) {
+    $('#p-startup').innerHTML = `<div class="card"><div class="toolbar"><input id="stQ" placeholder="Filtrer…" /><span class="small muted" id="stCount"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Nom</th><th>Commande</th><th>Emplacement</th><th>État</th></tr></thead><tbody id="stList"></tbody></table></div>
+      <div class="small muted" style="margin-top:8px">Clés Run/RunOnce (HKLM 64/32 bits, HKCU), dossiers Démarrage et Win32_StartupCommand. L'état provient de « Applications au démarrage » (Paramètres / Gestionnaire des tâches).</div></div>`;
+    $('#stQ').oninput = e => { state.startQ = e.target.value; drawStartup(); };
+  }
+  drawStartup();
+}
+function drawStartup() {
+  const items = state.data.startup.data.items; const q = state.startQ.toLowerCase();
+  const f = items.filter(i => !q || (i.name + ' ' + i.command + ' ' + i.location).toLowerCase().includes(q));
+  $('#stCount').textContent = `${f.length} / ${items.length} · ${items.filter(i => i.enabled).length} activé(s)`;
+  $('#stList').innerHTML = f.map(i => `<tr><td>${esc(i.name)}</td><td class="mono wrap small">${v(i.command)}</td><td class="small">${v(i.location)}</td><td>${yn(i.enabled)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Aucun</td></tr>';
+}
+
+/* ── Environnement ── */
+function rEnv(d) {
+  if (!$('#envList')) {
+    $('#p-env').innerHTML = `<div class="card"><div class="toolbar"><input id="envQ" placeholder="Rechercher une variable ou une valeur…" />
+      <select id="envScope"><option value="">Toutes les portées</option><option>Système</option><option>Utilisateur</option><option>Processus</option></select><span class="small muted" id="envCount"></span></div>
+      <div class="tblwrap"><table><thead><tr><th style="width:220px">Nom</th><th>Valeur</th><th>Portée</th></tr></thead><tbody id="envList"></tbody></table></div>
+      <div class="small muted" style="margin-top:8px">Cliquez sur une valeur pour la copier. Les valeurs %VAR% ne sont pas développées pour Système/Utilisateur.</div></div>`;
+    $('#envQ').oninput = e => { state.envQ = e.target.value; drawEnv(); };
+    $('#envScope').onchange = drawEnv;
+  }
+  drawEnv();
+}
+function drawEnv() {
+  const items = state.data.env.data.items; const q = state.envQ.toLowerCase(); const sc = $('#envScope').value;
+  const f = items.filter(i => (!sc || i.scope === sc) && (!q || (i.name + '=' + i.value).toLowerCase().includes(q)));
+  $('#envCount').textContent = `${f.length} / ${items.length}`;
+  const fmtVal = (i) => (/^path(ext)?$/i.test(i.name) || i.value.split(';').length > 3) && i.value.includes(';') ? i.value.split(';').filter(Boolean).map(p => esc(p)).join('<br>') : esc(i.value);
+  $('#envList').innerHTML = f.map(i => `<tr><td class="mono">${esc(i.name)}</td><td class="mono wrap small copy" data-copy="${esc(i.value)}" title="Copier">${fmtVal(i)}</td><td><span class="pill ${i.scope === 'Système' ? 'acc' : ''}">${esc(i.scope)}</span></td></tr>`).join('') || '<tr><td colspan="3" class="muted">Aucune variable</td></tr>';
+}
+
+/* ── Export ── */
+async function doExport(fmt, btn) {
+  const txt = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Export…';
+  try { const r = await api(`/export/${fmt}`, { method: 'POST' }); download(r.filename); toast('Export prêt : ' + r.filename, true); }
+  catch (e) { toast(e.message); }
+  finally { btn.disabled = false; btn.textContent = txt; }
+}
+$('#btnHtml').onclick = () => doExport('html', $('#btnHtml'));
+$('#btnJson').onclick = () => doExport('json', $('#btnJson'));
+$('#btnRefresh').onclick = () => loadAll(true);
+
+api('/status').then(s => { const b = $('#adminBadge'); b.textContent = s.admin ? 'Administrateur' : 'Mode standard'; b.className = 'pill ' + (s.admin ? 'warn' : 'acc'); }).catch(() => { $('#adminBadge').textContent = 'Hors ligne'; });
+loadAll(false);
+</script>
+</body>
+</html>

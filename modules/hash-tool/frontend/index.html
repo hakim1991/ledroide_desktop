@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hash & Checksum</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 18px 14px; font-size: 14px; }
+  .wrap { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 1.15rem; font-weight: 700; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .card-title { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 9px;
+                display: flex; align-items: center; gap: 8px; }
+  .card-title .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 11px;
+           font: inherit; font-size: .82rem; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover { border-color: #52525b; background: #26262b; }
+  input[type=text], input[type=password], textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 8px 10px; font: inherit; font-size: .85rem; width: 100%; outline: none; }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  textarea { font-family: var(--mono); font-size: 13px; resize: vertical; min-height: 110px; line-height: 1.5; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 7px 16px; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); font-size: .8rem; }
+
+  .drop { border: 2px dashed #3f3f46; border-radius: 8px; padding: 30px 16px; text-align: center; cursor: pointer; transition: .15s; }
+  .drop:hover, .drop.drag { border-color: var(--accent); background: rgba(99,102,241,.06); }
+  .drop .big { font-size: 2rem; margin-bottom: 6px; }
+  .fileinfo { margin-top: 10px; display: flex; gap: 10px; align-items: center; font-size: .85rem; }
+  .fileinfo b { font-weight: 600; word-break: break-all; }
+  .progress { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+  .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+
+  .hashes { display: flex; flex-direction: column; gap: 6px; }
+  .h { display: grid; grid-template-columns: 96px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border);
+       border-radius: 7px; background: #141417; transition: .15s; }
+  .h .name { font-size: .8rem; font-weight: 600; color: #a5b4fc; }
+  .h .val { font-family: var(--mono); font-size: 12.5px; word-break: break-all; color: var(--text); user-select: all; }
+  .h .val.empty { color: #3f3f46; user-select: none; }
+  .h.match { border-color: var(--ok); background: #0d1f14; }
+  .h.match .name { color: #86efac; }
+  .h.match .name::after { content: ' ✔'; }
+  .h button { padding: 4px 9px; font-size: .75rem; }
+  .verdict { margin-top: 8px; padding: 9px 12px; border-radius: 7px; font-size: .85rem; display: none; }
+  .verdict.ok { display: block; background: #0d1f14; border: 1px solid #14532d; color: #86efac; }
+  .verdict.bad { display: block; background: #1f0d0d; border: 1px solid #7f1d1d; color: #fca5a5; }
+  .expected-ok { border-color: var(--ok) !important; }
+  .expected-bad { border-color: var(--err) !important; }
+  .err { color: #fca5a5; font-size: .85rem; margin-top: 8px; }
+  .hidden { display: none !important; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; cursor: pointer; }
+  .chk input { accent-color: var(--accent); }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(20px); background: #27272a; color: var(--text);
+           padding: 8px 16px; border-radius: 8px; font-size: .82rem; opacity: 0; transition: .2s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (max-width: 600px) { .h { grid-template-columns: 1fr auto; } .h .val { grid-column: 1 / -1; grid-row: 2; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row"><h1 style="margin-right:auto">#️⃣ Hash & Checksum</h1>
+    <div class="seg" id="modeSeg"><button data-mode="text" class="on">Texte</button><button data-mode="file">Fichier</button></div>
+  </div>
+
+  <div class="card" id="textCard">
+    <div class="card-title">Texte (UTF-8) <span class="r muted" id="textInfo"></span></div>
+    <textarea id="text" spellcheck="false" placeholder="Saisissez le texte à hacher… (calcul instantané)"></textarea>
+  </div>
+
+  <div class="card hidden" id="fileCard">
+    <div class="card-title">Fichier</div>
+    <div class="drop" id="drop">
+      <div class="big">📄</div>
+      <div>Glissez-déposez un fichier ici ou <u>cliquez pour choisir</u></div>
+      <div class="muted" style="margin-top:4px">Le calcul se fait par blocs : les gros fichiers sont supportés.</div>
+      <input type="file" id="fileInput" class="hidden">
+    </div>
+    <div class="fileinfo hidden" id="fileInfo"></div>
+    <div class="progress hidden" id="progress"><div id="progBar"></div></div>
+    <div class="err hidden" id="fileErr"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Options</div>
+    <div class="row" style="align-items:flex-start">
+      <div style="flex:1;min-width:240px">
+        <label class="muted" for="expected">Somme de contrôle attendue (détection automatique de l'algorithme)</label>
+        <input type="text" id="expected" spellcheck="false" placeholder="ex. e3b0c44298fc1c149afbf4c8996fb924…" style="margin-top:5px;font-family:var(--mono)">
+      </div>
+      <div style="flex:1;min-width:240px">
+        <label class="chk"><input type="checkbox" id="useHmac"> HMAC avec clé secrète</label>
+        <input type="password" id="hmacKey" placeholder="Clé HMAC" style="margin-top:5px" disabled>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label class="chk"><input type="checkbox" id="upper"> Majuscules</label>
+    </div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Empreintes <span class="r"><button id="copyAll">Tout copier</button></span></div>
+    <div class="hashes" id="hashes"></div>
+    <div id="hmacBlock" class="hidden">
+      <div class="card-title" style="margin-top:14px">HMAC</div>
+      <div class="hashes" id="hmacs"></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/hash-tool/api`;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const LABELS = { md5: 'MD5', sha1: 'SHA-1', sha256: 'SHA-256', sha512: 'SHA-512', sha3_256: 'SHA3-256', blake2b: 'BLAKE2b', crc32: 'CRC32' };
+const HMAC_ALGOS = ['md5', 'sha1', 'sha256', 'sha512', 'sha3_256', 'blake2b'];
+let mode = 'text', current = { text: null, file: null }, file = null, seq = 0;
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
+function fmtSize(n) { if (n < 1024) return n + ' o'; const u = ['Ko', 'Mo', 'Go', 'To']; let i = -1; do { n /= 1024; i++; } while (n >= 1024 && i < 3); return n.toFixed(n < 10 ? 2 : 1).replace('.', ',') + ' ' + u[i]; }
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (_) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); return ok;
+  }
+}
+const fmt = v => $('upper').checked ? v.toUpperCase() : v;
+
+function renderList(container, obj, keys, prefix) {
+  container.innerHTML = keys.map(k => {
+    const v = obj && obj[k];
+    return `<div class="h" data-k="${prefix}${k}"><span class="name">${prefix ? 'HMAC-' : ''}${LABELS[k]}</span>
+      <span class="val ${v ? '' : 'empty'}">${v ? esc(fmt(v)) : '—'}</span>
+      <button data-copy="${v ? esc(fmt(v)) : ''}" ${v ? '' : 'disabled'}>Copier</button></div>`;
+  }).join('');
+}
+function render() {
+  const r = current[mode];
+  renderList($('hashes'), r && r.hashes, Object.keys(LABELS), '');
+  const hasH = !!(r && r.hmac);
+  $('hmacBlock').classList.toggle('hidden', !$('useHmac').checked);
+  renderList($('hmacs'), hasH ? r.hmac : null, HMAC_ALGOS, 'h:');
+  compare();
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button[data-copy]'); if (!b || !b.dataset.copy) return;
+  toast(await copyText(b.dataset.copy) ? 'Copié' : 'Copie impossible');
+});
+$('copyAll').onclick = async () => {
+  const r = current[mode]; if (!r) return toast('Rien à copier');
+  let s = Object.keys(LABELS).map(k => `${LABELS[k].padEnd(9)} ${fmt(r.hashes[k])}`).join('\n');
+  if (r.hmac) s += '\n' + HMAC_ALGOS.map(k => `HMAC-${LABELS[k].padEnd(9)} ${fmt(r.hmac[k])}`).join('\n');
+  if (mode === 'file' && r.filename) s = `Fichier : ${r.filename} (${r.size} octets)\n` + s;
+  toast(await copyText(s) ? 'Toutes les empreintes copiées' : 'Copie impossible');
+};
+
+function compare() {
+  // accepts "sha256:abcd…", "abcd…  fichier.iso" (sha256sum output) and "AB:CD:…"
+  const exp = ($('expected').value.trim().replace(/^(md5|sha[\w-]*|blake2b|crc32)\s*[:=]\s*/i, '').split(/\s+/)[0] || '')
+    .replace(/[:-]/g, '').toLowerCase();
+  const inp = $('expected'), v = $('verdict');
+  document.querySelectorAll('.h').forEach(h => h.classList.remove('match'));
+  inp.classList.remove('expected-ok', 'expected-bad');
+  v.className = 'verdict';
+  const r = current[mode];
+  if (!exp || !r) return;
+  const token = exp;
+  const found = [];
+  for (const [k, val] of Object.entries(r.hashes)) if (val === token) found.push(['', k]);
+  if (r.hmac) for (const [k, val] of Object.entries(r.hmac)) if (val === token) found.push(['h:', k]);
+  if (found.length) {
+    found.forEach(([p, k]) => { const el = document.querySelector(`.h[data-k="${p}${k}"]`); if (el) el.classList.add('match'); });
+    inp.classList.add('expected-ok');
+    v.className = 'verdict ok';
+    v.textContent = '✔ Correspondance : ' + found.map(([p, k]) => (p ? 'HMAC-' : '') + LABELS[k]).join(', ');
+  } else {
+    inp.classList.add('expected-bad');
+    v.className = 'verdict bad';
+    const lens = { 8: 'CRC32', 32: 'MD5', 40: 'SHA-1', 64: 'SHA-256 / SHA3-256', 128: 'SHA-512 / BLAKE2b' };
+    v.textContent = '✖ Aucune correspondance' + (lens[token.length] ? ` (longueur compatible avec ${lens[token.length]})` : !/^[0-9a-f]*$/.test(token) ? ' — la valeur saisie n\'est pas hexadécimale' : '');
+  }
+}
+
+async function hashText() {
+  const s = ++seq;
+  const text = $('text').value;
+  $('textInfo').textContent = `${text.length.toLocaleString('fr-FR')} caractères · ${fmtSize(new Blob([text]).size)}`;
+  try {
+    const res = await fetch(BASE + '/text', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, hmac_key: $('useHmac').checked ? $('hmacKey').value : '' }) });
+    const d = await res.json();
+    if (s !== seq) return;
+    if (!res.ok) throw d;
+    current.text = d; render();
+  } catch (e) { if (s === seq) toast(e.error || 'Backend injoignable'); }
+}
+
+function hashFile() {
+  if (!file) return;
+  const s = ++seq;
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('hmac_key', $('useHmac').checked ? $('hmacKey').value : '');
+  $('fileErr').classList.add('hidden');
+  $('progress').classList.remove('hidden'); $('progBar').style.width = '0%';
+  $('fileInfo').innerHTML = `📄 <b>${esc(file.name)}</b> <span class="muted">${fmtSize(file.size)} — envoi…</span>`;
+  $('fileInfo').classList.remove('hidden');
+  current.file = null; render();
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', BASE + '/file');
+  xhr.upload.onprogress = e => {
+    if (!e.lengthComputable || s !== seq) return;
+    const p = e.loaded / e.total * 100;
+    $('progBar').style.width = p.toFixed(1) + '%';
+    if (p >= 100) $('fileInfo').querySelector('.muted').textContent = `${fmtSize(file.size)} — calcul des empreintes…`;
+  };
+  xhr.onload = () => {
+    if (s !== seq) return;
+    $('progress').classList.add('hidden');
+    let d; try { d = JSON.parse(xhr.responseText); } catch (_) { d = { error: 'Réponse invalide du serveur' }; }
+    if (xhr.status >= 400 || d.error) { $('fileErr').textContent = '✖ ' + (d.error || ('Erreur ' + xhr.status)); $('fileErr').classList.remove('hidden'); return; }
+    current.file = d;
+    $('fileInfo').innerHTML = `📄 <b>${esc(d.filename)}</b> <span class="muted">${fmtSize(d.size)} · ${d.size.toLocaleString('fr-FR')} octets · ${d.elapsed_ms} ms</span>`;
+    render();
+  };
+  xhr.onerror = () => { if (s !== seq) return; $('progress').classList.add('hidden'); $('fileErr').textContent = '✖ Backend injoignable'; $('fileErr').classList.remove('hidden'); };
+  xhr.send(fd);
+}
+
+let tTimer;
+$('text').addEventListener('input', () => { clearTimeout(tTimer); tTimer = setTimeout(hashText, 120); });
+$('expected').addEventListener('input', compare);
+$('upper').onchange = render;
+$('useHmac').onchange = () => {
+  $('hmacKey').disabled = !$('useHmac').checked;
+  if ($('useHmac').checked) $('hmacKey').focus();
+  refresh();
+};
+let kTimer;
+$('hmacKey').addEventListener('input', () => { clearTimeout(kTimer); kTimer = setTimeout(refresh, 250); });
+function refresh() { if (mode === 'text') hashText(); else if (file) hashFile(); else render(); }
+
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => {
+  mode = b.dataset.mode;
+  document.querySelectorAll('#modeSeg button').forEach(x => x.classList.toggle('on', x === b));
+  $('textCard').classList.toggle('hidden', mode !== 'text');
+  $('fileCard').classList.toggle('hidden', mode !== 'file');
+  render();
+});
+
+const drop = $('drop');
+drop.onclick = () => $('fileInput').click();
+$('fileInput').onchange = e => { if (e.target.files[0]) { file = e.target.files[0]; hashFile(); } e.target.value = ''; };
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) { file = f; hashFile(); } });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f && !drop.contains(e.target)) { document.querySelector('#modeSeg button[data-mode=file]').click(); file = f; hashFile(); }
+});
+
+render();
+hashText();
+</script>
+</body>
+</html>

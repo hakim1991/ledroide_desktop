@@ -3,9 +3,25 @@
   "name": "MP4 → MP3",
   "version": "1.0.0",
   "description": "Extrait la piste audio d'une vidéo MP4 en fichier MP3",
+  "category": "Images & médias",
+  "tags": [
+    "vidéo",
+    "audio",
+    "conversion"
+  ],
   "icon": "🎵",
-  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
   "permissions": [],
-  "database": {"type": "none"},
-  "dependencies": {"python": ["moviepy"], "modules": []}
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "moviepy>=2,<3"
+    ],
+    "modules": []
+  }
 }

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Testeur Regex</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         padding: 14px; font-size: 14px; }
+  .layout { display: grid; grid-template-columns: 1fr 280px; gap: 12px; max-width: 1400px; margin: 0 auto; }
+  .layout.nocheat { grid-template-columns: 1fr; }
+  .layout.nocheat .cheat { display: none; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  h1 { font-size: 1.15rem; font-weight: 700; margin-right: auto; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .card-title { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600;
+                margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .card-title .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 6px 11px; font: inherit; font-size: .82rem; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover { border-color: #52525b; background: #26262b; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--accent-h); }
+  button.danger { color: #fca5a5; border-color: #7f1d1d; }
+  button.danger:hover { background: #2a1212; }
+  select, input[type=text] { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 6px 8px; font: inherit; font-size: .82rem; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: #fff; }
+
+  .pattern-row { display: flex; align-items: stretch; gap: 0; background: var(--surface2); border: 1px solid var(--border);
+                 border-radius: 7px; overflow: hidden; }
+  .pattern-row.bad { border-color: var(--err); }
+  .pattern-row .slash { color: var(--muted); font-family: var(--mono); padding: 9px 6px 9px 10px; font-size: 15px; }
+  .pattern-row input { flex: 1; border: none; background: transparent; font-family: var(--mono); font-size: 15px; padding: 9px 2px;
+                       color: #fde68a; outline: none; min-width: 0; }
+  .flags { display: flex; gap: 2px; padding: 4px 6px; align-items: center; border-left: 1px solid var(--border); }
+  .flag { font-family: var(--mono); width: 28px; height: 28px; padding: 0; border-radius: 5px; color: var(--muted); background: transparent; border: 1px solid transparent; }
+  .flag.on { color: #fff; background: var(--accent); }
+  .flag:disabled { opacity: .3; cursor: not-allowed; }
+  .msg { font-size: .8rem; margin-top: 7px; min-height: 18px; color: var(--muted); font-family: var(--mono); white-space: pre; overflow-x: auto; }
+  .msg.err { color: #fca5a5; }
+  .msg.ok { color: #86efac; font-family: system-ui; }
+
+  .hl-wrap { position: relative; border: 1px solid var(--border); border-radius: 7px; background: #141417; height: 240px; resize: vertical; overflow: hidden; min-height: 100px; }
+  .hl-wrap.drag { outline: 2px dashed var(--accent); outline-offset: -5px; }
+  .hl-back, .hl-wrap textarea { position: absolute; inset: 0; margin: 0; padding: 10px 12px; font-family: var(--mono); font-size: 13.5px;
+          line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; letter-spacing: 0; tab-size: 4; border: none; }
+  /* both layers always reserve a scrollbar so text wraps identically */
+  .hl-back { color: transparent; overflow-y: scroll; pointer-events: none; }
+  .hl-back::-webkit-scrollbar { background: transparent; }
+  .hl-back::-webkit-scrollbar-thumb { background: transparent; }
+  .hl-wrap textarea { background: transparent; color: var(--text); resize: none; outline: none; overflow-y: scroll; caret-color: #fff; }
+  .hl-wrap textarea::-webkit-scrollbar { width: 10px; }
+  .hl-back::-webkit-scrollbar { width: 10px; }
+  .hl-wrap textarea::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; }
+  .hl-back mark { color: transparent; border-radius: 2px; }
+  .m0 { background: rgba(99,102,241,.38); } .m1 { background: rgba(14,165,233,.35); }
+  .g1 { background: rgba(34,197,94,.45); box-shadow: inset 0 -2px #22c55e; }
+  .g2 { background: rgba(245,158,11,.45); box-shadow: inset 0 -2px #f59e0b; }
+  .g3 { background: rgba(236,72,153,.45); box-shadow: inset 0 -2px #ec4899; }
+  .g4 { background: rgba(20,184,166,.45); box-shadow: inset 0 -2px #14b8a6; }
+  .g5 { background: rgba(168,85,247,.45); box-shadow: inset 0 -2px #a855f7; }
+  .g0 { background: rgba(239,68,68,.4); box-shadow: inset 0 -2px #ef4444; }
+  .chip { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: .74rem; font-family: var(--mono); margin: 1px 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 5px 8px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+  td { padding: 5px 8px; border-bottom: 1px solid #202024; vertical-align: top; }
+  td.code { font-family: var(--mono); white-space: pre-wrap; word-break: break-all; }
+  tr:hover td { background: #1d1d22; }
+  .tablewrap { max-height: 280px; overflow: auto; }
+  .nil { color: var(--muted); font-style: italic; }
+  .gname { color: var(--muted); }
+
+  .rep-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .rep-row input[type=text] { flex: 1; font-family: var(--mono); min-width: 200px; }
+  pre.out { margin-top: 8px; background: #141417; border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; font-family: var(--mono);
+            font-size: 13px; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; min-height: 40px; }
+
+  .saved { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .saved select { min-width: 180px; }
+  .inline-confirm { display: inline-flex; gap: 6px; align-items: center; font-size: .8rem; color: #fca5a5; }
+
+  .cheat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; align-self: start;
+           position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow: auto; }
+  .cheat h3 { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 0 5px; }
+  .cheat h3:first-of-type { margin-top: 4px; }
+  .cs { display: flex; gap: 8px; padding: 3px 5px; border-radius: 4px; cursor: pointer; font-size: .8rem; align-items: baseline; }
+  .cs:hover { background: #222227; }
+  .cs code { font-family: var(--mono); color: #fde68a; min-width: 74px; flex-shrink: 0; }
+  .cs span { color: #a1a1aa; }
+  .hidden { display: none !important; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(20px); background: #27272a;
+           color: var(--text); padding: 8px 16px; border-radius: 8px; font-size: .82rem; opacity: 0; transition: .2s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="layout" id="layout">
+  <div class="main">
+    <header>
+      <h1>🔍 Testeur Regex</h1>
+      <span style="font-size:.8rem;color:var(--muted)">Moteur</span>
+      <div class="seg" id="engineSeg">
+        <button data-engine="python" class="on">Python (re)</button>
+        <button data-engine="js">JavaScript</button>
+      </div>
+      <button id="btnCheat">📖 Aide-mémoire</button>
+    </header>
+
+    <div class="card">
+      <div class="card-title">Expression régulière
+        <div class="r saved">
+          <select id="savedSel"><option value="">— Motifs enregistrés —</option></select>
+          <span id="savedActions"></span>
+        </div>
+      </div>
+      <div class="pattern-row" id="patRow">
+        <span class="slash">/</span>
+        <input type="text" id="pattern" spellcheck="false" autocomplete="off" placeholder="(?P<annee>\d{4})-(?P<mois>\d{2})">
+        <span class="slash">/</span>
+        <div class="flags" id="flags">
+          <button class="flag" data-f="i" title="i — insensible à la casse">i</button>
+          <button class="flag" data-f="m" title="m — multiligne (^ $ par ligne)">m</button>
+          <button class="flag" data-f="s" title="s — le point inclut les retours à la ligne">s</button>
+          <button class="flag" data-f="x" title="x — verbeux (espaces et # commentaires ignorés)">x</button>
+        </div>
+      </div>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Texte de test <span class="r legend" id="legend"></span></div>
+      <div class="hl-wrap" id="hlWrap">
+        <div class="hl-back" id="hlBack"></div>
+        <textarea id="text" spellcheck="false" placeholder="Saisissez ou déposez un fichier texte ici…"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Correspondances <span class="r" id="countInfo"></span></div>
+      <div class="tablewrap"><table id="matchTable"><thead></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Remplacement <span class="r" id="repInfo"></span></div>
+      <div class="rep-row">
+        <input type="text" id="replacement" spellcheck="false" placeholder="\g<jour>/\g<mois>/\g<annee>   ou   \1, \2 …">
+        <label style="font-size:.8rem;display:flex;gap:5px;align-items:center;color:var(--muted)"><input type="checkbox" id="repFirst" style="accent-color:var(--accent)"> 1re occurrence seulement</label>
+        <button id="btnCopyRep">Copier le résultat</button>
+      </div>
+      <pre class="out" id="repOut"><span class="nil">Saisissez un modèle de remplacement pour voir l'aperçu.</span></pre>
+    </div>
+  </div>
+
+  <aside class="cheat" id="cheat">
+    <div class="card-title" style="margin-bottom:0">Aide-mémoire <span class="r" style="font-size:.72rem">clic = insérer</span></div>
+    <div id="cheatBody"></div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/regex-tester/api`;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const MAX_MATCHES = 5000;
+
+const state = { engine: 'python', flags: new Set(), matches: [], groupNames: [], groupCount: 0, seq: 0, saved: [] };
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
+
+// ── Saved state (per viewer convenience) ─────────────────────────────────
+function persist() {
+  try { localStorage.setItem('regex-tester', JSON.stringify({ engine: state.engine, flags: [...state.flags], pattern: $('pattern').value, text: $('text').value, rep: $('replacement').value })); } catch (_) {}
+}
+function restore() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem('regex-tester') || 'null'); } catch (_) {}
+  if (!d) {
+    d = { engine: 'python', flags: ['m'], pattern: '(?P<annee>\\d{4})-(?P<mois>\\d{2})-(?P<jour>\\d{2})',
+          text: 'Livraison prévue le 2024-03-15, relance le 2024-04-01.\nFacture n°42 du 2023-12-31 — contact : support@exemple.fr\nDate invalide : 2024-1-5',
+          rep: '\\g<jour>/\\g<mois>/\\g<annee>' };
+  }
+  state.engine = d.engine || 'python';
+  state.flags = new Set(d.flags || []);
+  $('pattern').value = d.pattern || ''; $('text').value = d.text || ''; $('replacement').value = d.rep || '';
+}
+
+// ── Code point ↔ UTF-16 index mapping (Python returns code point offsets) ─
+let cpMap = null;
+function buildCpMap(text) {
+  if (!/[\uD800-\uDFFF]/.test(text)) { cpMap = null; return; }
+  cpMap = [];
+  let u = 0;
+  for (const ch of text) { cpMap.push(u); u += ch.length; }
+  cpMap.push(u);
+}
+const toU16 = i => (cpMap && i != null ? cpMap[i] : i);
+
+// ── JS engine helpers ────────────────────────────────────────────────────
+function stripVerbose(p) {
+  let out = '', inClass = false;
+  for (let i = 0; i < p.length; i++) {
+    const c = p[i];
+    if (c === '\\') { out += c + (p[i + 1] ?? ''); i++; continue; }
+    if (inClass) { if (c === ']') inClass = false; out += c; continue; }
+    if (c === '[') { inClass = true; out += c; continue; }
+    if (/\s/.test(c)) continue;
+    if (c === '#') { while (i < p.length && p[i] !== '\n') i++; continue; }
+    out += c;
+  }
+  return out;
+}
+function jsPattern(p) {
+  if (state.flags.has('x')) p = stripVerbose(p);
+  return p.replace(/\(\?P<([A-Za-z_]\w*)>/g, '(?<$1>').replace(/\(\?P=([A-Za-z_]\w*)\)/g, '\\k<$1>');
+}
+function jsMatch(pattern, text) {
+  const fl = 'gd' + [...state.flags].filter(f => 'ims'.includes(f)).join('') + 'u';
+  let rx;
+  try { rx = new RegExp(jsPattern(pattern), fl); }
+  catch (e) {
+    try { rx = new RegExp(jsPattern(pattern), fl.replace('u', '')); }
+    catch (_) { throw { error: 'Expression invalide : ' + e.message.replace(/^Invalid regular expression: /, '') }; }
+  }
+  const src = rx.source;
+  const names = [];
+  // count groups and their names in order
+  const probe = new RegExp(src + '|', rx.flags.replace('g', '').replace('d', '')).exec('');
+  const groupCount = probe ? probe.length - 1 : 0;
+  const nameByIdx = {};   // map group index -> name by scanning the source
+  let gi = 0;
+  for (let i = 0; i < src.length; i++) {
+    if (src[i] === '\\') { i++; continue; }
+    if (src[i] === '[') { while (i < src.length && src[i] !== ']') { if (src[i] === '\\') i++; i++; } continue; }
+    if (src[i] === '(') {
+      if (src[i + 1] !== '?') { gi++; continue; }
+      const m = /^\(\?<([A-Za-z_$][\w$]*)>/.exec(src.slice(i));
+      if (m) { gi++; nameByIdx[gi] = m[1]; }
+    }
+  }
+  for (let g = 1; g <= groupCount; g++) names.push(nameByIdx[g] || null);
+  const matches = [];
+  let m, truncated = false;
+  rx.lastIndex = 0;
+  while ((m = rx.exec(text)) !== null) {
+    if (matches.length >= MAX_MATCHES) { truncated = true; break; }
+    const groups = [];
+    for (let g = 1; g <= groupCount; g++) {
+      const ix = m.indices && m.indices[g];
+      groups.push({ index: g, name: names[g - 1], start: ix ? ix[0] : null, end: ix ? ix[1] : null, text: m[g] ?? null });
+    }
+    matches.push({ index: matches.length, start: m.index, end: m.index + m[0].length, text: m[0], groups });
+    if (m[0].length === 0) rx.lastIndex = m.index + (text.codePointAt(m.index) > 0xFFFF ? 2 : 1);
+  }
+  return { matches, count: matches.length, truncated, group_count: groupCount, group_names: names, rx };
+}
+// Python-style template (\1, \g<name>, \g<1>, \n, \t, \\) applied in JS
+function expandTemplate(tpl, m, groupsByName) {
+  let out = '';
+  for (let i = 0; i < tpl.length; i++) {
+    const c = tpl[i];
+    if (c !== '\\') { out += c; continue; }
+    const n = tpl[i + 1];
+    if (n === undefined) { throw { error: 'Remplacement invalide : « \\ » final' }; }
+    if (n === 'g') {
+      const mm = /^\\g<([^>]+)>/.exec(tpl.slice(i));
+      if (!mm) throw { error: 'Remplacement invalide : \\g<…> attendu' };
+      const key = mm[1];
+      let v;
+      if (/^\d+$/.test(key)) { if (+key >= m.length) throw { error: `Remplacement invalide : groupe ${key} inexistant` }; v = m[+key]; }
+      else { if (!(key in groupsByName)) throw { error: `Remplacement invalide : groupe « ${key} » inconnu` }; v = m.groups[key]; }
+      out += v ?? ''; i += mm[0].length - 1; continue;
+    }
+    if (/\d/.test(n)) {
+      let num = n; if (/\d/.test(tpl[i + 2] || '') && +(n + tpl[i + 2]) < m.length) { num += tpl[i + 2]; }
+      if (+num >= m.length || +num === 0) throw { error: `Remplacement invalide : groupe ${num} inexistant` };
+      out += m[+num] ?? ''; i += num.length; continue;
+    }
+    const map = { n: '\n', t: '\t', r: '\r', '\\': '\\', a: '\x07', f: '\f', v: '\v' };
+    if (n in map) { out += map[n]; i++; continue; }
+    out += '\\' + n; i++;
+  }
+  return out;
+}
+function jsReplace(res, text, tpl, firstOnly) {
+  const rx = new RegExp(res.rx.source, res.rx.flags.replace('d', ''));
+  const byName = {}; res.group_names.forEach(n => { if (n) byName[n] = true; });
+  let count = 0, last = 0, out = '';
+  let m;
+  while ((m = rx.exec(text)) !== null) {
+    out += text.slice(last, m.index) + expandTemplate(tpl, m, byName);
+    last = m.index + m[0].length; count++;
+    if (firstOnly || count > 100000) break;
+    if (m[0].length === 0) {
+      if (m.index >= text.length) break;
+      const step = text.codePointAt(m.index) > 0xFFFF ? 2 : 1;
+      out += text.slice(m.index, m.index + step); last = m.index + step;
+      rx.lastIndex = last;
+    }
+  }
+  return { result: out + text.slice(last), count };
+}
+
+// ── Backend calls ────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  let res;
+  try { res = await fetch(BASE + path, opts); }
+  catch (e) { throw { error: 'Backend injoignable : ' + e.message }; }
+  const data = await res.json().catch(() => ({ error: 'Réponse invalide du serveur' }));
+  if (!res.ok) throw data;
+  return data;
+}
+const post = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+// ── Main run ─────────────────────────────────────────────────────────────
+let timer = null;
+function schedule() { clearTimeout(timer); timer = setTimeout(run, state.engine === 'python' ? 160 : 60); persist(); }
+
+async function run() {
+  const seq = ++state.seq;
+  const pattern = $('pattern').value, text = $('text').value, flags = [...state.flags].join('');
+  const tpl = $('replacement').value, firstOnly = $('repFirst').checked;
+  if (!pattern) { showError(null); render({ matches: [], group_count: 0, group_names: [] }, text); renderReplace(null); return; }
+  let res, rep = null, repErr = null;
+  try {
+    if (state.engine === 'python') {
+      buildCpMap(text);
+      const reqs = [post('/match', { pattern, flags, text })];
+      if (tpl) reqs.push(post('/replace', { pattern, flags, text, replacement: tpl, count: firstOnly ? 1 : 0 }).catch(e => { repErr = e; return null; }));
+      const out = await Promise.all(reqs);
+      res = out[0]; rep = out[1] || null;
+      res.matches.forEach(m => { m.start = toU16(m.start); m.end = toU16(m.end); m.groups.forEach(g => { g.start = toU16(g.start); g.end = toU16(g.end); }); });
+    } else {
+      cpMap = null;
+      res = jsMatch(pattern, text);
+      if (tpl) { try { rep = jsReplace(res, text, tpl, firstOnly); } catch (e) { repErr = e; } }
+    }
+  } catch (e) {
+    if (seq !== state.seq) return;
+    showError(e); render({ matches: [], group_count: 0, group_names: [] }, text); renderReplace(null);
+    return;
+  }
+  if (seq !== state.seq) return;
+  showError(null, res);
+  render(res, text);
+  renderReplace(rep, repErr);
+}
+
+function showError(e, res) {
+  const msg = $('msg');
+  $('patRow').classList.toggle('bad', !!e);
+  if (!e) {
+    if (res) {
+      msg.className = 'msg ok';
+      msg.textContent = res.count ? `✔ ${res.count}${res.truncated ? '+' : ''} correspondance${res.count > 1 ? 's' : ''}` + (res.group_count ? ` · ${res.group_count} groupe${res.group_count > 1 ? 's' : ''}` : '') : 'Aucune correspondance';
+      if (!res.count) msg.className = 'msg';
+    } else { msg.className = 'msg'; msg.textContent = ''; }
+    return;
+  }
+  msg.className = 'msg err';
+  let t = '✖ ' + (e.error || 'Erreur');
+  if (e.pos != null) {
+    const p = $('pattern').value;
+    t += ` (position ${e.pos})\n/${p}/\n ${' '.repeat(e.pos)}^`;
+  }
+  msg.textContent = t;
+}
+
+function render(res, text) {
+  state.matches = res.matches; state.groupNames = res.group_names; state.groupCount = res.group_count;
+  // Legend
+  const lg = ['<span class="chip m0">correspondance</span>'];
+  for (let g = 1; g <= res.group_count; g++) {
+    const n = res.group_names[g - 1];
+    lg.push(`<span class="chip g${g % 6}">${g}${n ? ' · ' + esc(n) : ''}</span>`);
+  }
+  $('legend').innerHTML = res.matches.length ? lg.join('') : '';
+  // Highlights: segment the text by boundaries
+  const back = $('hlBack');
+  if (!res.matches.length) { back.innerHTML = esc(text) + '\n'; }
+  else {
+    let html = '', pos = 0;
+    for (const m of res.matches) {
+      if (m.start < pos) continue;
+      html += esc(text.slice(pos, m.start));
+      // inner segmentation by innermost group
+      const pts = new Set([m.start, m.end]);
+      const gs = m.groups.filter(g => g.start != null && g.end > g.start && g.start >= m.start && g.end <= m.end);
+      gs.forEach(g => { pts.add(g.start); pts.add(g.end); });
+      const sorted = [...pts].sort((a, b) => a - b);
+      let inner = '';
+      for (let k = 0; k < sorted.length - 1; k++) {
+        const a = sorted[k], b = sorted[k + 1];
+        let best = null;
+        for (const g of gs) if (g.start <= a && g.end >= b && (!best || g.end - g.start <= best.end - best.start)) best = g;
+        const seg = esc(text.slice(a, b));
+        inner += best ? `<mark class="g${best.index % 6}">${seg}</mark>` : seg;
+      }
+      if (m.end === m.start) inner = '';
+      html += `<mark class="m${m.index % 2}">${inner}</mark>`;
+      pos = m.end;
+    }
+    html += esc(text.slice(pos));
+    back.innerHTML = html + '\n';
+  }
+  back.scrollTop = $('text').scrollTop;
+  // Table
+  const thead = $('matchTable').querySelector('thead'), tbody = $('matchTable').querySelector('tbody');
+  let h = '<tr><th>#</th><th>Position</th><th>Correspondance</th>';
+  for (let g = 1; g <= res.group_count; g++) {
+    const n = res.group_names[g - 1];
+    h += `<th><span class="chip g${g % 6}" style="margin:0">${g}</span>${n ? ' <span class="gname">' + esc(n) + '</span>' : ''}</th>`;
+  }
+  thead.innerHTML = h + '</tr>';
+  const rows = [];
+  const shown = res.matches.slice(0, 1000);
+  for (const m of shown) {
+    let r = `<tr><td>${m.index + 1}</td><td>${m.start}–${m.end}</td><td class="code">${m.text === '' ? '<span class="nil">(vide)</span>' : esc(m.text)}</td>`;
+    for (const g of m.groups) r += `<td class="code">${g.text == null ? '<span class="nil">—</span>' : (g.text === '' ? '<span class="nil">(vide)</span>' : esc(g.text))}</td>`;
+    rows.push(r + '</tr>');
+  }
+  if (!res.matches.length) rows.push(`<tr><td colspan="${3 + res.group_count}" class="nil" style="text-align:center;padding:14px">Aucune correspondance</td></tr>`);
+  if (res.matches.length > shown.length) rows.push(`<tr><td colspan="${3 + res.group_count}" class="nil">… ${res.matches.length - shown.length} autres non affichées</td></tr>`);
+  tbody.innerHTML = rows.join('');
+  $('countInfo').textContent = res.matches.length ? `${res.matches.length}${res.truncated ? '+ (limite atteinte)' : ''}` : '';
+}
+
+let lastRep = '';
+function renderReplace(rep, err) {
+  const out = $('repOut');
+  if (err) { out.innerHTML = `<span style="color:#fca5a5">✖ ${esc(err.error || 'Erreur')}</span>`; $('repInfo').textContent = ''; lastRep = ''; return; }
+  if (!rep) {
+    lastRep = '';
+    out.innerHTML = '<span class="nil">Saisissez un modèle de remplacement pour voir l\'aperçu.</span>';
+    $('repInfo').textContent = ''; return;
+  }
+  lastRep = rep.result;
+  out.textContent = rep.result;
+  $('repInfo').textContent = `${rep.count} remplacement${rep.count > 1 ? 's' : ''}`;
+}
+
+// ── UI wiring ────────────────────────────────────────────────────────────
+function syncUI() {
+  document.querySelectorAll('#engineSeg button').forEach(b => b.classList.toggle('on', b.dataset.engine === state.engine));
+  document.querySelectorAll('.flag').forEach(b => b.classList.toggle('on', state.flags.has(b.dataset.f)));
+}
+document.querySelectorAll('#engineSeg button').forEach(b => b.onclick = () => { state.engine = b.dataset.engine; syncUI(); schedule(); });
+document.querySelectorAll('.flag').forEach(b => b.onclick = () => {
+  const f = b.dataset.f; state.flags.has(f) ? state.flags.delete(f) : state.flags.add(f); syncUI(); schedule();
+});
+['pattern', 'text', 'replacement'].forEach(id => $(id).addEventListener('input', schedule));
+$('repFirst').onchange = schedule;
+$('text').addEventListener('scroll', () => { $('hlBack').scrollTop = $('text').scrollTop; });
+new ResizeObserver(() => { $('hlBack').scrollTop = $('text').scrollTop; }).observe($('hlWrap'));
+$('btnCheat').onclick = () => { $('layout').classList.toggle('nocheat'); try { localStorage.setItem('regex-tester-cheat', $('layout').classList.contains('nocheat') ? '0' : '1'); } catch (_) {} };
+try { if (localStorage.getItem('regex-tester-cheat') === '0') $('layout').classList.add('nocheat'); } catch (_) {}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (_) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); return ok;
+  }
+}
+$('btnCopyRep').onclick = async () => { if (!lastRep) return toast('Rien à copier'); toast(await copyText(lastRep) ? 'Résultat copié' : 'Copie impossible'); };
+
+// Drag & drop a text file into the test area
+const wrap = $('hlWrap');
+['dragenter', 'dragover'].forEach(ev => wrap.addEventListener(ev, e => { e.preventDefault(); wrap.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => wrap.addEventListener(ev, e => { e.preventDefault(); wrap.classList.remove('drag'); }));
+wrap.addEventListener('drop', e => {
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  if (f.size > 2 * 1024 * 1024) return toast('Fichier trop volumineux (max 2 Mo)');
+  const r = new FileReader(); r.onload = () => { $('text').value = r.result; schedule(); toast(`« ${f.name} » chargé`); }; r.readAsText(f);
+});
+
+// ── Cheat sheet ──────────────────────────────────────────────────────────
+const CHEAT = [
+  ['Caractères', [['.', 'tout caractère (sauf \\n)'], ['\\d', 'chiffre'], ['\\D', 'non-chiffre'], ['\\w', 'mot [A-Za-z0-9_]'], ['\\W', 'non-mot'], ['\\s', 'espace blanc'], ['\\S', 'non-espace'], ['\\b', 'limite de mot'], ['\\\\', 'antislash littéral']]],
+  ['Classes', [['[abc]', 'a, b ou c'], ['[^abc]', 'ni a, ni b, ni c'], ['[a-z]', 'de a à z'], ['[0-9A-F]', 'hexadécimal']]],
+  ['Ancres', [['^', 'début (de ligne avec m)'], ['$', 'fin (de ligne avec m)'], ['\\A', 'début du texte (Python)'], ['\\Z', 'fin du texte (Python)']]],
+  ['Quantificateurs', [['*', '0 ou plus'], ['+', '1 ou plus'], ['?', '0 ou 1'], ['{3}', 'exactement 3'], ['{2,5}', 'de 2 à 5'], ['{2,}', '2 ou plus'], ['*?', 'non gourmand']]],
+  ['Groupes', [['(…)', 'groupe capturant'], ['(?:…)', 'non capturant'], ['(?P<nom>…)', 'groupe nommé'], ['(?P=nom)', 'référence nommée'], ['\\1', 'référence arrière'], ['a|b', 'alternative']]],
+  ['Assertions', [['(?=…)', 'suivi de'], ['(?!…)', 'non suivi de'], ['(?<=…)', 'précédé de'], ['(?<!…)', 'non précédé de']]],
+  ['Remplacement', [['\\1', 'groupe 1'], ['\\g<nom>', 'groupe nommé'], ['\\g<0>', 'correspondance entière'], ['\\n', 'retour à la ligne']]],
+  ['Exemples', [['[\\w.+-]+@[\\w-]+\\.[\\w.]+', 'e-mail'], ['https?://\\S+', 'URL'], ['\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b', 'adresse IPv4'], ['(?:\\+33|0)[1-9](?:[ .-]?\\d{2}){4}', 'tél. français'], ['\\d{4}-\\d{2}-\\d{2}', 'date ISO'], ['#[0-9a-fA-F]{6}\\b', 'couleur hex']]],
+];
+$('cheatBody').innerHTML = CHEAT.map(([t, items]) => `<h3>${t}</h3>` + items.map(([c, d]) => `<div class="cs" data-c="${esc(c)}" data-rep="${t === 'Remplacement' ? 1 : 0}"><code>${esc(c)}</code><span>${esc(d)}</span></div>`).join('')).join('');
+$('cheatBody').addEventListener('click', e => {
+  const it = e.target.closest('.cs'); if (!it) return;
+  const target = it.dataset.rep === '1' ? $('replacement') : $('pattern');
+  let ins = it.dataset.c.replace('…', '');
+  const s = target.selectionStart ?? target.value.length, en = target.selectionEnd ?? s;
+  target.value = target.value.slice(0, s) + ins + target.value.slice(en);
+  target.focus(); target.selectionStart = target.selectionEnd = s + ins.length;
+  schedule();
+});
+
+// ── Saved patterns (SQLite) ──────────────────────────────────────────────
+async function loadSaved() {
+  try {
+    const r = await api('/patterns');
+    state.saved = r.patterns;
+    const sel = $('savedSel'), cur = sel.value;
+    sel.innerHTML = '<option value="">— Motifs enregistrés —</option>' + r.patterns.map(p => `<option value="${p.id}">${esc(p.name)} (${p.engine === 'js' ? 'JS' : 'Py'})</option>`).join('');
+    if (r.patterns.some(p => String(p.id) === cur)) sel.value = cur;
+  } catch (e) { /* backend absent: silently ignore */ }
+  renderSavedActions();
+}
+function renderSavedActions(mode) {
+  const box = $('savedActions');
+  const id = $('savedSel').value;
+  if (mode === 'save') {
+    const cur = state.saved.find(p => String(p.id) === id);
+    box.innerHTML = `<input type="text" id="saveName" placeholder="Nom du motif" style="width:150px" value="${cur ? esc(cur.name) : ''}"> <button class="primary" id="saveOk">OK</button> <button id="saveCancel">Annuler</button>`;
+    $('saveName').focus();
+    $('saveName').onkeydown = e => { if (e.key === 'Enter') $('saveOk').click(); if (e.key === 'Escape') renderSavedActions(); };
+    $('saveOk').onclick = async () => {
+      const name = $('saveName').value.trim(); if (!name) return toast('Nom requis');
+      try {
+        const p = await post('/patterns', { name, pattern: $('pattern').value, flags: [...state.flags].join(''), replacement: $('replacement').value, engine: state.engine });
+        await loadSaved(); $('savedSel').value = p.id; renderSavedActions(); toast('Motif enregistré');
+      } catch (e) { toast(e.error || 'Erreur'); }
+    };
+    $('saveCancel').onclick = () => renderSavedActions();
+    return;
+  }
+  if (mode === 'del') {
+    box.innerHTML = `<span class="inline-confirm">Supprimer ? <button class="danger" id="delOk">Oui</button><button id="delNo">Non</button></span>`;
+    $('delOk').onclick = async () => { try { await api('/patterns/' + id, { method: 'DELETE' }); $('savedSel').value = ''; await loadSaved(); toast('Motif supprimé'); } catch (e) { toast(e.error || 'Erreur'); } };
+    $('delNo').onclick = () => renderSavedActions();
+    return;
+  }
+  box.innerHTML = `<button id="btnSave" title="Enregistrer le motif courant">💾 Enregistrer</button>` + (id ? ` <button class="danger" id="btnDel" title="Supprimer ce motif">🗑</button>` : '');
+  $('btnSave').onclick = () => { if (!$('pattern').value) return toast('Le motif est vide'); renderSavedActions('save'); };
+  if (id) $('btnDel').onclick = () => renderSavedActions('del');
+}
+$('savedSel').onchange = () => {
+  const p = state.saved.find(x => String(x.id) === $('savedSel').value);
+  if (p) {
+    $('pattern').value = p.pattern; $('replacement').value = p.replacement; state.engine = p.engine;
+    state.flags = new Set(p.flags.split('').filter(Boolean)); syncUI(); schedule();
+  }
+  renderSavedActions();
+};
+
+restore(); syncUI(); run(); loadSaved();
+</script>
+</body>
+</html>

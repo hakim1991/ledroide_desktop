@@ -3,11 +3,13 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-from fastapi import APIRouter
+from ledroide_sdk import Module, data_path
+
 from pydantic import BaseModel
 
-router  = APIRouter()
-DB_PATH = Path(__file__).parent / "calculator.db"
+module = Module(__file__)
+router = module.router
+DB_PATH = data_path(__file__, "calculator.db")
 
 
 @contextmanager

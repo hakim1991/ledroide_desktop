@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Journaux d'événements</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; --crit: #c026d3; --info: #3b82f6; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 16px; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 6px 12px; }
+  button:hover { background: #2a2a30; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #5458e0; }
+  button.sm { padding: 3px 9px; font-size: 12px; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; outline: none; min-width: 0; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=datetime-local] { color-scheme: dark; }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .sp { flex: 1; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.admin { color: #bbf7d0; border-color: #166534; background: #14301f; }
+  .badge.std { color: #fde68a; border-color: #854d0e; background: #2b2110; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; align-items: end; }
+  .f label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .f input, .f select { width: 100%; }
+  .levels { display: flex; gap: 6px; flex-wrap: wrap; }
+  .lv { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; padding: 4px 9px; border: 1px solid var(--border); border-radius: 99px; cursor: pointer; user-select: none; }
+  .lv input { margin: 0; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)) minmax(240px, 2fr); gap: 10px; margin: 12px 0; }
+  @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } .stats .tops { grid-column: 1 / -1; } }
+  .stat .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 12px; color: var(--muted); }
+  .stat { border-left: 3px solid var(--border); }
+  .stat.c1 { border-left-color: var(--crit); } .stat.c2 { border-left-color: var(--danger); } .stat.c3 { border-left-color: var(--warn); } .stat.c4 { border-left-color: var(--info); }
+  .tops { font-size: 12px; }
+  .tops .t { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
+  .tops .t:hover .n { color: var(--text); }
+  .tops .n { flex: 0 0 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c4c4cc; }
+  .tops .bar { flex: 1; height: 6px; background: #111114; border-radius: 3px; overflow: hidden; }
+  .tops .bar i { display: block; height: 100%; background: var(--accent); }
+  .tops .c { width: 38px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 40%); gap: 12px; align-items: start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--card); z-index: 1; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td { background: #1c1c20; }
+  tbody tr.sel td { background: rgba(99,102,241,.16); }
+  tr.l1 td:first-child { box-shadow: inset 3px 0 var(--crit); } tr.l2 td:first-child { box-shadow: inset 3px 0 var(--danger); }
+  tr.l3 td:first-child { box-shadow: inset 3px 0 var(--warn); } tr.l4 td:first-child, tr.l0 td:first-child, tr.l5 td:first-child { box-shadow: inset 3px 0 var(--info); }
+  .lvl { font-size: 11px; padding: 1px 7px; border-radius: 99px; }
+  .lvl.l1 { background: #3b0d3f; color: #f0abfc; } .lvl.l2 { background: #3f1d1d; color: #fca5a5; }
+  .lvl.l3 { background: #2b2110; color: #fcd34d; } .lvl.l4, .lvl.l0, .lvl.l5 { background: #172554; color: #93c5fd; }
+  .tablewrap { max-height: calc(100vh - 330px); min-height: 260px; overflow: auto; }
+  .msg { white-space: pre-wrap; word-break: break-word; font-size: 13px; background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 10px; max-height: 320px; overflow: auto; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 4px 10px; font-size: 13px; margin: 10px 0; }
+  .kv b { font-weight: 500; color: var(--muted); }
+  .kv span { word-break: break-all; }
+  pre.xml { white-space: pre-wrap; word-break: break-all; font: 12px/1.45 Consolas, 'Cascadia Mono', monospace; background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 10px; max-height: 360px; overflow: auto; margin: 0; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin: 10px 0 6px; }
+  ol.props { margin: 0; padding-left: 22px; font-size: 12px; font-family: Consolas, monospace; }
+  ol.props li { word-break: break-all; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .empty { text-align: center; color: var(--muted); padding: 30px; white-space: normal; }
+  .info { background: #172036; border: 1px solid #1e3a8a; color: #bfdbfe; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+  .err { background: rgba(239,68,68,.1); border: 1px solid var(--danger); color: #fecaca; padding: 12px 14px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .err b { display: block; margin-bottom: 4px; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #555; border-top-color: var(--accent); border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>📜 Journaux d'événements</h1>
+  <span class="badge" id="adminBadge">…</span>
+  <span class="sp"></span>
+  <button id="recentBtn" title="Erreurs et événements critiques des journaux Système et Application">🚨 Erreurs récentes (24 h)</button>
+  <button id="exportBtn">⭳ Exporter CSV</button>
+</div>
+
+<div class="card">
+  <div class="form">
+    <div class="f"><label>Journal</label>
+      <select id="log">
+        <option value="System">Système</option><option value="Application">Application</option>
+        <option value="Security">Sécurité (admin)</option><option value="Setup">Installation (Setup)</option>
+        <option value="__other">Autre journal…</option>
+      </select></div>
+    <div class="f hide" id="otherWrap"><label>Nom du journal <span id="logCount"></span></label>
+      <input id="otherLog" list="logList" placeholder="ex. Microsoft-Windows-…/Operational" /><datalist id="logList"></datalist></div>
+    <div class="f"><label>Période</label>
+      <select id="period"><option value="1h">Dernière heure</option><option value="24h" selected>24 dernières heures</option><option value="7d">7 derniers jours</option><option value="30d">30 derniers jours</option><option value="all">Tout</option><option value="custom">Personnalisée…</option></select></div>
+    <div class="f hide cust"><label>Début</label><input type="datetime-local" id="start" /></div>
+    <div class="f hide cust"><label>Fin</label><input type="datetime-local" id="end" /></div>
+    <div class="f"><label>Source (fournisseur)</label><input id="provider" list="provList" placeholder="toutes" /><datalist id="provList"></datalist></div>
+    <div class="f"><label>ID d'événement</label><input id="ids" placeholder="ex. 41, 6008" /></div>
+    <div class="f"><label>Texte contenu</label><input id="q" type="search" placeholder="dans le message…" /></div>
+    <div class="f"><label>Résultats max.</label>
+      <select id="max"><option>100</option><option selected>500</option><option>1000</option><option>2000</option><option>5000</option></select></div>
+  </div>
+  <div class="actions">
+    <div class="levels">
+      <label class="lv"><input type="checkbox" value="1" checked /> Critique</label>
+      <label class="lv"><input type="checkbox" value="2" checked /> Erreur</label>
+      <label class="lv"><input type="checkbox" value="3" checked /> Avertissement</label>
+      <label class="lv"><input type="checkbox" value="4" /> Information</label>
+    </div>
+    <span class="sp"></span>
+    <span class="muted" id="meta"></span>
+    <button class="primary" id="go">🔍 Rechercher</button>
+  </div>
+</div>
+
+<div class="err" id="err" style="margin-top:12px"></div>
+<div class="info hide" id="dashInfo" style="margin-top:12px"></div>
+
+<div class="stats">
+  <div class="card stat c1"><div class="v" id="n1">–</div><div class="l">Critiques</div></div>
+  <div class="card stat c2"><div class="v" id="n2">–</div><div class="l">Erreurs</div></div>
+  <div class="card stat c3"><div class="v" id="n3">–</div><div class="l">Avertissements</div></div>
+  <div class="card stat c4"><div class="v" id="n4">–</div><div class="l">Informations</div></div>
+  <div class="card tops"><div class="muted" style="margin-bottom:4px">Principales sources (clic = filtrer)</div><div id="tops"><span class="muted">—</span></div></div>
+</div>
+
+<div class="layout">
+  <div class="card" style="padding:0">
+    <div class="tablewrap">
+      <table>
+        <colgroup><col style="width:112px"><col style="width:150px"><col style="width:26%"><col style="width:64px"><col></colgroup>
+        <thead><tr><th>Niveau</th><th>Date et heure</th><th>Source</th><th>ID</th><th>Message</th></tr></thead>
+        <tbody id="tbody"><tr><td colspan="5" class="empty">Choisissez des filtres puis « Rechercher ».</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card" id="details"><div class="empty">Sélectionnez un événement pour afficher son message complet.</div></div>
+</div>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/event-viewer/api`;
+const $ = s => document.querySelector(s);
+const LVN = { 0: 'Information', 1: 'Critique', 2: 'Erreur', 3: 'Avertissement', 4: 'Information', 5: 'Détaillé' };
+const LOGFR = { System: 'Système', Application: 'Application', Security: 'Sécurité', Setup: 'Installation' };
+let events = [], sel = null, admin = false, loading = false, lastParams = null, provCache = {};
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+let toastT;
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 5000); }
+async function api(path, opts = {}) {
+  const r = await fetch(BASE + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  let j = null; try { j = await r.json(); } catch (_) {}
+  if (!r.ok) { const e = new Error((j && j.error) || `Erreur HTTP ${r.status}`); e.code = j && j.code; e.status = r.status; throw e; }
+  return j;
+}
+function fmtTime(t) {
+  if (!t) return '';
+  const d = new Date(t);
+  if (isNaN(d)) return t;
+  return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR');
+}
+function curLog() { return $('#log').value === '__other' ? $('#otherLog').value.trim() : $('#log').value; }
+function showErr(html) { const b = $('#err'); if (!html) { b.style.display = 'none'; return; } b.innerHTML = html; b.style.display = 'block'; }
+
+async function init() {
+  try {
+    const s = await api('/status');
+    admin = s.admin;
+    $('#adminBadge').textContent = admin ? 'Administrateur' : 'Mode standard';
+    $('#adminBadge').className = 'badge ' + (admin ? 'admin' : 'std');
+  } catch (e) { toast(e.message); }
+  loadProviders();
+  search();
+}
+async function loadLogs() {
+  if ($('#logList').dataset.loaded) return;
+  $('#logCount').innerHTML = '<span class="spin"></span>';
+  try {
+    const r = await api('/logs');
+    $('#logList').innerHTML = r.logs.map(l => `<option value="${esc(l.name)}">${esc(l.name)} — ${l.count ?? '?'} événements</option>`).join('');
+    $('#logList').dataset.loaded = '1';
+    $('#logCount').textContent = `(${r.logs.length} journaux non vides)`;
+  } catch (e) { $('#logCount').textContent = ''; toast(e.message); }
+}
+async function loadProviders() {
+  const log = curLog(); if (!log) return;
+  if (!provCache[log]) {
+    try { provCache[log] = (await api('/providers?log=' + encodeURIComponent(log))).providers; } catch (_) { provCache[log] = []; }
+  }
+  $('#provList').innerHTML = provCache[log].map(p => `<option value="${esc(p)}">`).join('');
+}
+
+function params(elevate) {
+  const p = new URLSearchParams();
+  p.set('log', curLog());
+  const lv = [...document.querySelectorAll('.levels input:checked')].map(i => i.value);
+  p.set('levels', lv.join(','));
+  const per = $('#period').value; p.set('period', per);
+  if (per === 'custom') {
+    const s = $('#start').value, e = $('#end').value;
+    if (s) p.set('start', Math.floor(new Date(s).getTime() / 1000));
+    if (e) p.set('end', Math.floor(new Date(e).getTime() / 1000));
+  }
+  if ($('#provider').value.trim()) p.set('provider', $('#provider').value.trim());
+  if ($('#ids').value.trim()) p.set('ids', $('#ids').value.trim());
+  if ($('#q').value.trim()) p.set('q', $('#q').value.trim());
+  p.set('max', $('#max').value);
+  if (elevate) p.set('elevate', 'true');
+  return p;
+}
+
+async function search(elevate = false) {
+  if (loading) return;
+  const log = curLog();
+  if (!log) { toast('Indiquez un nom de journal.'); return; }
+  if ($('#period').value === 'custom' && !$('#start').value && !$('#end').value) { toast('Indiquez une date de début et/ou de fin.'); return; }
+  loading = true; $('#go').disabled = true; $('#go').innerHTML = '<span class="spin"></span> Recherche…';
+  showErr(null); $('#dashInfo').classList.add('hide');
+  $('#tbody').innerHTML = '<tr><td colspan="5" class="empty"><span class="spin"></span> Lecture du journal…</td></tr>';
+  const p = params(elevate); lastParams = p;
+  try {
+    const r = await api('/events?' + p);
+    showResults(r.events, r.stats);
+    $('#meta').textContent = `${r.count} événement(s) · ${LOGFR[r.log] || r.log} · ${r.duration} s${r.truncated ? ' · limite atteinte' : ''}`;
+  } catch (e) {
+    events = []; showResults([], null);
+    if (e.code === 'ACCESS_DENIED') {
+      showErr(`<b>Droits administrateur requis</b>${esc(e.message)} Le journal Sécurité n'est lisible que par un administrateur.
+        <div style="margin-top:8px"><button class="sm" id="elevBtn">Lire en administrateur (invite UAC)</button></div>`);
+      $('#elevBtn').onclick = () => search(true);
+    } else showErr(`<b>Erreur</b>${esc(e.message)}`);
+    $('#meta').textContent = '';
+  } finally { loading = false; $('#go').disabled = false; $('#go').textContent = '🔍 Rechercher'; }
+}
+
+function showResults(list, stats) {
+  events = list; sel = null;
+  const lv = stats ? stats.levels : { critical: 0, error: 0, warning: 0, information: 0 };
+  $('#n1').textContent = stats ? lv.critical : '–'; $('#n2').textContent = stats ? lv.error : '–';
+  $('#n3').textContent = stats ? lv.warning : '–'; $('#n4').textContent = stats ? lv.information : '–';
+  const tops = stats ? stats.top_sources.slice(0, 6) : [];
+  const mx = Math.max(1, ...tops.map(t => t.count));
+  $('#tops').innerHTML = tops.length ? tops.map(t => `<div class="t" data-src="${esc(t.source)}"><span class="n" title="${esc(t.source)}">${esc(t.source)}</span><span class="bar"><i style="width:${t.count / mx * 100}%"></i></span><span class="c">${t.count}</span></div>`).join('') : '<span class="muted">—</span>';
+  renderTable();
+  $('#details').innerHTML = '<div class="empty">Sélectionnez un événement pour afficher son message complet.</div>';
+}
+function renderTable() {
+  if (!events.length) { $('#tbody').innerHTML = '<tr><td colspan="5" class="empty">Aucun événement ne correspond à ces critères.</td></tr>'; return; }
+  $('#tbody').innerHTML = events.map((e, i) => `<tr class="l${e.level} ${i === sel ? 'sel' : ''}" data-i="${i}">
+    <td><span class="lvl l${e.level}">${esc(LVN[e.level] || e.level_name)}</span></td>
+    <td>${esc(fmtTime(e.time))}</td>
+    <td title="${esc(e.source)}">${esc(e.source)}</td>
+    <td>${esc(e.id)}</td>
+    <td title="${esc(e.message.slice(0, 400))}">${esc(e.message.replace(/\s+/g, ' ').slice(0, 300))}</td></tr>`).join('');
+}
+
+async function showDetails(i, elevate = false) {
+  sel = i; renderTable();
+  const e = events[i]; if (!e) return;
+  const box = $('#details');
+  const base = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="lvl l${e.level}">${esc(LVN[e.level])}</span><b>${esc(e.source)}</b><span class="muted">ID ${esc(e.id)}</span><span class="sp"></span><button class="sm" id="copyBtn">Copier</button></div>
+    <div class="kv"><b>Date</b><span>${esc(fmtTime(e.time))}</span><b>Journal</b><span>${esc(LOGFR[e.log] || e.log)}</span><b>Ordinateur</b><span>${esc(e.machine)}</span><b>N° d'enreg.</b><span>${esc(e.record_id)}</span><span id="extraKv" style="display:contents"></span></div>
+    <div class="msg">${esc(e.message)}</div><div id="xmlZone"><div class="muted" style="margin-top:10px"><span class="spin"></span> Chargement des propriétés…</div></div>`;
+  box.innerHTML = base;
+  $('#copyBtn').onclick = () => copyText(`${fmtTime(e.time)} | ${LVN[e.level]} | ${e.source} | ID ${e.id}\n${e.message}`);
+  try {
+    const p = new URLSearchParams({ log: e.log, record_id: e.record_id });
+    if (elevate || (lastParams && lastParams.get('elevate'))) p.set('elevate', 'true');
+    const d = await api('/event?' + p);
+    if (sel !== i) return;
+    $('#extraKv').innerHTML = [['Utilisateur', d.user], ['Catégorie', d.task], ['Opcode', d.opcode], ['Mots-clés', d.keywords], ['Processus', d.pid ? `${d.pid} (thread ${d.tid})` : '']]
+      .filter(x => x[1]).map(([k, v]) => `<b>${k}</b><span>${esc(v)}</span>`).join('');
+    $('#xmlZone').innerHTML = (d.properties.length ? `<details open><summary>Propriétés (${d.properties.length})</summary><ol class="props">${d.properties.map(v => `<li>${esc(v)}</li>`).join('')}</ol></details>` : '')
+      + `<details><summary>XML de l'événement</summary><pre class="xml">${esc(prettyXml(d.xml))}</pre></details>`;
+  } catch (err) { if (sel === i) $('#xmlZone').innerHTML = `<div class="muted" style="margin-top:10px">Propriétés indisponibles : ${esc(err.message)}</div>`; }
+}
+function prettyXml(x) {
+  if (!x) return '';
+  let out = '', depth = 0;
+  x.replace(/>\s*</g, '><').split(/(?=<)|(?<=>)/).forEach(tok => {
+    if (!tok) return;
+    if (tok.startsWith('</')) { depth = Math.max(0, depth - 1); out += '  '.repeat(depth) + tok + '\n'; }
+    else if (tok.startsWith('<') && !tok.endsWith('/>') && !tok.startsWith('<?')) { out += '  '.repeat(depth) + tok; depth++; out += '\n'; }
+    else if (tok.startsWith('<')) out += '  '.repeat(depth) + tok + '\n';
+    else out += '  '.repeat(depth) + tok + '\n';
+  });
+  // recolle « <Tag>texte</Tag> » sur une ligne
+  return out.replace(/(<[^/!?][^>]*[^/]>|<[^/!?]>)\n\s*([^<\n]+)\n\s*(<\/[^>]+>)/g, '$1$2$3').trim();
+}
+function copyText(t) {
+  const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+  ta.remove();
+  if (!ok && navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast('Copié.', true), () => toast('Copie impossible.'));
+  else toast(ok ? 'Copié.' : 'Copie impossible.', ok);
+}
+
+async function recentErrors() {
+  if (loading) return;
+  loading = true; $('#recentBtn').disabled = true; showErr(null);
+  $('#tbody').innerHTML = '<tr><td colspan="5" class="empty"><span class="spin"></span> Analyse des journaux Système et Application…</td></tr>';
+  try {
+    const r = await api('/recent-errors?hours=24&max=300');
+    showResults(r.events, r.stats);
+    const top = r.stats.top_ids.slice(0, 3).map(t => `${esc(t.source)} (ID ${t.id}) ×${t.count}`).join(', ');
+    $('#dashInfo').innerHTML = `<b>Erreurs récentes — 24 h</b> : ${r.stats.levels.critical} critique(s), ${r.stats.levels.error} erreur(s) dans Système + Application.${top ? ' Les plus fréquentes : ' + top + '.' : ''}${r.errors.length ? '<br>' + r.errors.map(esc).join('<br>') : ''}`;
+    $('#dashInfo').classList.remove('hide');
+    $('#meta').textContent = `${r.count} événement(s) · tableau de bord`;
+  } catch (e) { showErr(`<b>Erreur</b>${esc(e.message)}`); }
+  finally { loading = false; $('#recentBtn').disabled = false; }
+}
+
+$('#tbody').addEventListener('click', e => { const tr = e.target.closest('tr[data-i]'); if (tr) showDetails(+tr.dataset.i); });
+$('#tops').addEventListener('click', e => {
+  const t = e.target.closest('[data-src]'); if (!t) return;
+  $('#provider').value = t.dataset.src; search();
+});
+$('#log').addEventListener('change', () => {
+  const other = $('#log').value === '__other';
+  $('#otherWrap').classList.toggle('hide', !other);
+  if (other) { loadLogs(); $('#otherLog').focus(); }
+  $('#provider').value = '';
+  loadProviders();
+});
+$('#otherLog').addEventListener('change', () => { $('#provider').value = ''; loadProviders(); });
+$('#period').addEventListener('change', () => document.querySelectorAll('.cust').forEach(x => x.classList.toggle('hide', $('#period').value !== 'custom')));
+$('#go').addEventListener('click', () => search());
+['#provider', '#ids', '#q', '#otherLog'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') search(); }));
+$('#recentBtn').addEventListener('click', recentErrors);
+$('#exportBtn').addEventListener('click', async () => {
+  if (!events.length) { toast('Aucun événement à exporter.'); return; }
+  try {
+    const r = await api('/export', { method: 'POST', body: JSON.stringify({ rows: events.map(e => ({ ...e, level_name: LVN[e.level] || e.level_name })) }) });
+    const a = document.createElement('a'); a.href = `${BASE}/file/${encodeURIComponent(r.filename)}`; a.download = r.filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    toast(`${r.count} événement(s) exporté(s).`, true);
+  } catch (e) { toast(e.message); }
+});
+init();
+</script>
+</body>
+</html>

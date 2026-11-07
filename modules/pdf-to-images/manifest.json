@@ -3,9 +3,26 @@
   "name": "PDF → Images",
   "version": "1.0.0",
   "description": "Convertit chaque page d'un PDF en image PNG",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "pdf",
+    "image",
+    "conversion"
+  ],
   "icon": "🖼️",
-  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
   "permissions": [],
-  "database": {"type": "none"},
-  "dependencies": {"python": ["pdf2image", "Pillow"], "modules": []}
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "pdf2image>=1.17,<2",
+      "Pillow>=11,<12"
+    ],
+    "modules": []
+  }
 }

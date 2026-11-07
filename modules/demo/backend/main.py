@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from ledroide_sdk import Module
 
-router = APIRouter()
+module = Module(__file__)
+router = module.router
 
 _counter = 0
 

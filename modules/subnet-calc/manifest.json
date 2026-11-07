@@ -1,0 +1,27 @@
+{
+  "id": "subnet-calc",
+  "name": "Calculateur de sous-réseaux",
+  "version": "1.0.0",
+  "description": "Calculs IPv4/IPv6 (CIDR, masque, plages, binaire), découpage, VLSM, appartenance/chevauchement et agrégation de réseaux.",
+  "category": "Réseau",
+  "tags": [
+    "ip",
+    "calcul",
+    "cidr"
+  ],
+  "icon": "🧮",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

@@ -1,0 +1,32 @@
+{
+  "id": "clipboard-history",
+  "name": "Historique presse-papier",
+  "version": "1.0.0",
+  "description": "Garde l'historique du presse-papier (texte et images) : recherche, épingles, recopie en un clic.",
+  "category": "Productivité",
+  "tags": [
+    "presse-papier",
+    "historique",
+    "texte",
+    "image"
+  ],
+  "icon": "📋",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "Pillow>=11,<12"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

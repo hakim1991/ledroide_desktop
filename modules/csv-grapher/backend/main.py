@@ -6,7 +6,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
-from fastapi import UploadFile, File
+from ledroide_sdk.http import UploadFile, File
 from pydantic import BaseModel
 
 from ledroide_sdk import Module

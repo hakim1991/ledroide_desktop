@@ -1,0 +1,27 @@
+{
+  "id": "wifi-tools",
+  "name": "Wi-Fi",
+  "version": "1.0.0",
+  "description": "Connexion Wi-Fi en direct, réseaux à proximité et encombrement des canaux, profils enregistrés (mot de passe, suppression, export).",
+  "category": "Réseau",
+  "tags": [
+    "wi-fi",
+    "windows",
+    "diagnostic"
+  ],
+  "icon": "📶",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

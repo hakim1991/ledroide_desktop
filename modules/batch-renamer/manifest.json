@@ -1,0 +1,27 @@
+{
+  "id": "batch-renamer",
+  "name": "Renommage en masse",
+  "version": "1.0.0",
+  "description": "Renomme des fichiers par lot avec aperçu, détection des conflits et annulation",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "fichier",
+    "renommage",
+    "lot"
+  ],
+  "icon": "✏️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

@@ -5,8 +5,8 @@ import zipfile
 from pathlib import Path
 import tempfile
 
-from fastapi import UploadFile, File
-from fastapi.responses import FileResponse, JSONResponse
+from ledroide_sdk.http import UploadFile, File
+from ledroide_sdk.http import FileResponse, JSONResponse
 from ledroide_sdk import Module
 
 module = Module(__file__)

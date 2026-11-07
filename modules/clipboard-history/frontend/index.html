@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Historique presse-papier</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; display: flex; flex-direction: column; overflow: hidden; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 6px 11px; transition: background .15s, border-color .15s; }
+  button:hover { background: #2a2a30; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: #fca5a5; }
+  button.danger:hover { background: rgba(239,68,68,.15); border-color: var(--danger); }
+  button.icon { background: transparent; border-color: transparent; color: var(--muted); padding: 4px 7px; }
+  button.icon:hover { color: var(--text); background: #2a2a30; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--card); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 6px 0 0; font-weight: 600; }
+  .sp { flex: 1; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.paused { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+  .dot.off { background: var(--danger); box-shadow: none; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; align-items: center; border-bottom: 1px solid var(--border); }
+  #q { flex: 1; min-width: 180px; }
+  .settings { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .settings input[type=number] { width: 80px; padding: 4px 6px; }
+  .settings label { display: flex; align-items: center; gap: 5px; }
+  main { flex: 1; overflow-y: auto; padding: 12px 16px; }
+  .item { display: flex; gap: 10px; align-items: flex-start; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .item:hover { border-color: #3f3f46; background: #1c1c20; }
+  .item.pinned { border-color: rgba(99,102,241,.55); }
+  .item.flash { border-color: var(--ok); background: rgba(34,197,94,.08); }
+  .item .body { flex: 1; min-width: 0; }
+  .item pre { margin: 0; font: 13px/1.45 ui-monospace, 'Cascadia Mono', Consolas, monospace; white-space: pre-wrap; word-break: break-word; max-height: 7.3em; overflow: hidden; }
+  .item img { max-width: 240px; max-height: 160px; border-radius: 6px; border: 1px solid var(--border); background: repeating-conic-gradient(#222 0 25%, #2b2b2b 0 50%) 50% / 16px 16px; display: block; }
+  .meta { font-size: 11px; color: var(--muted); margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .acts { display: flex; gap: 2px; flex: none; align-items: center; }
+  .pin-on { color: #a5b4fc !important; }
+  .empty { text-align: center; color: var(--muted); padding: 60px 20px; }
+  .empty .big { font-size: 40px; }
+  .confirm { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: #fca5a5; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.4); padding: 2px 6px; border-radius: 6px; }
+  .confirm button { padding: 2px 8px; font-size: 12px; }
+  .banner { margin: 10px 16px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--warn); background: rgba(245,158,11,.1); color: #fcd34d; font-size: 13px; display: none; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: #2f2f36; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 Historique presse-papier</h1>
+  <span class="status"><span class="dot" id="dot"></span><span id="stTxt">…</span></span>
+  <span class="sp"></span>
+  <button id="pauseBtn">⏸ Mettre en pause</button>
+  <span><button id="clearBtn" class="danger">🧹 Vider (hors épinglés)</button></span>
+</header>
+<div class="banner" id="banner"></div>
+<div class="bar">
+  <input id="q" type="search" placeholder="Rechercher dans l'historique…" />
+  <select id="kind">
+    <option value="">Tout</option><option value="text">Texte</option><option value="image">Images</option>
+  </select>
+  <label class="status"><input type="checkbox" id="pinOnly" /> Épinglés seulement</label>
+  <div class="settings">
+    <label>Max entrées <input type="number" id="maxN" min="10" max="5000" step="10" /></label>
+    <label><input type="checkbox" id="capImg" /> Capturer les images</label>
+  </div>
+</div>
+<main id="list"></main>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/clipboard-history/api`;
+const $ = s => document.querySelector(s);
+let status = null, lastVersion = -1, items = [], qTimer = null;
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2800); }
+async function api(path, opts = {}) {
+  const o = { method: opts.method || 'GET', headers: {} };
+  if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  let r; try { r = await fetch(BASE + path, o); } catch (e) { throw new Error('Backend injoignable'); }
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok || (data && data.error)) {
+    let msg = (data && (data.error || (data.detail && JSON.stringify(data.detail)))) || ('Erreur ' + r.status);
+    if (data && data.code === 'MISSING_DEP') msg += ' — Installez les dépendances du module.';
+    throw new Error(msg);
+  }
+  return data;
+}
+async function safe(fn) { try { return await fn(); } catch (e) { toast(e.message); } }
+
+function fmtTime(ts) {
+  const d = new Date(ts * 1000), now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return "à l'instant";
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
+  const sameDay = d.toDateString() === now.toDateString();
+  const hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return sameDay ? `aujourd'hui ${hm}` : d.toLocaleDateString('fr-FR') + ' ' + hm;
+}
+
+function inlineConfirm(anchor, msg, onYes) {
+  const box = document.createElement('span');
+  box.className = 'confirm';
+  box.innerHTML = `${esc(msg)} <button class="danger">Oui</button><button>Non</button>`;
+  anchor.style.display = 'none'; anchor.after(box);
+  const close = () => { box.remove(); anchor.style.display = ''; };
+  box.onclick = e => e.stopPropagation();
+  box.children[0].onclick = () => { close(); onYes(); };
+  box.children[1].onclick = close;
+  setTimeout(close, 6000);
+}
+
+async function loadStatus() {
+  const s = await api('/status').catch(e => { $('#stTxt').textContent = e.message; $('#dot').className = 'dot off'; return null; });
+  if (!s) return;
+  status = s;
+  const dot = $('#dot');
+  if (!s.supported) { dot.className = 'dot off'; $('#stTxt').textContent = 'Non pris en charge (Windows uniquement)'; }
+  else if (!s.running) { dot.className = 'dot off'; $('#stTxt').textContent = 'Capture arrêtée'; }
+  else if (s.paused) { dot.className = 'dot paused'; $('#stTxt').textContent = 'En pause'; }
+  else { dot.className = 'dot'; $('#stTxt').textContent = `Capture active · ${s.count} élément(s)` + (s.pinned_count ? ` · ${s.pinned_count} épinglé(s)` : ''); }
+  $('#pauseBtn').textContent = s.paused ? '▶ Reprendre la capture' : '⏸ Mettre en pause';
+  $('#pauseBtn').className = s.paused ? 'primary' : '';
+  if (document.activeElement !== $('#maxN')) $('#maxN').value = s.max_entries;
+  $('#capImg').checked = s.capture_images;
+  $('#capImg').disabled = !s.images_available;
+  const b = $('#banner');
+  if (!s.images_available) { b.style.display = 'block'; b.textContent = "La capture d'images nécessite Pillow — Installez les dépendances du module."; }
+  else if (s.last_error) { b.style.display = 'block'; b.textContent = 'Erreur de capture : ' + s.last_error; }
+  else b.style.display = 'none';
+  if (s.version !== lastVersion) await loadItems();
+}
+
+async function loadItems() {
+  const p = new URLSearchParams({ q: $('#q').value, kind: $('#kind').value, pinned_only: $('#pinOnly').checked, limit: 500 });
+  const r = await safe(() => api('/items?' + p)); if (!r) return;
+  items = r.items; lastVersion = r.version;
+  render(r.total);
+}
+
+function render(total) {
+  const list = $('#list');
+  if (!items.length) {
+    const filtered = $('#q').value || $('#kind').value || $('#pinOnly').checked;
+    list.innerHTML = `<div class="empty"><div class="big">${filtered ? '🔍' : '📋'}</div><p>${filtered ? 'Aucun résultat.' : "L'historique est vide. Copiez du texte (Ctrl+C) n'importe où : il apparaîtra ici."}</p></div>`;
+    return;
+  }
+  list.innerHTML = '';
+  for (const it of items) {
+    const el = document.createElement('div');
+    el.className = 'item' + (it.pinned ? ' pinned' : '');
+    const body = it.kind === 'text'
+      ? `<pre>${esc(it.preview)}${it.length > it.preview.length ? '…' : ''}</pre>`
+      : `<img src="${BASE}/items/${it.id}/thumb" alt="image" loading="lazy" />`;
+    const info = it.kind === 'text'
+      ? `${it.length} caractère(s)${it.lines > 1 ? ` · ${it.lines} lignes` : ''}`
+      : `Image ${it.width}×${it.height}`;
+    el.innerHTML = `<div class="body">${body}<div class="meta"><span>${fmtTime(it.created_at)}</span><span>${info}</span>${it.pinned ? '<span style="color:#a5b4fc">📌 Épinglé</span>' : ''}</div></div>
+      <div class="acts">
+        <button class="icon cp" title="Copier">📄</button>
+        <button class="icon pin ${it.pinned ? 'pin-on' : ''}" title="${it.pinned ? 'Désépingler' : 'Épingler'}">📌</button>
+        <button class="icon del" title="Supprimer">🗑️</button>
+      </div>`;
+    el.onclick = () => copyItem(it, el);
+    el.querySelector('.cp').onclick = e => { e.stopPropagation(); copyItem(it, el); };
+    el.querySelector('.pin').onclick = async e => {
+      e.stopPropagation();
+      if (await safe(() => api(`/items/${it.id}/pin`, { method: 'POST', body: { pinned: !it.pinned } }))) refresh();
+    };
+    el.querySelector('.del').onclick = async e => {
+      e.stopPropagation();
+      if (await safe(() => api(`/items/${it.id}`, { method: 'DELETE' }))) refresh();
+    };
+    list.appendChild(el);
+  }
+}
+
+async function copyItem(it, el) {
+  if (await safe(() => api(`/items/${it.id}/copy`, { method: 'POST' }))) {
+    el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 600);
+    toast('Copié dans le presse-papier ✔', true);
+    refresh();
+  }
+}
+
+function refresh() { lastVersion = -1; loadStatus(); }
+
+$('#pauseBtn').onclick = async () => {
+  if (!status) return;
+  if (await safe(() => api('/settings', { method: 'POST', body: { paused: !status.paused } }))) loadStatus();
+};
+$('#clearBtn').onclick = e => inlineConfirm(e.currentTarget, 'Supprimer tous les éléments non épinglés ?', async () => {
+  const r = await safe(() => api('/clear', { method: 'POST' }));
+  if (r) { toast(`${r.deleted} élément(s) supprimé(s)`, true); refresh(); }
+});
+$('#maxN').onchange = async e => {
+  const v = parseInt(e.target.value, 10);
+  if (!(v >= 10 && v <= 5000)) { toast('Valeur entre 10 et 5000'); e.target.value = status ? status.max_entries : 200; return; }
+  if (await safe(() => api('/settings', { method: 'POST', body: { max_entries: v } }))) { toast('Limite enregistrée', true); refresh(); }
+};
+$('#capImg').onchange = async e => { if (await safe(() => api('/settings', { method: 'POST', body: { capture_images: e.target.checked } }))) loadStatus(); };
+$('#q').oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(loadItems, 200); };
+$('#kind').onchange = loadItems;
+$('#pinOnly').onchange = loadItems;
+
+loadStatus();
+setInterval(() => { if (!document.hidden) loadStatus(); }, 1500);
+setInterval(() => { document.querySelectorAll('.item .meta span:first-child').forEach((s, i) => { if (items[i]) s.textContent = fmtTime(items[i].created_at); }); }, 30000);
+</script>
+</body>
+</html>

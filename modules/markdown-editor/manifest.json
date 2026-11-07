@@ -1,0 +1,31 @@
+{
+  "id": "markdown-editor",
+  "name": "Éditeur Markdown",
+  "version": "1.0.0",
+  "description": "Éditeur Markdown avec aperçu en direct, documents enregistrés automatiquement, import et export .md / .html.",
+  "category": "Productivité",
+  "tags": [
+    "markdown",
+    "texte",
+    "notes"
+  ],
+  "icon": "📝",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "markdown"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

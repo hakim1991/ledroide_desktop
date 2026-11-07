@@ -3,9 +3,26 @@
   "name": "Graphique CSV",
   "version": "1.0.0",
   "description": "Visualise des données CSV sous forme de graphique",
+  "category": "Maths & données",
+  "tags": [
+    "csv",
+    "graphique",
+    "données"
+  ],
   "icon": "📊",
-  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
   "permissions": [],
-  "database": {"type": "none"},
-  "dependencies": {"python": ["pandas", "matplotlib"], "modules": []}
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "pandas>=2,<4",
+      "matplotlib>=3.8,<4"
+    ],
+    "modules": []
+  }
 }

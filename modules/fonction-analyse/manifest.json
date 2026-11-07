@@ -3,9 +3,27 @@
   "name": "Analyseur de fonctions",
   "version": "1.0.0",
   "description": "Analyse mathématique complète d'une fonction f(x) : dérivée, zéros, extrema, graphe",
+  "category": "Maths & données",
+  "tags": [
+    "calcul",
+    "graphique",
+    "fonction"
+  ],
   "icon": "📐",
-  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
   "permissions": [],
-  "database": {"type": "none"},
-  "dependencies": {"python": ["sympy", "numpy", "matplotlib"], "modules": []}
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "sympy>=1.12,<2",
+      "numpy>=2,<3",
+      "matplotlib>=3.8,<4"
+    ],
+    "modules": []
+  }
 }

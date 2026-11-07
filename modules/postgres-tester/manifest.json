@@ -1,0 +1,31 @@
+{
+  "id": "postgres-tester",
+  "name": "PostgreSQL",
+  "version": "1.0.0",
+  "description": "Teste un serveur PostgreSQL (service, port, connexion, bases), console SQL et gestion des utilisateurs / mots de passe.",
+  "category": "Développement",
+  "tags": [
+    "base de données",
+    "postgresql",
+    "sql"
+  ],
+  "icon": "🐘",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "psycopg[binary]"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

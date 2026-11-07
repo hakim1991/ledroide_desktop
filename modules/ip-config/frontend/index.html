@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Configuration IP</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; --cyan: #06b6d4; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 6px 12px; white-space: nowrap; }
+  button:hover:not(:disabled) { background: #2a2a30; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #4f46e5; }
+  button.danger { color: #fca5a5; border-color: rgba(239,68,68,.4); }
+  button.sm { padding: 3px 9px; font-size: 12px; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; outline: none; min-width: 0; }
+  input:focus, select:focus { border-color: var(--accent); }
+  header { display: flex; align-items: center; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 10px 10px 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 11px; padding: 2px 9px; border-radius: 10px; font-weight: 500; }
+  .badge.std { background: #27272a; color: #a1a1aa; }
+  .badge.adm { background: rgba(245,158,11,.15); color: #fcd34d; }
+  .tab { border: none; background: transparent; border-radius: 6px 6px 0 0; padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); background: #222226; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 16px; max-width: 1300px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .toolbar .sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+  .toolbar .grow { flex: 1; }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; color: #c4c4cc; font-size: 13px; cursor: pointer; user-select: none; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; }
+  .hostline { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .hostline b { color: var(--text); font-weight: 500; }
+  .adapters { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; }
+  .ad { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; }
+  .ad.down { opacity: .78; }
+  .ad h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ad .desc { color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #27272a; color: #a1a1aa; font-weight: 500; }
+  .pill.up { background: rgba(34,197,94,.15); color: #86efac; }
+  .pill.down { background: rgba(239,68,68,.12); color: #fca5a5; }
+  .pill.acc { background: rgba(99,102,241,.18); color: #c7d2fe; }
+  .pill.warn { background: rgba(245,158,11,.15); color: #fcd34d; }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 3px 10px; font-size: 13px; }
+  .kv .k { color: var(--muted); }
+  .kv .v { word-break: break-all; }
+  .kv .v .tag { font-size: 10.5px; color: var(--muted); margin-left: 6px; font-family: system-ui; }
+  .ad .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--card); cursor: pointer; user-select: none; }
+  th.sorted::after { content: ' ▾'; }
+  th.sorted.asc::after { content: ' ▴'; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.hl td { background: rgba(99,102,241,.07); }
+  .tablewrap { max-height: calc(100vh - 210px); overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+  pre.out { background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0; max-height: 420px; overflow: auto; font: 12px/1.5 ui-monospace, 'Cascadia Mono', Consolas, monospace; white-space: pre-wrap; color: #c4c4cc; }
+  .err { color: #fecaca; background: rgba(239,68,68,.1); border: 1px solid var(--danger); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .okbox { color: #bbf7d0; background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.45); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .resbox { margin-bottom: 12px; }
+  .resbox .head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .empty { padding: 30px; text-align: center; color: var(--muted); }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #3f3f46; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  /* Confirmation inline */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .overlay.show { display: flex; }
+  .dialog { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; max-width: 460px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog h4 { margin: 0 0 8px; font-size: 15px; }
+  .dialog p { margin: 0 0 6px; color: #c4c4cc; font-size: 13px; }
+  .dialog .uac { color: #fcd34d; font-size: 12px; margin-top: 8px; }
+  .dialog .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .toast { position: fixed; bottom: 16px; right: 16px; background: #27272a; border: 1px solid #3f3f46; padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60; }
+  .toast.show { opacity: 1; }
+  .count { font-size: 12px; color: var(--muted); }
+  .st-Joignable, .st-Permanent { color: #86efac; }
+  .st-Obsolète, .st-Délai, .st-Sonde { color: #fcd34d; }
+  .st-Injoignable, .st-Incomplet { color: #fca5a5; }
+  @media (max-width: 520px) { .adapters { grid-template-columns: 1fr; } .kv { grid-template-columns: 105px 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🖧 Configuration IP <span id="adminBadge" class="badge std">…</span></h1>
+  <button class="tab active" data-tab="cartes">Cartes réseau</button>
+  <button class="tab" data-tab="arp">Table ARP</button>
+  <button class="tab" data-tab="routes">Table de routage</button>
+  <button class="tab" data-tab="dnscache">Cache DNS</button>
+</header>
+<main>
+  <div id="actionResult"></div>
+
+  <!-- CARTES -->
+  <section class="panel active" id="p-cartes">
+    <div class="toolbar">
+      <button class="primary" id="btnRefresh">↻ Actualiser</button>
+      <label class="chk"><input type="checkbox" id="hideVirtual" checked /> Masquer virtuelles / déconnectées</label>
+      <span class="grow"></span>
+      <button id="btnCopyAll" title="Copier toutes les cartes au format ipconfig /all">📋 Copier tout</button>
+      <button id="btnRaw">ipconfig /all brut</button>
+    </div>
+    <div class="toolbar">
+      <span class="small muted">Actions globales :</span>
+      <button class="sm" data-gact="renew">Renouveler tout</button>
+      <button class="sm danger" data-gact="release">Libérer tout</button>
+      <span class="sep"></span>
+      <button class="sm" data-gact="flushdns">Vider le cache DNS</button>
+      <button class="sm" data-gact="registerdns">Réenregistrer DNS</button>
+    </div>
+    <div id="hostInfo" class="hostline"></div>
+    <div id="rawBox"></div>
+    <div id="adapters"><div class="empty"><span class="spinner"></span> Chargement des cartes réseau…</div></div>
+  </section>
+
+  <!-- ARP -->
+  <section class="panel" id="p-arp">
+    <div class="toolbar">
+      <button class="primary" id="arpRefresh">↻ Actualiser</button>
+      <input id="arpFilter" placeholder="Filtrer (IP, MAC, interface)…" style="width:240px" />
+      <select id="arpFamily"><option value="">IPv4 + IPv6</option><option>IPv4</option><option>IPv6</option></select>
+      <select id="arpState"><option value="">Tous les états</option></select>
+      <select id="arpIface"><option value="">Toutes les interfaces</option></select>
+      <label class="chk"><input type="checkbox" id="arpHideMulti" checked /> Masquer multicast / diffusion</label>
+      <span class="grow"></span><span class="count" id="arpCount"></span>
+    </div>
+    <div id="arpTable" class="tablewrap"><div class="empty">Cliquez sur Actualiser.</div></div>
+  </section>
+
+  <!-- ROUTES -->
+  <section class="panel" id="p-routes">
+    <div class="toolbar">
+      <button class="primary" id="rtRefresh">↻ Actualiser</button>
+      <input id="rtFilter" placeholder="Filtrer (destination, passerelle, interface)…" style="width:260px" />
+      <select id="rtFamily"><option value="">IPv4 + IPv6</option><option>IPv4</option><option>IPv6</option></select>
+      <select id="rtIface"><option value="">Toutes les interfaces</option></select>
+      <label class="chk"><input type="checkbox" id="rtHideLocal" /> Masquer hôte/multicast/diffusion</label>
+      <span class="grow"></span><span class="count" id="rtCount"></span>
+    </div>
+    <div id="rtTable" class="tablewrap"><div class="empty">Cliquez sur Actualiser.</div></div>
+    <p class="small muted">Métrique effective = métrique de route + métrique d'interface. La route par défaut ayant la plus faible métrique effective est utilisée en priorité.</p>
+  </section>
+
+  <!-- DNS CACHE -->
+  <section class="panel" id="p-dnscache">
+    <div class="toolbar">
+      <button class="primary" id="dcRefresh">↻ Actualiser</button>
+      <input id="dcFilter" placeholder="Rechercher un nom ou une donnée…" style="width:260px" />
+      <select id="dcType"><option value="">Tous les types</option></select>
+      <span class="grow"></span><span class="count" id="dcCount"></span>
+      <button class="danger" data-gact="flushdns">Vider le cache DNS</button>
+    </div>
+    <div id="dcTable" class="tablewrap"><div class="empty">Cliquez sur Actualiser.</div></div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <h4 id="dlgTitle"></h4>
+    <p id="dlgText"></p>
+    <div class="uac" id="dlgUac"></div>
+    <div class="btns"><button id="dlgNo">Annuler</button><button class="primary" id="dlgYes">Confirmer</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/ip-config/api`;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let state = { admin: false, host: null, adapters: [], arp: null, routes: null, dns: null };
+
+function lsGet(k, d) { try { const v = localStorage.getItem('ipcfg.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } }
+function lsSet(k, v) { try { localStorage.setItem('ipcfg.' + k, JSON.stringify(v)); } catch {} }
+
+async function api(path, opts = {}) {
+  let r;
+  try {
+    r = await fetch(BASE + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  } catch (e) { throw new Error('Backend injoignable : ' + e.message); }
+  let data = null;
+  try { data = await r.json(); } catch { data = null; }
+  if (!r.ok) {
+    const err = new Error((data && (data.error || data.detail)) ? (data.error || JSON.stringify(data.detail)) : ('Erreur HTTP ' + r.status));
+    err.code = data && data.code; throw err;
+  }
+  return data;
+}
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800); }
+
+function copyText(text) {
+  const fallback = () => {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch {}
+    ta.remove(); toast(ok ? 'Copié dans le presse-papiers' : 'Copie impossible');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast('Copié dans le presse-papiers'), fallback);
+  } else fallback();
+}
+
+/* ── Confirmation inline ── */
+function confirmBox(title, text, uac) {
+  return new Promise(res => {
+    $('#dlgTitle').textContent = title; $('#dlgText').textContent = text;
+    $('#dlgUac').textContent = uac ? '🛡 Une invite de contrôle de compte (UAC) va s\'afficher pour exécuter cette action en administrateur.' : '';
+    const ov = $('#overlay'); ov.classList.add('show');
+    const done = (v) => { ov.classList.remove('show'); $('#dlgYes').onclick = $('#dlgNo').onclick = null; res(v); };
+    $('#dlgYes').onclick = () => done(true); $('#dlgNo').onclick = () => done(false);
+    $('#dlgYes').focus();
+  });
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#overlay').classList.contains('show')) $('#dlgNo').click(); });
+
+/* ── Tabs ── */
+$$('.tab').forEach(b => b.addEventListener('click', () => {
+  $$('.tab').forEach(x => x.classList.toggle('active', x === b));
+  $$('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + b.dataset.tab));
+  lsSet('tab', b.dataset.tab);
+  if (b.dataset.tab === 'arp' && !state.arp) loadArp();
+  if (b.dataset.tab === 'routes' && !state.routes) loadRoutes();
+  if (b.dataset.tab === 'dnscache' && !state.dns) loadDns();
+}));
+
+/* ── Statut admin ── */
+async function loadStatus() {
+  try {
+    const s = await api('/status');
+    state.admin = !!s.is_admin;
+    const b = $('#adminBadge');
+    b.textContent = s.is_admin ? 'Administrateur' : 'Mode standard';
+    b.className = 'badge ' + (s.is_admin ? 'adm' : 'std');
+    b.title = s.is_admin ? 'Les actions s\'exécutent directement.' : 'Les actions qui le nécessitent demanderont une élévation (UAC).';
+  } catch (e) { $('#adminBadge').textContent = 'Statut inconnu'; }
+}
+
+/* ── Cartes ── */
+const fmtDate = (iso) => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'medium' }); };
+function relTime(iso) {
+  if (!iso) return ''; const d = new Date(iso); if (isNaN(d)) return '';
+  let s = Math.round((d - Date.now()) / 1000); const past = s < 0; s = Math.abs(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), dd = Math.floor(h / 24);
+  const txt = dd >= 1 ? `${dd} j ${h % 24} h` : h >= 1 ? `${h} h ${m} min` : `${m} min`;
+  return past ? `il y a ${txt}` : `dans ${txt}`;
+}
+
+async function loadAdapters() {
+  $('#btnRefresh').disabled = true;
+  try {
+    const d = await api('/adapters');
+    state.host = d.host; state.adapters = d.adapters || [];
+    if (d.host && typeof d.host.is_admin === 'boolean') state.admin = d.host.is_admin;
+    renderHost(); renderAdapters();
+  } catch (e) {
+    $('#adapters').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  } finally { $('#btnRefresh').disabled = false; }
+}
+
+function renderHost() {
+  const h = state.host || {};
+  $('#hostInfo').innerHTML = `
+    <span>Nom d'hôte : <b>${esc(h.dns_hostname || h.hostname || '?')}</b></span>
+    <span>${h.part_of_domain ? 'Domaine' : 'Groupe de travail'} : <b>${esc(h.domain || '—')}</b></span>
+    ${h.suffix_search && h.suffix_search.length ? `<span>Suffixes DNS : <b>${esc(h.suffix_search.join(', '))}</b></span>` : ''}
+    <span>${state.adapters.length} carte(s) détectée(s)</span>`;
+}
+
+function visibleAdapters() {
+  const hide = $('#hideVirtual').checked;
+  return state.adapters.filter(a => !hide || (a.up && !a.virtual));
+}
+
+function renderAdapters() {
+  const list = visibleAdapters();
+  const hidden = state.adapters.length - list.length;
+  if (!list.length) {
+    $('#adapters').innerHTML = `<div class="card empty">Aucune carte à afficher${hidden ? ` (${hidden} masquée(s) — décochez le filtre)` : ''}.</div>`;
+    return;
+  }
+  $('#adapters').innerHTML = `<div class="adapters">${list.map(adapterCard).join('')}</div>` +
+    (hidden ? `<p class="small muted">${hidden} carte(s) virtuelle(s) ou déconnectée(s) masquée(s).</p>` : '');
+}
+
+function adapterCard(a) {
+  const v4 = a.addresses.filter(x => x.family === 'IPv4');
+  const v6 = a.addresses.filter(x => x.family === 'IPv6');
+  const rows = [];
+  const row = (k, v) => { if (v !== '' && v != null) rows.push(`<div class="k">${k}</div><div class="v">${v}</div>`); };
+  row('Vitesse', a.up ? esc(a.link_speed) : '<span class="muted">—</span>');
+  row('Adresse MAC', `<span class="mono">${esc(a.mac || '—')}</span>`);
+  row('IPv4', v4.length ? v4.map(x => `<span class="mono">${esc(x.ip)}/${x.prefix}</span><span class="tag">${esc(x.mask || '')}${x.link_local ? ' · APIPA' : ''} · ${esc(x.origin)}</span>`).join('<br>') : '<span class="muted">aucune</span>');
+  row('IPv6', v6.length ? v6.map(x => `<span class="mono">${esc(x.ip)}/${x.prefix}</span><span class="tag">${x.link_local ? 'lien local' : x.temporary ? 'temporaire' : esc(x.origin)}${x.state !== 'Préférée' ? ' · ' + esc(x.state) : ''}</span>`).join('<br>') : '<span class="muted">aucune</span>');
+  row('Passerelle', a.gateways.length ? a.gateways.map(g => `<span class="mono">${esc(g.ip)}</span>`).join('<br>') : '<span class="muted">aucune</span>');
+  row('Serveurs DNS', a.dns_servers.length ? a.dns_servers.map(s => `<span class="mono">${esc(s)}</span>`).join('<br>') : '<span class="muted">aucun</span>');
+  if (a.dns_suffix) row('Suffixe DNS', esc(a.dns_suffix));
+  row('DHCP', a.dhcp_enabled ? 'Activé' : (a.dhcp_enabled === false ? 'Désactivé (IP statique)' : '—'));
+  if (a.dhcp_enabled && a.dhcp_server) row('Serveur DHCP', `<span class="mono">${esc(a.dhcp_server)}</span>`);
+  if (a.lease_obtained) row('Bail obtenu', `${esc(fmtDate(a.lease_obtained))} <span class="tag">${esc(relTime(a.lease_obtained))}</span>`);
+  if (a.lease_expires) row('Bail expire', `${esc(fmtDate(a.lease_expires))} <span class="tag">${esc(relTime(a.lease_expires))}</span>`);
+  if (a.mtu) row('MTU', a.mtu);
+  if (a.metric4 != null) row('Métrique', `IPv4 ${a.metric4}${a.metric6 != null ? ' · IPv6 ' + a.metric6 : ''}`);
+  if (a.driver_version) row('Pilote', `${esc(a.driver_version)}`);
+  const name = esc(a.name);
+  return `<div class="ad ${a.up ? '' : 'down'}">
+    <h3>${name}
+      <span class="pill ${a.up ? 'up' : 'down'}">${esc(a.status_fr)}</span>
+      <span class="pill acc">${esc(a.type)}</span>
+      ${a.virtual ? '<span class="pill">virtuelle</span>' : ''}
+      ${a.dhcp_enabled ? '<span class="pill">DHCP</span>' : (a.dhcp_enabled === false ? '<span class="pill warn">Statique</span>' : '')}
+    </h3>
+    <div class="desc">${esc(a.description)} · index ${a.ifIndex}</div>
+    <div class="kv">${rows.join('')}</div>
+    <div class="acts">
+      <button class="sm" data-copy="${a.ifIndex}">📋 Copier</button>
+      ${a.dhcp_enabled ? `<button class="sm" data-act="renew" data-ad="${name}">Renouveler</button>
+      <button class="sm danger" data-act="release" data-ad="${name}">Libérer</button>` : ''}
+    </div>
+  </div>`;
+}
+
+/* ── Texte façon ipconfig /all ── */
+function dots(label, width = 38) {
+  let s = '   ' + label + ' ';
+  while (s.length < width) s += s.length % 2 ? '.' : ' ';
+  return s + ': ';
+}
+function adapterText(a) {
+  const L = [];
+  const kind = a.type === 'Wi-Fi' ? 'Carte réseau sans fil' : a.type === 'Ethernet' ? 'Carte Ethernet' : 'Carte ' + a.type;
+  L.push(`${kind} ${a.name} :`, '');
+  if (!a.up) L.push(dots('Statut du média') + 'Média déconnecté');
+  L.push(dots('Suffixe DNS propre à la connexion') + (a.dns_suffix || ''));
+  L.push(dots('Description') + (a.description || ''));
+  L.push(dots('Adresse physique') + (a.mac || ''));
+  if (a.up && a.link_speed) L.push(dots('Vitesse de liaison') + a.link_speed);
+  L.push(dots('DHCP activé') + (a.dhcp_enabled ? 'Oui' : 'Non'));
+  for (const x of a.addresses.filter(x => x.family === 'IPv6')) {
+    const lbl = x.link_local ? 'Adresse IPv6 de liaison locale' : x.temporary ? 'Adresse IPv6 temporaire' : 'Adresse IPv6';
+    L.push(dots(lbl) + `${x.ip}${x.scope ? '%' + x.scope : ''}/${x.prefix}(${(x.state || '').toLowerCase()})`);
+  }
+  for (const x of a.addresses.filter(x => x.family === 'IPv4')) {
+    L.push(dots(x.link_local ? 'Adresse IPv4 de configuration automatique' : 'Adresse IPv4') + `${x.ip}(${(x.state || '').toLowerCase()})`);
+    L.push(dots('Masque de sous-réseau') + (x.mask || ''));
+  }
+  if (a.lease_obtained) L.push(dots('Bail obtenu') + fmtDate(a.lease_obtained));
+  if (a.lease_expires) L.push(dots('Bail expirant') + fmtDate(a.lease_expires));
+  L.push(dots('Passerelle par défaut') + (a.gateways.map(g => g.ip).join('\n' + ' '.repeat(40)) || ''));
+  if (a.dhcp_server) L.push(dots('Serveur DHCP') + a.dhcp_server);
+  L.push(dots('Serveurs DNS') + (a.dns_servers.join('\n' + ' '.repeat(40)) || ''));
+  if (a.wins && a.wins.length) L.push(dots('Serveur WINS principal') + a.wins.join(', '));
+  return L.join('\n');
+}
+function allText() {
+  const h = state.host || {};
+  const parts = ['Configuration IP de Windows', '',
+    dots("Nom de l'hôte") + (h.dns_hostname || h.hostname || ''),
+    dots('Suffixe DNS principal') + (h.part_of_domain ? (h.domain || '') : ''),
+    dots('Liste de recherche du suffixe DNS') + ((h.suffix_search || []).join(', ')), ''];
+  for (const a of visibleAdapters()) parts.push(adapterText(a), '');
+  return parts.join('\n');
+}
+
+$('#btnRefresh').onclick = loadAdapters;
+$('#hideVirtual').checked = lsGet('hideVirtual', true);
+$('#hideVirtual').onchange = () => { lsSet('hideVirtual', $('#hideVirtual').checked); renderAdapters(); };
+$('#btnCopyAll').onclick = () => { if (!state.adapters.length) return toast('Aucune donnée'); copyText(allText()); };
+$('#btnRaw').onclick = async () => {
+  const box = $('#rawBox');
+  if (box.innerHTML) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="card"><span class="spinner"></span> ipconfig /all…</div>';
+  try {
+    const d = await api('/ipconfig-all');
+    box.innerHTML = `<div class="card"><div class="toolbar" style="margin-bottom:8px"><b>Sortie de ipconfig /all</b><span class="grow"></span><button class="sm" id="rawCopy">📋 Copier</button><button class="sm" id="rawClose">Fermer</button></div><pre class="out" id="rawPre"></pre></div>`;
+    $('#rawPre').textContent = d.output;
+    $('#rawCopy').onclick = () => copyText(d.output);
+    $('#rawClose').onclick = () => { box.innerHTML = ''; };
+  } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+};
+$('#adapters').addEventListener('click', e => {
+  const c = e.target.closest('[data-copy]');
+  if (c) { const a = state.adapters.find(x => String(x.ifIndex) === c.dataset.copy); if (a) copyText(adapterText(a)); return; }
+  const b = e.target.closest('[data-act]');
+  if (b) runAction(b.dataset.act, b.dataset.ad, b);
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-gact]');
+  if (b) runAction(b.dataset.gact, null, b);
+});
+
+/* ── Actions ── */
+const ACT_INFO = {
+  release: { title: 'Libérer l\'adresse IPv4', admin: true, text: (ad) => ad ? `Le bail DHCP de « ${ad} » sera libéré : la carte perdra son adresse IPv4 et la connexion réseau sera coupée jusqu'au renouvellement.` : 'Les baux DHCP de TOUTES les cartes seront libérés : vous perdrez la connexion réseau jusqu\'au renouvellement.' },
+  renew: { title: 'Renouveler l\'adresse IPv4', admin: true, text: (ad) => ad ? `Un nouveau bail DHCP sera demandé pour « ${ad} ». La connexion peut être brièvement interrompue.` : 'Un nouveau bail DHCP sera demandé pour toutes les cartes. La connexion peut être brièvement interrompue (jusqu\'à ~1 min si un serveur ne répond pas).' },
+  flushdns: { title: 'Vider le cache DNS', admin: false, text: () => 'Le cache du résolveur DNS de Windows sera purgé. Les prochaines résolutions interrogeront à nouveau les serveurs DNS.' },
+  registerdns: { title: 'Réenregistrer DNS', admin: true, text: () => 'Actualise tous les baux DHCP et réenregistre les noms DNS de cet ordinateur.' },
+};
+async function runAction(act, adapter, btn, forceElev = false) {
+  const info = ACT_INFO[act]; if (!info) return;
+  const needUac = (info.admin || forceElev) && !state.admin;
+  const ok = await confirmBox(info.title + (adapter ? ` — ${adapter}` : ''), info.text(adapter), needUac);
+  if (!ok) return;
+  const res = $('#actionResult');
+  res.innerHTML = `<div class="card"><span class="spinner"></span> ${esc(info.title)} en cours${needUac ? ' (validez l\'invite UAC)' : ''}…</div>`;
+  if (btn) btn.disabled = true;
+  try {
+    const d = await api('/action', { method: 'POST', body: JSON.stringify({ action: act, adapter: adapter || null, elevate: forceElev }) });
+    const head = d.ok ? `<div class="head"><span class="pill up">Succès</span><b>${esc(d.label)}</b>${d.elevated ? '<span class="pill warn">élevé</span>' : ''}<span class="grow" style="flex:1"></span><button class="sm" id="resClose">Fermer</button></div>`
+      : `<div class="head"><span class="pill down">Échec (code ${d.exit_code})</span><b>${esc(d.label)}</b><span style="flex:1"></span>${d.needs_admin ? '<button class="sm primary" id="resElev">Réessayer en administrateur</button>' : ''}<button class="sm" id="resClose">Fermer</button></div>`;
+    res.innerHTML = `<div class="card resbox">${head}<pre class="out" id="resOut"></pre></div>`;
+    $('#resOut').textContent = d.output || '(aucune sortie)';
+    $('#resClose').onclick = () => { res.innerHTML = ''; };
+    if ($('#resElev')) $('#resElev').onclick = () => runAction(act, adapter, null, true);
+    if (act === 'flushdns') { state.dns = null; if ($('#p-dnscache').classList.contains('active')) loadDns(); }
+    if (['release', 'renew', 'registerdns'].includes(act)) setTimeout(loadAdapters, 600);
+  } catch (e) {
+    const msg = e.code === 'UAC_CANCELLED' ? 'Action annulée : l\'élévation des privilèges (UAC) a été refusée.' : e.message;
+    res.innerHTML = `<div class="err">${esc(msg)} <button class="sm" style="float:right" onclick="this.parentNode.remove()">×</button></div>`;
+  } finally { if (btn) btn.disabled = false; }
+}
+
+/* ── Tableaux génériques triables ── */
+function makeTable(container, cols, rows, sortState, rowClass) {
+  const { key, asc } = sortState;
+  const col = cols.find(c => c.key === key);
+  if (col) {
+    rows = rows.slice().sort((a, b) => {
+      let x = col.sort ? col.sort(a) : a[key], y = col.sort ? col.sort(b) : b[key];
+      if (typeof x === 'number' && typeof y === 'number') return asc ? x - y : y - x;
+      return asc ? String(x).localeCompare(String(y), 'fr', { numeric: true }) : String(y).localeCompare(String(x), 'fr', { numeric: true });
+    });
+  }
+  if (!rows.length) { container.innerHTML = '<div class="empty">Aucune entrée.</div>'; return; }
+  const MAX = 2000;
+  container.innerHTML = `<table><thead><tr>${cols.map(c => `<th data-k="${c.key}" class="${c.num ? 'num' : ''} ${c.key === key ? 'sorted' + (asc ? ' asc' : '') : ''}">${c.label}</th>`).join('')}</tr></thead>
+    <tbody>${rows.slice(0, MAX).map(r => `<tr class="${rowClass ? rowClass(r) : ''}">${cols.map(c => `<td class="${c.num ? 'num' : ''} ${c.mono ? 'mono' : ''}">${c.render ? c.render(r) : esc(r[c.key])}</td>`).join('')}</tr>`).join('')}</tbody></table>
+    ${rows.length > MAX ? `<div class="empty small">${rows.length - MAX} entrée(s) supplémentaire(s) non affichée(s) — affinez le filtre.</div>` : ''}`;
+  $$('th', container).forEach(th => th.onclick = () => {
+    if (sortState.key === th.dataset.k) sortState.asc = !sortState.asc; else { sortState.key = th.dataset.k; sortState.asc = true; }
+    sortState.redraw();
+  });
+}
+function fillSelect(sel, values, allLabel) {
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">${allLabel}</option>` + [...new Set(values)].filter(Boolean).sort((a, b) => a.localeCompare(b, 'fr')).map(v => `<option>${esc(v)}</option>`).join('');
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+function ipSortKey(ip) {
+  if (/^\d+\.\d+\.\d+\.\d+/.test(ip)) return ip.split(/[./]/).slice(0, 5).map(n => String(+n || 0).padStart(3, '0')).join('.');
+  return 'z' + ip;
+}
+
+/* ── ARP ── */
+const arpSort = { key: 'ip', asc: true, redraw: () => renderArp() };
+async function loadArp() {
+  $('#arpTable').innerHTML = '<div class="empty"><span class="spinner"></span> Chargement…</div>';
+  try {
+    const d = await api('/arp'); state.arp = d.entries || [];
+    fillSelect($('#arpState'), state.arp.map(x => x.state), 'Tous les états');
+    fillSelect($('#arpIface'), state.arp.map(x => x.interface), 'Toutes les interfaces');
+    renderArp();
+  } catch (e) { $('#arpTable').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function renderArp() {
+  if (!state.arp) return;
+  const q = $('#arpFilter').value.trim().toLowerCase(), fam = $('#arpFamily').value, st = $('#arpState').value, ifc = $('#arpIface').value, hm = $('#arpHideMulti').checked;
+  const rows = state.arp.filter(r => (!fam || r.family === fam) && (!st || r.state === st) && (!ifc || r.interface === ifc) && (!hm || r.kind === 'unicast')
+    && (!q || (r.ip + ' ' + r.mac + ' ' + r.interface).toLowerCase().includes(q)));
+  $('#arpCount').textContent = `${rows.length} / ${state.arp.length} entrée(s)`;
+  makeTable($('#arpTable'), [
+    { key: 'ip', label: 'Adresse IP', mono: true, sort: r => ipSortKey(r.ip) },
+    { key: 'mac', label: 'Adresse physique (MAC)', mono: true, render: r => r.mac ? esc(r.mac) : '<span class="muted">—</span>' },
+    { key: 'state', label: 'État', render: r => `<span class="st-${esc(r.state)}">${esc(r.state)}</span>` },
+    { key: 'kind', label: 'Type', render: r => ({ unicast: 'Unicast', multicast: 'Multicast', broadcast: 'Diffusion' }[r.kind] || r.kind) },
+    { key: 'family', label: 'Famille' },
+    { key: 'interface', label: 'Interface', render: r => `${esc(r.interface)} <span class="muted small">(${r.ifIndex})</span>` },
+  ], rows, arpSort);
+}
+$('#arpRefresh').onclick = loadArp;
+['arpFilter', 'arpFamily', 'arpState', 'arpIface', 'arpHideMulti'].forEach(id => $('#' + id).addEventListener('input', renderArp));
+
+/* ── Routes ── */
+const rtSort = { key: 'metric', asc: true, redraw: () => renderRoutes() };
+async function loadRoutes() {
+  $('#rtTable').innerHTML = '<div class="empty"><span class="spinner"></span> Chargement…</div>';
+  try {
+    const d = await api('/routes'); state.routes = d.routes || [];
+    fillSelect($('#rtIface'), state.routes.map(x => x.interface), 'Toutes les interfaces');
+    renderRoutes();
+  } catch (e) { $('#rtTable').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+const isDefault = r => r.destination === '0.0.0.0/0' || r.destination === '::/0';
+function isNoise(r) {
+  const d = r.destination;
+  return /\/32$|\/128$/.test(d) || d.startsWith('224.0.0.0') || d.toLowerCase().startsWith('ff00') || d === '255.255.255.255/32';
+}
+function renderRoutes() {
+  if (!state.routes) return;
+  const q = $('#rtFilter').value.trim().toLowerCase(), fam = $('#rtFamily').value, ifc = $('#rtIface').value, hl = $('#rtHideLocal').checked;
+  const rows = state.routes.filter(r => (!fam || r.family === fam) && (!ifc || r.interface === ifc) && (!hl || !isNoise(r))
+    && (!q || (r.destination + ' ' + r.next_hop + ' ' + r.interface).toLowerCase().includes(q)));
+  $('#rtCount').textContent = `${rows.length} / ${state.routes.length} route(s)`;
+  makeTable($('#rtTable'), [
+    { key: 'destination', label: 'Destination', mono: true, sort: r => ipSortKey(r.destination), render: r => esc(r.destination) + (isDefault(r) ? ' <span class="pill acc">par défaut</span>' : '') },
+    { key: 'next_hop', label: 'Passerelle (saut suivant)', mono: true, render: r => r.on_link ? '<span class="muted">On-link</span>' : esc(r.next_hop) },
+    { key: 'interface', label: 'Interface', render: r => `${esc(r.interface)} <span class="muted small">(${r.ifIndex})</span>` },
+    { key: 'route_metric', label: 'Métr. route', num: true },
+    { key: 'interface_metric', label: 'Métr. interface', num: true, render: r => r.interface_metric == null ? '—' : r.interface_metric },
+    { key: 'metric', label: 'Métr. effective', num: true, render: r => `<b>${r.metric}</b>` },
+    { key: 'protocol', label: 'Origine' },
+    { key: 'store', label: 'Stockage' },
+  ], rows, rtSort, r => isDefault(r) ? 'hl' : '');
+}
+$('#rtRefresh').onclick = loadRoutes;
+['rtFilter', 'rtFamily', 'rtIface', 'rtHideLocal'].forEach(id => $('#' + id).addEventListener('input', renderRoutes));
+
+/* ── Cache DNS ── */
+const dcSort = { key: 'entry', asc: true, redraw: () => renderDns() };
+async function loadDns() {
+  $('#dcTable').innerHTML = '<div class="empty"><span class="spinner"></span> Chargement…</div>';
+  try {
+    const d = await api('/dns-cache'); state.dns = d.entries || [];
+    fillSelect($('#dcType'), state.dns.map(x => x.type), 'Tous les types');
+    renderDns();
+  } catch (e) { $('#dcTable').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function fmtTtl(s) { if (s >= 86400) return `${Math.floor(s / 86400)} j ${Math.floor(s % 86400 / 3600)} h`; if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`; if (s >= 60) return `${Math.floor(s / 60)} min ${s % 60} s`; return s + ' s'; }
+function renderDns() {
+  if (!state.dns) return;
+  const q = $('#dcFilter').value.trim().toLowerCase(), t = $('#dcType').value;
+  const rows = state.dns.filter(r => (!t || r.type === t) && (!q || (r.entry + ' ' + r.name + ' ' + r.data).toLowerCase().includes(q)));
+  const names = new Set(rows.map(r => r.entry)).size;
+  $('#dcCount').textContent = `${rows.length} enregistrement(s) · ${names} nom(s)`;
+  makeTable($('#dcTable'), [
+    { key: 'entry', label: 'Entrée', mono: true },
+    { key: 'type', label: 'Type' },
+    { key: 'data', label: 'Donnée', mono: true, render: r => r.ok ? esc(r.data) : `<span class="muted">${esc(r.status)}</span>` },
+    { key: 'ttl', label: 'TTL restant', num: true, render: r => fmtTtl(r.ttl) },
+    { key: 'section', label: 'Section' },
+    { key: 'name', label: 'Nom (enregistrement)', mono: true, render: r => r.name !== r.entry ? esc(r.name) : '<span class="muted">=</span>' },
+  ], rows, dcSort, r => r.ok ? '' : 'neg');
+}
+$('#dcRefresh').onclick = loadDns;
+['dcFilter', 'dcType'].forEach(id => $('#' + id).addEventListener('input', renderDns));
+
+/* ── Init ── */
+loadStatus();
+loadAdapters();
+const lastTab = lsGet('tab', 'cartes');
+if (lastTab !== 'cartes') { const b = $(`.tab[data-tab="${lastTab}"]`); if (b) b.click(); }
+</script>
+</body>
+</html>

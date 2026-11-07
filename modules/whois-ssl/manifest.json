@@ -1,0 +1,33 @@
+{
+  "id": "whois-ssl",
+  "name": "WHOIS & SSL",
+  "version": "1.0.0",
+  "description": "WHOIS de domaines et d'IP, analyse de certificats SSL/TLS, en-têtes HTTP de sécurité et surveillance des expirations.",
+  "category": "Réseau",
+  "tags": [
+    "whois",
+    "ssl",
+    "sécurité",
+    "diagnostic"
+  ],
+  "icon": "🔐",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "cryptography",
+      "truststore"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

@@ -11,6 +11,8 @@ backend/sdk/*.egg-info/
 backend/sdk/ledroide_sdk.egg-info/
 backend/configs.json
 backend/state.json
+backend/env.json
+backend/module_meta.json
 .env
 *.log
 
@@ -21,3 +23,6 @@ modules/**/configs.json
 
 modules_backup/
 steamlit_tools/
+# Données runtime du backend lancé hors Electron (LEDROIDE_DATA_DIR par défaut)
+backend/modules/
+*.tmp

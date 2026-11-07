@@ -1,0 +1,29 @@
+{
+  "id": "unit-converter",
+  "name": "Convertisseur",
+  "version": "1.0.0",
+  "description": "Convertisseur d'unités instantané : longueur, masse, température, données, énergie… plus devises et fuseaux horaires.",
+  "category": "Maths & données",
+  "tags": [
+    "conversion",
+    "unités",
+    "devises"
+  ],
+  "icon": "📏",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "tzdata"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

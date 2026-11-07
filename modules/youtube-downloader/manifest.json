@@ -3,9 +3,25 @@
   "name": "YouTube Downloader",
   "version": "1.0.0",
   "description": "Télécharge une vidéo ou l'audio depuis YouTube",
+  "category": "Images & médias",
+  "tags": [
+    "vidéo",
+    "audio",
+    "téléchargement"
+  ],
   "icon": "▶️",
-  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
   "permissions": [],
-  "database": {"type": "none"},
-  "dependencies": {"python": ["yt-dlp"], "modules": []}
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "yt-dlp"
+    ],
+    "modules": []
+  }
 }

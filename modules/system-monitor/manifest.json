@@ -1,0 +1,29 @@
+{
+  "id": "system-monitor",
+  "name": "Moniteur système",
+  "version": "1.0.0",
+  "description": "CPU, mémoire, disques, réseau, batterie en temps réel avec graphiques, et gestionnaire de processus.",
+  "category": "Système",
+  "tags": [
+    "performances",
+    "processus",
+    "temps réel"
+  ],
+  "icon": "📊",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "psutil"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

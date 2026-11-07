@@ -3,6 +3,10 @@
   "name": "Module Demo",
   "version": "0.1.0",
   "description": "Module de demonstration : compteur interactif avec appels backend.",
+  "category": "Développement",
+  "tags": [
+    "exemple"
+  ],
   "author": "LedroideDesktop",
   "entry": {
     "backend": "backend/main.py",

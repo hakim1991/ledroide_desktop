@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JSON / YAML</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         display: flex; flex-direction: column; padding: 14px; gap: 10px; font-size: 14px; }
+  h1 { font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  h1 small { font-weight: 400; color: var(--muted); font-size: .8rem; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--surface);
+             border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+  label.lbl { color: var(--muted); font-size: .78rem; }
+  select, input[type=text] { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; font-size: .82rem; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 6px 11px; font: inherit; font-size: .82rem; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover { border-color: #52525b; background: #26262b; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--accent-h); }
+  button:disabled { opacity: .45; cursor: default; }
+  .chk { display: flex; align-items: center; gap: 5px; font-size: .82rem; color: var(--text); cursor: pointer; }
+  .chk input { accent-color: var(--accent); }
+
+  .panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0; }
+  @media (max-width: 820px) { .panes { grid-template-columns: 1fr; grid-auto-rows: minmax(260px, 1fr); } }
+  .pane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex;
+          flex-direction: column; min-height: 0; overflow: hidden; }
+  .pane-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border);
+               font-size: .8rem; color: var(--muted); }
+  .pane-head .title { color: var(--text); font-weight: 600; margin-right: auto; }
+  .editor { flex: 1; display: flex; min-height: 0; position: relative; }
+  .editor.drag { outline: 2px dashed var(--accent); outline-offset: -6px; }
+  .gutter { width: 46px; background: #141417; color: #52525b; font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+            text-align: right; padding: 8px 6px 8px 0; overflow: hidden; user-select: none; white-space: pre; }
+  .gutter .bad { color: #fff; background: var(--err); border-radius: 3px; padding: 0 3px; }
+  textarea { flex: 1; resize: none; border: none; outline: none; background: transparent; color: var(--text);
+             font-family: var(--mono); font-size: 12.5px; line-height: 1.5; padding: 8px 10px; white-space: pre;
+             overflow: auto; tab-size: 4; }
+  textarea::placeholder { color: #52525b; }
+  .tabs { display: flex; gap: 2px; }
+  .tab { padding: 3px 10px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; font-size: .78rem; }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+
+  .status { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 8px; font-size: .82rem;
+            border: 1px solid var(--border); background: var(--surface); min-height: 36px; }
+  .status.ok { border-color: #14532d; background: #0d1f14; color: #86efac; }
+  .status.err { border-color: #7f1d1d; background: #1f0d0d; color: #fca5a5; }
+  .status.warn { border-color: #78350f; background: #1f170d; color: #fcd34d; }
+  .status .grow { flex: 1; }
+  .status button { padding: 3px 9px; font-size: .75rem; }
+
+  .tree { flex: 1; overflow: auto; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
+  .tree .node { padding-left: 16px; }
+  .tree .row { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; border-radius: 3px; }
+  .tree .row:hover { background: #222227; }
+  .tree .tog { width: 14px; display: inline-block; color: var(--muted); cursor: pointer; user-select: none; text-align: center; flex-shrink: 0; }
+  .tree .k { color: #93c5fd; }
+  .tree .s { color: #86efac; white-space: pre-wrap; word-break: break-all; }
+  .tree .n { color: #fbbf24; }
+  .tree .b { color: #c084fc; }
+  .tree .z { color: #f87171; }
+  .tree .meta { color: var(--muted); font-size: 11.5px; }
+  .tree .collapsed > .node { display: none; }
+  .tree-tools { display: flex; gap: 6px; }
+  .tree-tools button { padding: 2px 8px; font-size: .74rem; }
+  .empty { color: var(--muted); padding: 20px; text-align: center; font-family: system-ui; }
+  .hidden { display: none !important; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(20px); background: #27272a;
+           color: var(--text); padding: 8px 16px; border-radius: 8px; font-size: .82rem; opacity: 0; transition: .2s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<h1>🧾 JSON / YAML <small>formater · valider · convertir</small></h1>
+
+<div class="toolbar">
+  <div class="group">
+    <label class="lbl" for="src">Entrée</label>
+    <select id="src"><option value="json">JSON</option><option value="yaml">YAML</option><option value="csv">CSV</option></select>
+    <button id="btnSwapFmt" title="Inverser entrée / sortie">⇄</button>
+    <label class="lbl" for="dst">Sortie</label>
+    <select id="dst"><option value="json">JSON</option><option value="yaml">YAML</option><option value="csv">CSV</option></select>
+  </div>
+  <div class="sep"></div>
+  <div class="group">
+    <label class="lbl" for="indent">Indentation</label>
+    <select id="indent"><option value="2">2 espaces</option><option value="4">4 espaces</option><option value="tab">Tabulation</option></select>
+    <label class="chk"><input type="checkbox" id="sortKeys"> Trier les clés</label>
+  </div>
+  <div class="group" id="csvOpts">
+    <label class="lbl" for="delim">Séparateur CSV</label>
+    <select id="delim"><option value="auto">Auto</option><option value=",">,</option><option value=";">;</option><option value="&#9;">Tab</option><option value="|">|</option></select>
+  </div>
+  <div class="sep"></div>
+  <div class="group">
+    <button class="primary" id="btnConvert">Formater / Convertir</button>
+    <button id="btnMinify">Minifier</button>
+    <button id="btnValidate">Valider</button>
+  </div>
+</div>
+
+<div class="status" id="status"><span class="grow">Collez ou déposez un fichier JSON, YAML ou CSV dans la zone de gauche.</span></div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-head">
+      <span class="title">Entrée</span>
+      <span id="inInfo"></span>
+      <button id="btnOpen" title="Ouvrir un fichier">📂 Ouvrir</button>
+      <button id="btnSample">Exemple</button>
+      <button id="btnClear">Effacer</button>
+      <input type="file" id="fileInput" class="hidden" accept=".json,.yaml,.yml,.csv,.txt,.tsv">
+    </div>
+    <div class="editor" id="inEditor">
+      <div class="gutter" id="inGutter">1</div>
+      <textarea id="input" spellcheck="false" placeholder='{"exemple": [1, 2, 3]}  — ou glissez-déposez un fichier ici'></textarea>
+    </div>
+  </div>
+  <div class="pane">
+    <div class="pane-head">
+      <span class="title">Sortie</span>
+      <div class="tabs"><span class="tab active" data-tab="text">Texte</span><span class="tab" data-tab="tree">Arbre</span></div>
+      <div class="tree-tools hidden" id="treeTools"><button id="btnExpand">Tout déplier</button><button id="btnCollapse">Tout replier</button></div>
+      <button id="btnUseOut" title="Utiliser la sortie comme entrée">⇦ Entrée</button>
+      <button id="btnCopy">Copier</button>
+      <button id="btnDownload">Télécharger</button>
+    </div>
+    <div class="editor" id="outText">
+      <div class="gutter" id="outGutter">1</div>
+      <textarea id="output" spellcheck="false" readonly placeholder="Le résultat apparaîtra ici"></textarea>
+    </div>
+    <div class="tree hidden" id="tree"><div class="empty">Aucune donnée à afficher.</div></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/json-formatter/api`;
+const $ = id => document.getElementById(id);
+const input = $('input'), output = $('output');
+let lastData = undefined, lastOutFmt = 'json', errLine = null, errCol = null, validateTimer = null;
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function setStatus(kind, html, withJump) {
+  const st = $('status');
+  st.className = 'status' + (kind ? ' ' + kind : '');
+  st.innerHTML = `<span class="grow">${html}</span>` + (withJump ? '<button id="btnJump">Aller à l\'erreur</button>' : '');
+  if (withJump) $('btnJump').onclick = jumpToError;
+}
+
+async function api(path, body) {
+  let res;
+  try {
+    res = await fetch(BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch (e) { throw { error: 'Backend injoignable : ' + e.message }; }
+  const data = await res.json().catch(() => ({ error: 'Réponse invalide du serveur' }));
+  if (!res.ok) throw data;
+  return data;
+}
+
+function showError(e) {
+  if (e && e.code === 'MISSING_DEP') { setStatus('warn', '⚠️ ' + esc(e.error) + ' <b>Installez les dépendances du module</b> (bouton « deps » dans le gestionnaire de modules).'); return; }
+  errLine = e && e.line || null; errCol = e && e.column || null;
+  let msg = '✖ ' + esc(e && e.error || 'Erreur inconnue');
+  if (errLine) msg += ` — <b>ligne ${errLine}, colonne ${errCol}</b>`;
+  setStatus('err', msg, !!errLine);
+  renderGutter(input, $('inGutter'), errLine);
+}
+
+function jumpToError() {
+  if (!errLine) return;
+  const lines = input.value.split('\n');
+  let pos = 0;
+  for (let i = 0; i < errLine - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+  pos += Math.max(0, (errCol || 1) - 1);
+  input.focus();
+  input.setSelectionRange(pos, Math.min(pos + 1, input.value.length));
+  const lh = parseFloat(getComputedStyle(input).lineHeight) || 19;
+  input.scrollTop = Math.max(0, (errLine - 4) * lh);
+}
+
+function renderGutter(ta, gutter, bad) {
+  const n = ta.value.split('\n').length;
+  let s = '';
+  for (let i = 1; i <= n; i++) s += (i === bad ? `<span class="bad">${i}</span>` : i) + '\n';
+  gutter.innerHTML = s;
+  gutter.scrollTop = ta.scrollTop;
+}
+input.addEventListener('scroll', () => { $('inGutter').scrollTop = input.scrollTop; });
+output.addEventListener('scroll', () => { $('outGutter').scrollTop = output.scrollTop; });
+
+function updateInfo() {
+  const v = input.value;
+  $('inInfo').textContent = v ? `${v.split('\n').length} lignes · ${new Blob([v]).size.toLocaleString('fr-FR')} o` : '';
+}
+
+input.addEventListener('input', () => {
+  errLine = null;
+  renderGutter(input, $('inGutter'), null);
+  updateInfo();
+  clearTimeout(validateTimer);
+  validateTimer = setTimeout(validate, 450);
+});
+input.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = input.selectionStart, en = input.selectionEnd;
+    input.value = input.value.slice(0, s) + '  ' + input.value.slice(en);
+    input.selectionStart = input.selectionEnd = s + 2;
+    input.dispatchEvent(new Event('input'));
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); convert(false); }
+});
+
+async function validate() {
+  const text = input.value;
+  if (!text.trim()) { setStatus('', 'Collez ou déposez un fichier JSON, YAML ou CSV dans la zone de gauche.'); return; }
+  try {
+    const r = await api('/validate', { text, source: $('src').value });
+    if (r.valid) {
+      errLine = null; renderGutter(input, $('inGutter'), null);
+      const fmt = $('src').value.toUpperCase();
+      const extra = r.size != null ? ` — ${r.type} de ${r.size} élément${r.size > 1 ? 's' : ''}` : ` — ${r.type}`;
+      setStatus('ok', `✔ ${fmt} valide${esc(extra)}`);
+    } else showError(r);
+  } catch (e) { showError(e); }
+}
+
+function opts(minify) {
+  return {
+    text: input.value, source: $('src').value, target: $('dst').value,
+    indent: minify ? 'min' : $('indent').value, sort_keys: $('sortKeys').checked,
+    delimiter: $('delim').value, infer_types: true, unflatten: true,
+  };
+}
+
+async function convert(minify) {
+  if (!input.value.trim()) { setStatus('warn', 'L\'entrée est vide.'); return; }
+  const body = opts(minify);
+  if (minify && body.target !== 'json') body.target = 'json';
+  try {
+    const r = await api('/convert', body);
+    output.value = r.result;
+    lastData = r.data; lastOutFmt = body.target;
+    renderGutter(output, $('outGutter'), null);
+    renderTree();
+    errLine = null; renderGutter(input, $('inGutter'), null);
+    const lbl = minify ? 'Minifié' : (body.source === body.target ? 'Formaté' : `Converti ${body.source.toUpperCase()} → ${body.target.toUpperCase()}`);
+    const before = new Blob([body.text]).size, after = new Blob([r.result]).size;
+    setStatus('ok', `✔ ${lbl} — ${after.toLocaleString('fr-FR')} o (entrée : ${before.toLocaleString('fr-FR')} o)`);
+  } catch (e) { showError(e); }
+}
+
+// ── Tree view ────────────────────────────────────────────────────────────
+function leaf(v) {
+  if (v === null) return '<span class="z">null</span>';
+  if (typeof v === 'string') return `<span class="s">"${esc(v)}"</span>`;
+  if (typeof v === 'number') return `<span class="n">${v}</span>`;
+  if (typeof v === 'boolean') return `<span class="b">${v}</span>`;
+  return esc(String(v));
+}
+function buildNode(key, v, depth) {
+  const wrap = document.createElement('div');
+  const isObj = v !== null && typeof v === 'object';
+  const keyHtml = key === null ? '' : `<span class="k">${esc(key)}</span>: `;
+  const row = document.createElement('div');
+  row.className = 'row';
+  if (!isObj) {
+    row.innerHTML = `<span class="tog"></span>${keyHtml}${leaf(v)}`;
+    wrap.appendChild(row);
+    return wrap;
+  }
+  const isArr = Array.isArray(v);
+  const entries = isArr ? v.map((x, i) => [String(i), x]) : Object.entries(v);
+  const open = isArr ? '[' : '{', close = isArr ? ']' : '}';
+  row.innerHTML = `<span class="tog">▾</span>${keyHtml}<span>${open}</span><span class="meta">${entries.length} ${isArr ? 'élément' : 'clé'}${entries.length > 1 ? 's' : ''}</span><span class="cl hidden">${close}</span>`;
+  wrap.appendChild(row);
+  const child = document.createElement('div');
+  child.className = 'node';
+  wrap.appendChild(child);
+  let built = false;
+  const build = () => {
+    if (built) return; built = true;
+    const frag = document.createDocumentFragment();
+    for (const [k, x] of entries) frag.appendChild(buildNode(isArr ? k : k, x, depth + 1));
+    const end = document.createElement('div'); end.className = 'row'; end.innerHTML = `<span class="tog"></span>${close}`;
+    frag.appendChild(end);
+    child.appendChild(frag);
+  };
+  wrap._build = build;
+  const setCollapsed = c => {
+    if (!c) build();
+    wrap.classList.toggle('collapsed', c);
+    row.querySelector('.tog').textContent = c ? '▸' : '▾';
+    row.querySelector('.cl').classList.toggle('hidden', !c);
+  };
+  wrap._set = setCollapsed;
+  row.querySelector('.tog').onclick = () => setCollapsed(!wrap.classList.contains('collapsed'));
+  row.ondblclick = () => setCollapsed(!wrap.classList.contains('collapsed'));
+  setCollapsed(depth >= 2 || entries.length > 200);
+  return wrap;
+}
+function renderTree() {
+  const t = $('tree');
+  t.innerHTML = '';
+  if (lastData === undefined) { t.innerHTML = '<div class="empty">Aucune donnée à afficher.</div>'; return; }
+  t.appendChild(buildNode(null, lastData, 0));
+}
+function setAll(collapsed) {
+  let count = 0;
+  const walk = el => {
+    if (el._set) {
+      if (!collapsed) { if (++count > 5000) return; el._set(false); }
+      else el._set(true);
+    }
+    for (const c of el.querySelectorAll(':scope > .node > div')) walk(c);
+  };
+  const root = $('tree').firstElementChild;
+  if (!root) return;
+  if (collapsed) { $('tree').querySelectorAll('div').forEach(d => d._set && d._set(true)); root._set && root._set(false); }
+  else walk(root);
+  if (count > 5000) toast('Arbre très grand : dépliage partiel');
+}
+
+document.querySelectorAll('.tab').forEach(tab => tab.onclick = () => {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+  const tree = tab.dataset.tab === 'tree';
+  $('tree').classList.toggle('hidden', !tree);
+  $('outText').classList.toggle('hidden', tree);
+  $('treeTools').classList.toggle('hidden', !tree);
+  if (tree && lastData === undefined && input.value.trim()) {
+    convert(false);
+  }
+});
+$('btnExpand').onclick = () => setAll(false);
+$('btnCollapse').onclick = () => setAll(true);
+
+// ── Copy / download ──────────────────────────────────────────────────────
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (_) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); return ok;
+  }
+}
+$('btnCopy').onclick = async () => {
+  if (!output.value) return toast('Rien à copier');
+  toast(await copyText(output.value) ? 'Copié dans le presse-papiers' : 'Copie impossible');
+};
+$('btnDownload').onclick = async () => {
+  if (!output.value) return toast('Rien à télécharger');
+  const ext = { json: 'json', yaml: 'yaml', csv: 'csv' }[lastOutFmt] || 'txt';
+  try {
+    const r = await api('/export', { content: output.value, filename: 'donnees.' + ext });
+    const a = document.createElement('a');
+    a.href = `${BASE}/file/${encodeURIComponent(r.filename)}`; a.download = 'donnees.' + ext;
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) { showError(e); }
+};
+$('btnUseOut').onclick = () => {
+  if (!output.value) return;
+  input.value = output.value; $('src').value = lastOutFmt;
+  input.dispatchEvent(new Event('input'));
+};
+
+// ── Files / drag & drop ──────────────────────────────────────────────────
+function detectFmt(name, text) {
+  const n = (name || '').toLowerCase();
+  if (n.endsWith('.json')) return 'json';
+  if (n.endsWith('.yaml') || n.endsWith('.yml')) return 'yaml';
+  if (n.endsWith('.csv') || n.endsWith('.tsv')) return 'csv';
+  const t = text.trimStart();
+  if (t.startsWith('{') || t.startsWith('[')) return 'json';
+  return null;
+}
+function loadFile(file) {
+  if (!file) return;
+  if (file.size > 20 * 1024 * 1024) { setStatus('warn', 'Fichier trop volumineux (max 20 Mo).'); return; }
+  const r = new FileReader();
+  r.onload = () => {
+    input.value = r.result;
+    const f = detectFmt(file.name, r.result);
+    if (f) $('src').value = f;
+    if (f === 'csv' && $('dst').value === 'csv') $('dst').value = 'json';
+    input.dispatchEvent(new Event('input'));
+    toast(`« ${file.name} » chargé`);
+  };
+  r.onerror = () => setStatus('err', 'Lecture du fichier impossible.');
+  r.readAsText(file);
+}
+$('btnOpen').onclick = () => $('fileInput').click();
+$('fileInput').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
+const ed = $('inEditor');
+['dragenter', 'dragover'].forEach(ev => ed.addEventListener(ev, e => { e.preventDefault(); ed.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => ed.addEventListener(ev, e => { e.preventDefault(); ed.classList.remove('drag'); }));
+ed.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => e.preventDefault());
+
+$('btnClear').onclick = () => { input.value = ''; output.value = ''; lastData = undefined; renderTree(); input.dispatchEvent(new Event('input')); renderGutter(output, $('outGutter'), null); };
+$('btnSample').onclick = () => {
+  $('src').value = 'json';
+  input.value = JSON.stringify({ projet: 'LedroideDesktop', version: '1.0.0', actif: true, note: null,
+    auteurs: [{ nom: 'Alice', role: 'dev', contact: { email: 'alice@exemple.fr' } }, { nom: 'Bob', role: 'design', contact: { email: 'bob@exemple.fr' } }],
+    stats: { modules: 19, telechargements: 1234.5 } });
+  input.dispatchEvent(new Event('input'));
+};
+$('btnConvert').onclick = () => convert(false);
+$('btnMinify').onclick = () => convert(true);
+$('btnValidate').onclick = validate;
+$('btnSwapFmt').onclick = () => { const a = $('src').value; $('src').value = $('dst').value; $('dst').value = a; validate(); };
+$('src').onchange = () => { lastData = undefined; validate(); };
+function syncCsvOpts() { $('csvOpts').style.display = ($('src').value === 'csv' || $('dst').value === 'csv') ? '' : 'none'; }
+$('src').addEventListener('change', syncCsvOpts); $('dst').addEventListener('change', syncCsvOpts);
+syncCsvOpts();
+renderGutter(input, $('inGutter'), null);
+fetch(BASE + '/health').then(r => r.json()).then(h => {
+  if (!h.yaml) setStatus('warn', '⚠️ PyYAML manquant : la conversion YAML est indisponible. <b>Installez les dépendances du module.</b>');
+}).catch(() => setStatus('err', 'Backend du module injoignable.'));
+</script>
+</body>
+</html>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Services Windows</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 16px; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 6px 12px; }
+  button:hover { background: #2a2a30; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #5458e0; }
+  button.danger { color: #fca5a5; }
+  button.danger:hover { background: rgba(239,68,68,.15); border-color: var(--danger); }
+  button.sm { padding: 3px 9px; font-size: 12px; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; word-break: break-word; }
+  .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .sp { flex: 1; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.admin { color: #bbf7d0; border-color: #166534; background: #14301f; }
+  .badge.std { color: #fde68a; border-color: #854d0e; background: #2b2110; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .stat { cursor: pointer; }
+  .stat:hover { border-color: #3f3f46; }
+  .stat .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 12px; color: var(--muted); }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; align-items: start; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .filters input { flex: 1; min-width: 200px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--card); z-index: 1; }
+  th.sorted { color: var(--text); }
+  td.dn { max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+  td.nm { color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; font-family: Consolas, monospace; font-size: 12px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td { background: #1c1c20; }
+  tbody tr.sel td { background: rgba(99,102,241,.16); }
+  .tablewrap { max-height: calc(100vh - 250px); min-height: 260px; overflow: auto; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: #26262c; color: #c4c4cc; display: inline-block; }
+  .pill.running { background: #14301f; color: #86efac; }
+  .pill.stopped { background: #26262c; color: #a1a1aa; }
+  .pill.pending { background: #2b2110; color: #fcd34d; }
+  .pill.disabled { background: #3f1d1d; color: #fca5a5; }
+  .crit { color: var(--warn); margin-left: 4px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; font-size: 13px; margin: 12px 0; }
+  .kv b { font-weight: 500; color: var(--muted); }
+  .kv span { word-break: break-all; }
+  .desc { font-size: 13px; color: #c4c4cc; margin: 8px 0; }
+  .sect { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .sect h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .warnbox { background: #2b2110; border: 1px solid #854d0e; color: #fde68a; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 10px; }
+  .confirmbox { background: #1f1416; border: 1px solid #7f1d1d; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 10px; }
+  .confirmbox label { display: flex; gap: 6px; align-items: flex-start; margin: 8px 0; color: #fde68a; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { font-size: 11px; padding: 1px 7px; background: #26262c; border-radius: 4px; cursor: pointer; font-family: Consolas, monospace; }
+  .chip:hover { background: #33333a; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .empty { text-align: center; color: var(--muted); padding: 30px; }
+  .err { background: rgba(239,68,68,.1); border: 1px solid var(--danger); color: #fecaca; padding: 14px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .err b { display: block; margin-bottom: 4px; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #555; border-top-color: var(--accent); border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>🧰 Services Windows</h1>
+  <span class="badge" id="adminBadge">…</span>
+  <span class="sp"></span>
+  <button id="refresh">⟳ Actualiser</button>
+</div>
+<div class="err" id="err"></div>
+<div class="warnbox hide" id="stdNote" style="margin:0 0 12px">Mode standard : démarrer, arrêter ou reconfigurer un service affichera une invite de contrôle de compte d'utilisateur (UAC).</div>
+
+<div class="stats">
+  <div class="card stat" data-f="all"><div class="v" id="sTotal">–</div><div class="l">Services</div></div>
+  <div class="card stat" data-f="running"><div class="v" id="sRun" style="color:#86efac">–</div><div class="l">En cours d'exécution</div></div>
+  <div class="card stat" data-f="stopped"><div class="v" id="sStop">–</div><div class="l">Arrêtés</div></div>
+  <div class="card stat" data-f="auto"><div class="v" id="sAuto">–</div><div class="l">Automatiques</div></div>
+  <div class="card stat" data-f="autostopped"><div class="v" id="sAutoStop" style="color:#fcd34d">–</div><div class="l">Auto mais arrêtés</div></div>
+  <div class="card stat" data-f="disabled"><div class="v" id="sDis" style="color:#fca5a5">–</div><div class="l">Désactivés</div></div>
+</div>
+
+<div class="layout">
+  <div class="card">
+    <div class="filters">
+      <input type="search" id="q" placeholder="Rechercher (nom, nom affiché, description, chemin, compte)…" />
+      <select id="fStatus"><option value="">Tous les états</option><option value="running">En cours</option><option value="stopped">Arrêtés</option><option value="pending">En transition</option></select>
+      <select id="fStart"><option value="">Tous les démarrages</option><option value="auto">Automatique</option><option value="delayed">Automatique différé</option><option value="anyauto">Automatique (tous)</option><option value="manual">Manuel</option><option value="disabled">Désactivé</option></select>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th data-k="display_name">Nom affiché</th><th data-k="name">Nom</th><th data-k="status">État</th><th data-k="start_key">Démarrage</th><th data-k="pid">PID</th></tr></thead>
+        <tbody id="tbody"><tr><td colspan="5" class="empty"><span class="spin"></span> Chargement…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:8px" id="shown"></div>
+  </div>
+  <div class="card" id="details"><div class="empty">Sélectionnez un service pour voir ses détails.</div></div>
+</div>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/services/api`;
+const $ = s => document.querySelector(s);
+const ST = { running: 'En cours', stopped: 'Arrêté', start_pending: 'Démarrage…', stop_pending: 'Arrêt…', continue_pending: 'Reprise…', pause_pending: 'Pause…', paused: 'En pause' };
+const START = { auto: 'Automatique', delayed: 'Automatique (différé)', manual: 'Manuel', disabled: 'Désactivé' };
+let list = [], sel = null, sortKey = 'display_name', sortDesc = false, admin = false, busy = false, pending = null;
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+let toastT;
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 5000); }
+async function api(path, opts = {}) {
+  const r = await fetch(BASE + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  let j = null; try { j = await r.json(); } catch (_) {}
+  if (!r.ok) { const e = new Error((j && j.error) || `Erreur HTTP ${r.status}`); e.code = j && j.code; e.status = r.status; throw e; }
+  return j;
+}
+function showErr(e) {
+  const box = $('#err');
+  if (!e) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = e.code === 'MISSING_DEP'
+    ? `<b>Dépendance manquante</b>${esc(e.message)} Installez les dépendances du module (psutil) depuis le gestionnaire de modules, puis rechargez.`
+    : `<b>Erreur</b>${esc(e.message)}`;
+}
+const pillCls = s => s === 'running' ? 'running' : s === 'stopped' ? 'stopped' : 'pending';
+
+async function load(keepSel = true) {
+  try {
+    const r = await api('/services');
+    showErr(null);
+    admin = r.admin;
+    $('#adminBadge').textContent = admin ? 'Administrateur' : 'Mode standard';
+    $('#adminBadge').className = 'badge ' + (admin ? 'admin' : 'std');
+    $('#stdNote').classList.toggle('hide', admin);
+    list = r.services;
+    $('#sTotal').textContent = list.length;
+    $('#sRun').textContent = list.filter(s => s.status === 'running').length;
+    $('#sStop').textContent = list.filter(s => s.status === 'stopped').length;
+    $('#sAuto').textContent = list.filter(s => s.start_type === 'automatic').length;
+    $('#sAutoStop').textContent = list.filter(s => s.start_type === 'automatic' && s.status === 'stopped').length;
+    $('#sDis').textContent = list.filter(s => s.start_type === 'disabled').length;
+    if (!keepSel || !list.find(s => s.name === sel)) { if (!keepSel) sel = null; }
+    render(); renderDetails();
+  } catch (e) { showErr(e); $('#tbody').innerHTML = '<tr><td colspan="5" class="empty">Impossible de charger les services.</td></tr>'; }
+}
+
+function filtered() {
+  const q = $('#q').value.trim().toLowerCase(), fs = $('#fStatus').value, ft = $('#fStart').value;
+  return list.filter(s => {
+    if (fs === 'running' && s.status !== 'running') return false;
+    if (fs === 'stopped' && s.status !== 'stopped') return false;
+    if (fs === 'pending' && (s.status === 'running' || s.status === 'stopped')) return false;
+    if (ft === 'anyauto') { if (s.start_type !== 'automatic') return false; }
+    else if (ft && s.start_key !== ft) return false;
+    if (q && ![s.name, s.display_name, s.description, s.binpath, s.username].join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function render() {
+  const rows = filtered();
+  const f = { display_name: s => (s.display_name || s.name).toLowerCase(), name: s => s.name.toLowerCase(), status: s => s.status, start_key: s => s.start_key, pid: s => s.pid || 0 }[sortKey];
+  rows.sort((a, b) => { const x = f(a), y = f(b); const r = x < y ? -1 : x > y ? 1 : 0; return sortDesc ? -r : r; });
+  document.querySelectorAll('th[data-k]').forEach(th => { th.classList.toggle('sorted', th.dataset.k === sortKey); th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (th.dataset.k === sortKey ? (sortDesc ? ' ▼' : ' ▲') : ''); });
+  $('#shown').textContent = `${rows.length} service(s) affiché(s) sur ${list.length}`;
+  if (!rows.length) { $('#tbody').innerHTML = '<tr><td colspan="5" class="empty">Aucun service ne correspond.</td></tr>'; return; }
+  $('#tbody').innerHTML = rows.map(s => `<tr data-n="${esc(s.name)}" class="${s.name === sel ? 'sel' : ''}">
+    <td class="dn" title="${esc(s.display_name)}">${esc(s.display_name || s.name)}${s.critical ? '<span class="crit" title="Service critique">⚠</span>' : ''}</td>
+    <td class="nm" title="${esc(s.name)}">${esc(s.name)}</td>
+    <td><span class="pill ${pillCls(s.status)}">${esc(ST[s.status] || s.status || '?')}</span></td>
+    <td>${s.start_key === 'disabled' ? '<span class="pill disabled">Désactivé</span>' : esc(START[s.start_key] || s.start_type || '?')}</td>
+    <td>${s.pid || ''}</td></tr>`).join('');
+}
+
+function renderDetails() {
+  const box = $('#details');
+  const s = list.find(x => x.name === sel);
+  if (!s) { box.innerHTML = '<div class="empty">Sélectionnez un service pour voir ses détails.</div>'; return; }
+  const running = s.status === 'running', stopped = s.status === 'stopped';
+  const chips = arr => arr && arr.length ? `<div class="chips">${arr.map(n => `<span class="chip" data-goto="${esc(n)}">${esc(n)}</span>`).join('')}</div>` : '<span class="muted">Aucun</span>';
+  let confirmHtml = '';
+  if (pending) {
+    const what = pending.kind === 'action'
+      ? { start: 'Démarrer', stop: 'Arrêter', restart: 'Redémarrer' }[pending.action] + ` le service « ${s.display_name || s.name} »`
+      : `Passer « ${s.display_name || s.name} » en démarrage « ${START[pending.start_type]} »`;
+    const depWarn = pending.kind === 'action' && pending.action !== 'start' && s.dependents && s.dependents.length
+      ? `<label><input type="checkbox" id="cForce" /> Arrêter aussi les services dépendants (${s.dependents.length}) — sinon l'opération échouera s'ils sont actifs.</label>` : '';
+    const critWarn = s.critical && !(pending.kind === 'action' && pending.action === 'start')
+      ? `<label><input type="checkbox" id="cCrit" /> Je comprends que « ${esc(s.name)} » est un service critique de Windows et que cette modification peut rendre le système instable.</label>` : '';
+    confirmHtml = `<div class="confirmbox"><b>${esc(what)} ?</b>${admin ? '' : '<div class="muted" style="margin-top:4px">Une invite UAC va s\'afficher.</div>'}
+      ${critWarn}${depWarn}
+      <div class="row" style="margin-top:8px"><button class="danger" id="cOk">${busy ? '<span class="spin"></span> En cours…' : 'Confirmer'}</button><button id="cNo" ${busy ? 'disabled' : ''}>Annuler</button></div></div>`;
+  }
+  box.innerHTML = `
+    <h2>${esc(s.display_name || s.name)}</h2>
+    <div class="row"><span class="pill ${pillCls(s.status)}">${esc(ST[s.status] || s.status)}</span>
+      ${s.start_key === 'disabled' ? '<span class="pill disabled">Désactivé</span>' : `<span class="pill">${esc(START[s.start_key] || s.start_type)}</span>`}
+      ${s.critical ? '<span class="pill pending">⚠ Service critique</span>' : ''}</div>
+    ${s.description ? `<div class="desc">${esc(s.description)}</div>` : ''}
+    <div class="kv">
+      <b>Nom</b><span>${esc(s.name)}</span>
+      <b>PID</b><span>${s.pid || '—'}</span>
+      <b>Compte</b><span>${esc(s.username || '—')}</span>
+      <b>Exécutable</b><span>${esc(s.binpath || '—')}</span>
+    </div>
+    <div class="sect"><h3>Dépend de</h3>${chips(s.depends_on)}</div>
+    <div class="sect"><h3>Services dépendants</h3>${chips(s.dependents)}</div>
+    <div class="sect"><h3>Actions</h3>
+      <div class="row">
+        <button class="primary" data-a="start" ${running || s.start_key === 'disabled' || busy ? 'disabled' : ''} title="${s.start_key === 'disabled' ? 'Service désactivé : changez d\'abord le type de démarrage' : ''}">▶ Démarrer</button>
+        <button class="danger" data-a="stop" ${stopped || busy ? 'disabled' : ''}>■ Arrêter</button>
+        <button data-a="restart" ${!running || busy ? 'disabled' : ''}>⟳ Redémarrer</button>
+      </div>
+    </div>
+    <div class="sect"><h3>Type de démarrage</h3>
+      <div class="row">
+        <select id="stSel">${Object.entries(START).map(([k, v]) => `<option value="${k}" ${k === s.start_key ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <button id="stApply" ${busy ? 'disabled' : ''}>Appliquer</button>
+      </div>
+    </div>
+    ${s.critical && !pending ? '<div class="warnbox">⚠ Service critique : l\'arrêter ou modifier son démarrage peut rendre Windows instable, couper le réseau ou empêcher le démarrage.</div>' : ''}
+    ${confirmHtml}`;
+  box.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { pending = { kind: 'action', action: b.dataset.a }; renderDetails(); });
+  box.querySelectorAll('[data-goto]').forEach(c => c.onclick = () => { if (list.find(x => x.name.toLowerCase() === c.dataset.goto.toLowerCase())) { sel = list.find(x => x.name.toLowerCase() === c.dataset.goto.toLowerCase()).name; pending = null; render(); renderDetails(); } else toast('Service introuvable : ' + c.dataset.goto); });
+  $('#stApply').onclick = () => {
+    const v = $('#stSel').value;
+    if (v === s.start_key) { toast('Le type de démarrage est déjà « ' + START[v] + ' ».', true); return; }
+    pending = { kind: 'start', start_type: v }; renderDetails();
+  };
+  if (pending) {
+    $('#cNo').onclick = () => { pending = null; renderDetails(); };
+    $('#cOk').onclick = () => execPending(s);
+  }
+}
+
+async function execPending(s) {
+  if (busy) return;
+  const crit = $('#cCrit'), force = $('#cForce');
+  if (crit && !crit.checked) { toast('Cochez la case de confirmation pour ce service critique.'); return; }
+  const body = { confirm_critical: !!(crit && crit.checked) };
+  let url;
+  if (pending.kind === 'action') { url = `/services/${encodeURIComponent(s.name)}/action`; body.action = pending.action; body.force = !!(force && force.checked); }
+  else { url = `/services/${encodeURIComponent(s.name)}/start-type`; body.start_type = pending.start_type; }
+  busy = true; renderDetails();
+  try {
+    const r = await api(url, { method: 'POST', body: JSON.stringify(body) });
+    toast(r.message, true);
+    pending = null;
+    if (r.service) { const i = list.findIndex(x => x.name === s.name); if (i >= 0) list[i] = { ...list[i], ...r.service, dependents: list[i].dependents }; }
+  } catch (e) { toast(e.message); pending = null; }
+  finally { busy = false; render(); renderDetails(); }
+}
+
+$('#tbody').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-n]'); if (!tr) return;
+  sel = tr.dataset.n; pending = null; render(); renderDetails();
+});
+document.querySelectorAll('th[data-k]').forEach(th => th.addEventListener('click', () => {
+  const k = th.dataset.k; if (sortKey === k) sortDesc = !sortDesc; else { sortKey = k; sortDesc = false; } render();
+}));
+document.querySelectorAll('.stat').forEach(c => c.addEventListener('click', () => {
+  const f = c.dataset.f;
+  $('#fStatus').value = f === 'running' ? 'running' : (f === 'stopped' || f === 'autostopped') ? 'stopped' : '';
+  $('#fStart').value = f === 'auto' || f === 'autostopped' ? 'anyauto' : f === 'disabled' ? 'disabled' : '';
+  render();
+}));
+$('#q').addEventListener('input', render);
+$('#fStatus').addEventListener('change', render);
+$('#fStart').addEventListener('change', render);
+$('#refresh').addEventListener('click', () => { if (!busy) { pending = null; load(); } });
+load();
+</script>
+</body>
+</html>

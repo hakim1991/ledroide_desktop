@@ -1,0 +1,27 @@
+{
+  "id": "event-viewer",
+  "name": "Journaux d'événements",
+  "version": "1.0.0",
+  "description": "Consultez et filtrez les journaux Windows (Système, Application, Sécurité…), statistiques et export CSV.",
+  "category": "Système",
+  "tags": [
+    "windows",
+    "journaux",
+    "diagnostic"
+  ],
+  "icon": "📜",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

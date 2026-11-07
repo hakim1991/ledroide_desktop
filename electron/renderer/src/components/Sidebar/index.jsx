@@ -4,10 +4,11 @@ import './Sidebar.css'
 const NAV = [
   { id: 'modules', icon: '⊞', label: 'Modules' },
   { id: 'catalog', icon: '🗂', label: 'Catalogue' },
+  { id: 'env',     icon: '🔑', label: 'Variables' },
 ]
 
 
-export default function Sidebar({ view, onNavigate }) {
+export default function Sidebar({ view, onNavigate, badges = {} }) {
   const activeNav = view === 'module' ? 'modules' : view
 
   return (
@@ -26,6 +27,7 @@ export default function Sidebar({ view, onNavigate }) {
           >
             <span className="sb-item-icon">{icon}</span>
             <span className="sb-item-label">{label}</span>
+            {badges[id] > 0 && <span className="sb-item-badge" title="Variables requises manquantes">{badges[id]}</span>}
           </button>
         ))}
       </nav>

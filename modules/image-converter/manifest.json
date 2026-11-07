@@ -1,0 +1,29 @@
+{
+  "id": "image-converter",
+  "name": "Convertisseur d'images",
+  "version": "1.0.0",
+  "description": "Convertit et redimensionne des images par lot (PNG, JPG, WebP, BMP, ICO)",
+  "category": "Images & médias",
+  "tags": [
+    "image",
+    "conversion",
+    "lot"
+  ],
+  "icon": "🖼️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "Pillow>=11,<12"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

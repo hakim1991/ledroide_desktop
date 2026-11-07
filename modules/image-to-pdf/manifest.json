@@ -3,12 +3,25 @@
   "name": "Images → PDF",
   "version": "1.0.0",
   "description": "Fusionne plusieurs images en un seul PDF",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "pdf",
+    "image",
+    "conversion"
+  ],
   "icon": "📄",
   "entry": {
     "backend": "backend/main.py",
     "frontend": "frontend/index.html"
   },
   "permissions": [],
-  "database": { "type": "none" },
-  "dependencies": { "python": ["Pillow"], "modules": [] }
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "Pillow>=11,<12"
+    ],
+    "modules": []
+  }
 }

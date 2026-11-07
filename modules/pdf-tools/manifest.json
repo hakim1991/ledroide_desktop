@@ -1,0 +1,30 @@
+{
+  "id": "pdf-tools",
+  "name": "Outils PDF",
+  "version": "1.0.0",
+  "description": "Fusionner, découper, réorganiser, pivoter et compresser des PDF",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "pdf",
+    "fusion",
+    "compression"
+  ],
+  "icon": "📑",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "pypdf",
+      "Pillow>=11,<12"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

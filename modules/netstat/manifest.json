@@ -1,0 +1,29 @@
+{
+  "id": "netstat",
+  "name": "Connexions réseau",
+  "version": "1.0.0",
+  "description": "Connexions TCP/UDP et ports en écoute avec processus associés, filtres, DNS inverse et export CSV.",
+  "category": "Réseau",
+  "tags": [
+    "ports",
+    "connexions",
+    "diagnostic"
+  ],
+  "icon": "🔌",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "psutil"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

@@ -1,0 +1,28 @@
+{
+  "id": "regex-tester",
+  "name": "Testeur Regex",
+  "version": "1.0.0",
+  "description": "Testez vos expressions régulières (Python ou JavaScript) avec surlignage en direct, groupes et remplacement.",
+  "category": "Développement",
+  "tags": [
+    "regex",
+    "texte"
+  ],
+  "icon": "🔍",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

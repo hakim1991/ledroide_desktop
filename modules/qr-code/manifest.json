@@ -1,0 +1,30 @@
+{
+  "id": "qr-code",
+  "name": "QR Code",
+  "version": "1.0.0",
+  "description": "Générez des QR codes (texte, URL, WiFi, contact) en PNG/SVG et lisez-les depuis une image.",
+  "category": "Images & médias",
+  "tags": [
+    "qr code",
+    "génération",
+    "image"
+  ],
+  "icon": "🔳",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "qrcode[pil]",
+      "opencv-python-headless"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

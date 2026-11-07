@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WHOIS & SSL</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 7px 14px; white-space: nowrap; }
+  button:hover { background: #2a2a30; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #4f46e5; }
+  button.danger { color: #fca5a5; }
+  button.dangerf { background: var(--danger); border-color: var(--danger); color: #fff; }
+  button.sm { padding: 3px 9px; font-size: 12px; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; outline: none; min-width: 0; }
+  input:focus { border-color: var(--accent); }
+  header { display: flex; align-items: center; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 14px 10px 0; font-weight: 600; }
+  .tab { border: none; background: transparent; border-radius: 6px 6px 0 0; padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); background: #222226; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 16px; max-width: 1100px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .form .grow { flex: 1; min-width: 220px; }
+  .form .grow input { width: 100%; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .stat { background: #111114; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .v { font-size: 17px; font-weight: 700; margin-top: 2px; word-break: break-word; font-variant-numeric: tabular-nums; }
+  .stat .s { font-size: 12px; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; font-size: 13px; }
+  .kv > div { padding: 6px 8px; border-bottom: 1px solid var(--border); word-break: break-word; }
+  .kv > div:nth-child(odd) { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; word-break: break-all; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #27272a; color: var(--muted); font-weight: 500; white-space: nowrap; display: inline-block; margin: 1px 2px 1px 0; }
+  .pill.ok { background: rgba(34,197,94,.15); color: #86efac; }
+  .pill.bad { background: rgba(239,68,68,.12); color: #fca5a5; }
+  .pill.warn { background: rgba(245,158,11,.14); color: #fcd34d; }
+  .pill.acc { background: rgba(99,102,241,.18); color: #c7d2fe; }
+  .c-ok { color: #86efac; } .c-warn { color: #fcd34d; } .c-bad { color: #fca5a5; }
+  pre.raw { background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0; max-height: 420px; overflow: auto; font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word; color: #c4c4cc; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 0; }
+  summary:hover { color: var(--text); }
+  .err { color: #fecaca; background: rgba(239,68,68,.1); border: 1px solid var(--danger); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .note { font-size: 13px; color: #fcd34d; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  .chain { display: flex; flex-direction: column; gap: 6px; }
+  .chain .node { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: #141417; }
+  .chain .node.leaf { border-color: rgba(99,102,241,.6); }
+  .hops { display: flex; flex-direction: column; gap: 0; }
+  .hop { display: grid; grid-template-columns: 70px 1fr 80px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--border); }
+  .hop:last-child { border-bottom: none; }
+  .check { display: grid; grid-template-columns: 28px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .check:last-child { border-bottom: none; }
+  .check .ic { font-size: 18px; line-height: 1.2; text-align: center; }
+  .score { font-size: 30px; font-weight: 700; }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid #3f3f46; border-top-color: var(--accent); border-radius: 50%; animation: rot .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .confirm { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: #fca5a5; }
+  .copy { cursor: pointer; }
+  .copy:hover { color: #a5b4fc; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+  .tblwrap { overflow-x: auto; }
+  @media (max-width: 640px) { .kv { grid-template-columns: 1fr; } .hop { grid-template-columns: 60px 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔐 WHOIS & SSL</h1>
+  <button class="tab active" data-tab="whois">WHOIS</button>
+  <button class="tab" data-tab="ssl">Certificat SSL</button>
+  <button class="tab" data-tab="headers">En-têtes HTTP</button>
+  <button class="tab" data-tab="watch">Surveillance</button>
+</header>
+<main>
+  <div id="depNote"></div>
+  <section class="panel active" id="p-whois">
+    <div class="card"><form class="form" id="whoisForm">
+      <label class="grow">Nom de domaine ou adresse IP<input id="whoisQ" placeholder="exemple.fr ou 8.8.8.8" required /></label>
+      <button class="primary" id="whoisGo">Rechercher</button>
+    </form></div>
+    <div id="whoisRes"></div>
+  </section>
+
+  <section class="panel" id="p-ssl">
+    <div class="card"><form class="form" id="sslForm">
+      <label class="grow">Hôte (ou URL)<input id="sslHost" placeholder="exemple.fr" required /></label>
+      <label>Port<input id="sslPort" type="number" min="1" max="65535" value="443" style="width:90px" /></label>
+      <button class="primary" id="sslGo">Analyser</button>
+    </form></div>
+    <div id="sslRes"></div>
+  </section>
+
+  <section class="panel" id="p-headers">
+    <div class="card"><form class="form" id="hdrForm">
+      <label class="grow">URL<input id="hdrUrl" placeholder="https://exemple.fr" required /></label>
+      <button class="primary" id="hdrGo">Analyser</button>
+    </form></div>
+    <div id="hdrRes"></div>
+  </section>
+
+  <section class="panel" id="p-watch">
+    <div class="card">
+      <form class="form" id="watchForm">
+        <label class="grow">Domaine à surveiller<input id="watchHost" placeholder="exemple.fr" required /></label>
+        <label>Port<input id="watchPort" type="number" min="1" max="65535" value="443" style="width:90px" /></label>
+        <button class="primary">Ajouter</button>
+        <button type="button" id="watchAll">↻ Tout actualiser</button>
+      </form>
+    </div>
+    <div class="card"><div class="tblwrap"><table><thead><tr><th>Domaine</th><th>Certificat SSL</th><th>Domaine (WHOIS)</th><th>Dernière vérification</th><th></th></tr></thead>
+      <tbody id="watchList"><tr><td colspan="5" class="muted">Chargement…</td></tr></tbody></table></div>
+      <div class="small muted" style="margin-top:8px">Les jours restants sont recalculés à chaque affichage ; « Tout actualiser » interroge à nouveau les serveurs (TLS + WHOIS/RDAP).</div></div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/whois-ssl/api`;
+const $ = s => document.querySelector(s);
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function v(x) { return (x === null || x === undefined || x === '') ? '<span class="muted">–</span>' : esc(x); }
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3500); }
+async function api(path, opts = {}) {
+  const o = { method: opts.method || 'GET', headers: {} };
+  if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  let r; try { r = await fetch(BASE + path, o); } catch (e) { throw new Error('Backend injoignable'); }
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok || (data && data.error)) {
+    const er = new Error((data && (data.error || (data.detail && 'Paramètres invalides'))) || ('Erreur ' + r.status));
+    er.code = data && data.code;
+    if (er.code === 'MISSING_DEP') er.message += ' — Installez les dépendances du module puis rechargez.';
+    throw er;
+  }
+  return data;
+}
+function copyText(t) {
+  const done = () => toast('Copié', true);
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+}
+document.addEventListener('click', e => { const el = e.target.closest('.copy'); if (el) copyText(el.dataset.copy || el.textContent.trim()); });
+function fmtDate(s) { if (!s) return '–'; const d = new Date(s); return isNaN(d) ? s : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }); }
+function daysCls(d, warn = 30) { return d == null ? '' : d < 0 ? 'bad' : d <= 14 ? 'bad' : d <= warn ? 'warn' : 'ok'; }
+function daysPill(d, warn) { if (d == null) return '<span class="pill">?</span>'; return `<span class="pill ${daysCls(d, warn)}">${d < 0 ? `expiré depuis ${-d} j` : d + ' j restants'}</span>`; }
+function loading(el, txt) { el.innerHTML = `<div class="card"><span class="spin"></span>${txt}</div>`; }
+function setBusy(btn, busy, label) { btn.disabled = busy; if (busy) { btn.dataset.l = btn.textContent; btn.innerHTML = '<span class="spin"></span>' + (label || '…'); } else btn.textContent = btn.dataset.l || btn.textContent; }
+
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + b.dataset.tab));
+  if (b.dataset.tab === 'watch') loadWatch();
+});
+
+/* ── WHOIS ── */
+$('#whoisForm').onsubmit = async e => {
+  e.preventDefault(); const q = $('#whoisQ').value.trim(); if (!q) return;
+  const btn = $('#whoisGo'); setBusy(btn, true, 'Recherche…'); loading($('#whoisRes'), 'Interrogation des serveurs WHOIS…');
+  try { renderWhois(await api('/whois?q=' + encodeURIComponent(q))); }
+  catch (er) { $('#whoisRes').innerHTML = `<div class="err">${esc(er.message)}</div>`; }
+  finally { setBusy(btn, false); }
+};
+function renderWhois(d) {
+  const p = d.parsed;
+  const raw = d.chain.map(c => `<details><summary>${esc(c.server)} — requête « ${esc(c.query)} »${c.error ? ' <span class="c-bad">(' + esc(c.error) + ')</span>' : ''}</summary><pre class="raw">${esc(c.text || '(vide)')}</pre></details>`).join('');
+  let html = d.note ? `<div class="note">${esc(d.note)}</div>` : '';
+  if (d.lookup_note) html += `<div class="note">${esc(d.lookup_note)}</div>`;
+  if (d.kind === 'ip') {
+    html += `<div class="card"><h2>Adresse IP ${esc(d.query)}</h2>${kv([
+      ['Plage', p.range], ['CIDR', p.cidr], ['Nom du réseau', p.name], ['Organisation', p.org], ['Pays', p.country],
+      ['AS d\'origine', p.origin_as], ['Créé le', fmtDate(p.created)], ['Mis à jour le', fmtDate(p.updated)], ['Contact abus', p.abuse],
+    ])}<div class="small muted" style="margin-top:8px">Chaîne : ${d.chain.map(c => esc(c.server)).join(' → ')}</div></div>`;
+  } else if (!d.found) {
+    html += `<div class="card"><h2>${esc(d.query)} <span class="pill ok">Non trouvé</span></h2><div class="muted">Aucun enregistrement : le domaine semble libre (ou le registre ne répond pas en WHOIS).</div></div>`;
+  } else {
+    const dl = p.days_left;
+    html += `<div class="stats">
+      <div class="stat"><div class="l">Domaine</div><div class="v copy">${esc(d.query)}</div><div class="s">Source : ${esc(d.source || 'WHOIS')}</div></div>
+      <div class="stat"><div class="l">Expiration</div><div class="v ${dl != null ? 'c-' + daysCls(dl, 60) : ''}">${fmtDate(p.expires)}</div><div class="s">${dl != null ? (dl < 0 ? 'expiré' : dl + ' jours restants') : 'non publiée par le registre'}</div></div>
+      <div class="stat"><div class="l">Bureau d'enregistrement</div><div class="v" style="font-size:15px">${v(p.registrar)}</div></div>
+      <div class="stat"><div class="l">DNSSEC</div><div class="v" style="font-size:15px">${v(p.dnssec)}</div></div>
+    </div>
+    <div class="card"><h2>Détails</h2>${kv([
+      ['Créé le', fmtDate(p.created) + (p.created_raw ? ` <span class="muted small">(${esc(p.created_raw)})</span>` : ''), true],
+      ['Mis à jour le', fmtDate(p.updated), false], ['Expire le', fmtDate(p.expires) + (p.expires_raw ? ` <span class="muted small">(${esc(p.expires_raw)})</span>` : ''), true],
+      ['Statut', (p.status || []).map(s => `<span class="pill ${/prohibited|active|ok|connect/i.test(s) ? 'acc' : /hold|pending|redemption/i.test(s) ? 'bad' : ''}">${esc(s)}</span>`).join('') || v(null), true],
+      ['Serveurs de noms', (p.name_servers || []).map(n => `<div class="mono">${esc(n)}</div>`).join('') || v(null), true],
+      ['Pays du titulaire', p.registrant_country, false], ['Contact abus', p.abuse_email, false],
+      ['Serveurs interrogés', d.chain.map(c => esc(c.server)).join(' → '), true],
+    ])}</div>`;
+  }
+  html += `<div class="card"><h2>Réponses brutes</h2>${raw}</div>`;
+  $('#whoisRes').innerHTML = html;
+}
+function kv(rows) { return '<div class="kv">' + rows.map(([k, val, raw]) => `<div>${esc(k)}</div><div>${raw ? val : v(val)}</div>`).join('') + '</div>'; }
+
+/* ── SSL ── */
+$('#sslForm').onsubmit = async e => {
+  e.preventDefault(); let h = $('#sslHost').value.trim(); if (!h) return;
+  let port = parseInt($('#sslPort').value) || 443;
+  const m = h.match(/^(?:https?:\/\/)?([^/:]+):(\d+)/); if (m) { h = m[1]; port = parseInt(m[2]); $('#sslPort').value = port; }
+  const btn = $('#sslGo'); setBusy(btn, true, 'Connexion…'); loading($('#sslRes'), 'Négociation TLS…');
+  try { renderSsl(await api(`/ssl?host=${encodeURIComponent(h)}&port=${port}`)); }
+  catch (er) { $('#sslRes').innerHTML = `<div class="err">${esc(er.message)}</div>`; }
+  finally { setBusy(btn, false); }
+};
+function renderSsl(d) {
+  const L = d.leaf, dl = L.days_left;
+  const verdict = d.verified && d.hostname_match ? '<span class="pill ok">✔ Certificat valide et approuvé</span>'
+    : `<span class="pill bad">✖ ${!d.hostname_match ? 'Nom d\'hôte non couvert' : 'Certificat non approuvé'}</span>`;
+  const keyTxt = L.key && L.key.type ? `${L.key.type}${L.key.size ? ' · ' + L.key.size + ' bits' : ''}` : null;
+  const weakKey = L.key && L.key.type === 'RSA' && L.key.size < 2048;
+  let html = d.basic ? '<div class="note">Mode basique : la bibliothèque « cryptography » n\'est pas installée (type de clé, algorithme et chaîne détaillée indisponibles). Installez les dépendances du module puis rechargez.</div>' : '';
+  html += `<div class="stats">
+    <div class="stat"><div class="l">Expire dans</div><div class="v c-${daysCls(dl)}">${dl < 0 ? 'Expiré' : dl + ' jours'}</div><div class="s">le ${fmtDate(L.not_after)}</div></div>
+    <div class="stat"><div class="l">Vérification</div><div class="v" style="font-size:14px">${verdict}</div><div class="s">${esc(d.trust_store)}</div></div>
+    <div class="stat"><div class="l">Protocole</div><div class="v ${/1\.[01]$|SSL/.test(d.tls_version) ? 'c-bad' : ''}">${v(d.tls_version)}</div><div class="s mono">${esc(d.cipher ? d.cipher.name + ' (' + d.cipher.bits + ' bits)' : '')}</div></div>
+    <div class="stat"><div class="l">Serveur</div><div class="v" style="font-size:15px">${esc(d.host)}:${d.port}</div><div class="s">${esc(d.ip)} · ${d.elapsed_ms} ms</div></div>
+  </div>`;
+  if (!d.verified && d.verify_error) html += `<div class="err">Échec de la vérification : ${esc(d.verify_error)}</div>`;
+  if (!d.hostname_match) html += `<div class="err">Le nom « ${esc(d.host)} » ne figure pas dans les noms alternatifs (SAN) du certificat.</div>`;
+  html += `<div class="card"><h2>Certificat du serveur</h2>${kv([
+    ['Sujet (CN)', `<b>${v(L.subject_cn)}</b>${L.subject_org ? ' · ' + esc(L.subject_org) : ''}<div class="small muted mono">${esc(L.subject)}</div>`, true],
+    ['Émetteur', `${v(L.issuer_cn)}${L.issuer_org ? ' · ' + esc(L.issuer_org) : ''}${L.self_signed ? ' <span class="pill bad">auto-signé</span>' : ''}`, true],
+    ['Noms alternatifs (SAN)', [...(L.san_dns || []), ...(L.san_ip || [])].map(n => `<span class="pill ${matchName(d.host, n) ? 'ok' : ''}">${esc(n)}</span>`).join('') || v(null), true],
+    ['Valide du', fmtDate(L.not_before), false], ['Valide jusqu\'au', `${fmtDate(L.not_after)} ${daysPill(dl)}`, true],
+    ['Clé publique', keyTxt ? `${esc(keyTxt)}${weakKey ? ' <span class="pill bad">faible</span>' : ''}` : v(null), true],
+    ['Algorithme de signature', `${v(L.signature_algorithm)}${/sha1|md5/i.test(L.signature_algorithm || '') ? ' <span class="pill bad">obsolète</span>' : ''}`, true],
+    ['Numéro de série', `<span class="mono copy" title="Copier">${v(L.serial)}</span>`, true],
+    ['Empreinte SHA-256', `<span class="mono copy" title="Copier">${v(L.sha256)}</span>`, true],
+    ['Empreinte SHA-1', `<span class="mono copy" title="Copier">${v(L.sha1)}</span>`, true],
+  ])}</div>`;
+  html += `<div class="card"><h2>Chaîne de certificats <span class="pill">${d.chain.length}</span></h2><div class="chain">${d.chain.map((c, i) => `
+    <div class="node ${i === 0 ? 'leaf' : ''}"><div><b>${i === 0 ? 'Serveur' : c.is_ca === false ? 'Certificat' : 'Autorité'} :</b> ${v(c.subject_cn || c.subject)} ${daysPill(c.days_left, 60)}</div>
+    <div class="small muted">Émis par ${v(c.issuer_cn || c.issuer)}${c.key && c.key.type ? ' · ' + esc(c.key.type) + (c.key.size ? ' ' + c.key.size + ' bits' : '') : ''} · jusqu'au ${fmtDate(c.not_after)}</div></div>`).join('<div class="muted small" style="padding-left:14px">↑ signé par</div>')}</div>
+    <div class="small muted" style="margin-top:8px">Chaîne telle qu'envoyée par le serveur (la racine n'est en général pas transmise).</div></div>`;
+  $('#sslRes').innerHTML = html;
+}
+function matchName(host, pat) { host = host.toLowerCase(); pat = pat.toLowerCase(); if (pat === host) return true; if (pat.startsWith('*.')) { const i = host.indexOf('.'); return i > 0 && host.slice(i + 1) === pat.slice(2); } return false; }
+
+/* ── En-têtes HTTP ── */
+$('#hdrForm').onsubmit = async e => {
+  e.preventDefault(); const u = $('#hdrUrl').value.trim(); if (!u) return;
+  const btn = $('#hdrGo'); setBusy(btn, true, 'Requête…'); loading($('#hdrRes'), 'Suivi des redirections…');
+  try { renderHeaders(await api('/headers?url=' + encodeURIComponent(u))); }
+  catch (er) { $('#hdrRes').innerHTML = `<div class="err">${esc(er.message)}</div>`; }
+  finally { setBusy(btn, false); }
+};
+function statusCls(s) { return s >= 500 ? 'bad' : s >= 400 ? 'bad' : s >= 300 ? 'warn' : 'ok'; }
+function renderHeaders(d) {
+  const total = d.hops.reduce((a, h) => a + (h.time_ms || 0), 0);
+  let html = `<div class="card"><h2>Chaîne de redirections <span class="pill">${d.hops.length} requête(s) · ${total} ms</span></h2><div class="hops">${d.hops.map((h, i) => `
+    <div class="hop"><div>${h.status ? `<span class="pill ${statusCls(h.status)}">${h.status}</span>` : '<span class="pill bad">Erreur</span>'}</div>
+      <div><div class="mono">${esc(h.url)}</div>${h.location ? `<div class="small muted">→ ${esc(h.location)}</div>` : ''}${h.error ? `<div class="small c-bad">${esc(h.error)}</div>` : ''}${h.cert_error ? `<div class="small c-bad">⚠ Certificat invalide : ${esc(h.cert_error)}</div>` : ''}<div class="small muted">${esc(h.reason || '')} ${esc(h.http_version || '')}</div></div>
+      <div class="num small muted" style="text-align:right">${h.time_ms != null ? h.time_ms + ' ms' : ''}</div></div>`).join('')}</div></div>`;
+  if (d.final) {
+    const pct = d.score_max ? d.score / d.score_max : 0;
+    const grade = pct >= .9 ? 'A' : pct >= .7 ? 'B' : pct >= .5 ? 'C' : pct >= .3 ? 'D' : 'F';
+    const icon = { pass: '<span class="c-ok">✔</span>', warn: '<span class="c-warn">⚠</span>', fail: '<span class="c-bad">✖</span>', info: '<span class="muted">ℹ</span>' };
+    html += `<div class="card"><h2>En-têtes de sécurité</h2>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:6px"><div class="score c-${pct >= .7 ? 'ok' : pct >= .4 ? 'warn' : 'bad'}">${grade}</div>
+      <div><div>${String(d.score).replace('.', ',')} / ${d.score_max} contrôles réussis</div><div class="small muted">${d.final.https ? 'HTTPS' : 'HTTP non chiffré'} · statut final ${d.final.status}</div></div></div>
+      ${d.checks.map(c => `<div class="check"><div class="ic">${icon[c.status]}</div><div><div><b>${esc(c.header)}</b> — <span class="${c.status === 'pass' ? 'c-ok' : c.status === 'warn' ? 'c-warn' : c.status === 'fail' ? 'c-bad' : 'muted'}">${esc(c.note)}</span></div>
+        ${c.value ? `<div class="mono small" style="color:#a1a1aa;margin:2px 0">${esc(c.value.length > 300 ? c.value.slice(0, 300) + '…' : c.value)}</div>` : ''}<div class="small muted">${esc(c.explanation)}</div></div></div>`).join('')}
+    </div>
+    <div class="card"><h2>En-têtes de la réponse finale <span class="pill">${d.final.headers.length}</span></h2><div class="tblwrap"><table><tbody>
+      ${d.final.headers.map(h => `<tr><td class="mono" style="width:240px;color:#a5b4fc">${esc(h.name)}</td><td class="mono">${esc(h.value)}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  }
+  $('#hdrRes').innerHTML = html;
+}
+
+/* ── Surveillance ── */
+let watchItems = [], watchConfirm = null, watchBusy = {};
+async function loadWatch() {
+  try { watchItems = (await api('/watch')).items; drawWatch(); }
+  catch (e) { $('#watchList').innerHTML = `<tr><td colspan="5"><div class="err">${esc(e.message)}</div></td></tr>`; }
+}
+function drawWatch() {
+  $('#watchList').innerHTML = watchItems.map(w => {
+    const certCell = w.last_check == null ? '<span class="muted small">Non vérifié</span>'
+      : w.cert_expiry ? `${daysPill(w.cert_days)} <div class="small muted">${fmtDate(w.cert_expiry)}${w.cert_issuer ? ' · ' + esc(w.cert_issuer) : ''}</div>${w.cert_ok ? '' : `<div class="small c-bad">${esc(w.cert_error || 'Non approuvé')}</div>`}`
+      : `<span class="small c-bad">${esc(w.cert_error || 'Erreur')}</span>`;
+    const domCell = w.last_check == null ? '<span class="muted small">Non vérifié</span>'
+      : w.domain_expiry ? `${daysPill(w.domain_days, 60)} <div class="small muted">${fmtDate(w.domain_expiry)}${w.registrar ? ' · ' + esc(w.registrar) : ''}</div>`
+      : `<span class="small muted">${esc(w.domain_error || 'Inconnue')}</span>`;
+    const act = watchConfirm === w.id
+      ? `<span class="confirm">Retirer ?<button class="sm dangerf" data-act="del-yes" data-id="${w.id}">Oui</button><button class="sm" data-act="del-no">Non</button></span>`
+      : `<button class="sm" data-act="refresh" data-id="${w.id}" ${watchBusy[w.id] ? 'disabled' : ''}>${watchBusy[w.id] ? '<span class="spin"></span>' : '↻'}</button> <button class="sm danger" data-act="del" data-id="${w.id}">🗑</button>`;
+    return `<tr><td><b>${esc(w.host)}</b>${w.port !== 443 ? `<span class="muted">:${w.port}</span>` : ''}<div class="small"><a href="#" data-act="open-ssl" data-id="${w.id}" style="color:#a5b4fc">SSL</a> · <a href="#" data-act="open-whois" data-id="${w.id}" style="color:#a5b4fc">WHOIS</a></div></td>
+      <td>${certCell}</td><td>${domCell}</td><td class="small muted">${w.last_check ? new Date(w.last_check).toLocaleString('fr-FR') : '–'}</td><td style="text-align:right;white-space:nowrap">${act}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="muted">Aucun domaine surveillé. Ajoutez-en un ci-dessus.</td></tr>';
+}
+$('#watchList').addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return; e.preventDefault();
+  const id = +b.dataset.id, act = b.dataset.act, w = watchItems.find(x => x.id === id);
+  if (act === 'del') { watchConfirm = id; drawWatch(); }
+  else if (act === 'del-no') { watchConfirm = null; drawWatch(); }
+  else if (act === 'del-yes') { watchConfirm = null; try { await api('/watch/' + id, { method: 'DELETE' }); watchItems = watchItems.filter(x => x.id !== id); drawWatch(); toast('Retiré de la surveillance', true); } catch (er) { toast(er.message); } }
+  else if (act === 'refresh') {
+    watchBusy[id] = true; drawWatch();
+    try { const r = await api(`/watch/${id}/refresh`, { method: 'POST' }); watchItems = watchItems.map(x => x.id === id ? r : x); } catch (er) { toast(er.message); }
+    watchBusy[id] = false; drawWatch();
+  } else if (act === 'open-ssl' && w) { $('#sslHost').value = w.host; $('#sslPort').value = w.port; document.querySelector('.tab[data-tab="ssl"]').click(); $('#sslForm').requestSubmit(); }
+  else if (act === 'open-whois' && w) { $('#whoisQ').value = w.host; document.querySelector('.tab[data-tab="whois"]').click(); $('#whoisForm').requestSubmit(); }
+});
+$('#watchForm').onsubmit = async e => {
+  e.preventDefault(); const host = $('#watchHost').value.trim(); if (!host) return;
+  try {
+    const r = await api('/watch', { method: 'POST', body: { host, port: parseInt($('#watchPort').value) || 443 } });
+    $('#watchHost').value = ''; watchItems.push(r); watchBusy[r.id] = true; drawWatch();
+    const u = await api(`/watch/${r.id}/refresh`, { method: 'POST' }); watchItems = watchItems.map(x => x.id === r.id ? u : x);
+    watchBusy[r.id] = false; drawWatch();
+  } catch (er) { toast(er.message); loadWatch(); }
+};
+$('#watchAll').onclick = async () => {
+  const b = $('#watchAll'); setBusy(b, true, 'Actualisation…');
+  try { watchItems = (await api('/watch/refresh-all', { method: 'POST' })).items; drawWatch(); toast('Surveillance actualisée', true); }
+  catch (er) { toast(er.message); } finally { setBusy(b, false); }
+};
+
+api('/status').then(s => {
+  if (!s.cryptography) $('#depNote').innerHTML = '<div class="note">La dépendance « cryptography » n\'est pas installée : l\'analyse des certificats fonctionne en mode basique. Installez les dépendances du module (cryptography, truststore) puis rechargez.</div>';
+  else if (!s.truststore) $('#depNote').innerHTML = '<div class="note">« truststore » n\'est pas installé : la vérification utilise le magasin de certificats exporté par Python (peut signaler à tort certaines racines). Installez les dépendances du module.</div>';
+}).catch(() => {});
+</script>
+</body>
+</html>

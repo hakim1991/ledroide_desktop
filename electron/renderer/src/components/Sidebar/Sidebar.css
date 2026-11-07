@@ -150,3 +150,16 @@
   opacity: .3;
   cursor: not-allowed;
 }
+
+.sb-item-badge {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 0 .3rem;
+  border-radius: 9px;
+  background: #ca8a04;
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Doublons</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  body { font-family: system-ui, sans-serif; background: #0f0f12; color: #e2e2e8; min-height: 100vh; padding: 1.5rem; font-size: .9rem; }
+  h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1rem; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
+  .muted { color: #71717a; }
+  input[type=text], input[type=number], select { background: #09090b; border: 1px solid #3f3f46; color: #e2e2e8; border-radius: 6px; padding: .45rem .6rem; font-size: .85rem; font-family: inherit; }
+  input:focus, select:focus { outline: none; border-color: #6366f1; }
+  input[type=checkbox] { accent-color: #6366f1; width: 15px; height: 15px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  label.opt { display: flex; align-items: center; gap: .45rem; cursor: pointer; }
+  .form { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
+  .form .f { display: flex; flex-direction: column; gap: .25rem; }
+  .form .lbl { font-size: .78rem; color: #a1a1aa; }
+  .grow { flex: 1; min-width: 240px; }
+  .grow input { width: 100%; }
+
+  button { cursor: pointer; border: none; border-radius: 6px; padding: .5rem 1.1rem; font-size: .85rem; font-weight: 500; transition: opacity .15s, background .15s; font-family: inherit; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-ghost { background: #27272a; color: #e2e2e8; }
+  .btn-ghost:hover:not(:disabled) { background: #3f3f46; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-danger:hover:not(:disabled) { opacity: .85; }
+  .btn-sm { padding: .3rem .7rem; font-size: .78rem; }
+
+  .progress { display: none; }
+  .progress.show { display: block; }
+  .bar { height: 8px; background: #27272a; border-radius: 999px; overflow: hidden; margin: .6rem 0 .4rem; }
+  .bar > div { height: 100%; background: #6366f1; width: 0; transition: width .3s; }
+  .bar.indet > div { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
+  @keyframes indet { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+
+  .summary { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .stat { background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: .6rem .9rem; min-width: 130px; }
+  .stat .v { font-size: 1.15rem; font-weight: 700; color: #f4f4f5; }
+  .stat .k { font-size: .72rem; color: #71717a; text-transform: uppercase; letter-spacing: .04em; }
+  .stat.accent .v { color: #a5b4fc; }
+
+  .toolbar { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; }
+  .sticky { position: sticky; top: 0; z-index: 5; background: #0f0f12; padding: .6rem 0; margin-bottom: .5rem; border-bottom: 1px solid #27272a; }
+  .sel-info { flex: 1; min-width: 200px; }
+
+  .group { background: #18181b; border: 1px solid #27272a; border-radius: 8px; margin-bottom: .6rem; overflow: hidden; }
+  .group.allsel { border-color: rgba(239,68,68,.5); }
+  .ghead { display: flex; gap: .75rem; align-items: center; padding: .55rem .9rem; background: #1f1f23; font-size: .8rem; flex-wrap: wrap; }
+  .ghead .t { font-weight: 600; }
+  .ghead .h { color: #52525b; font-family: ui-monospace, Consolas, monospace; font-size: .72rem; }
+  .ghead .warn { color: #fca5a5; margin-left: auto; }
+  .file { display: flex; gap: .65rem; align-items: center; padding: .45rem .9rem; border-top: 1px solid #27272a; font-size: .82rem; cursor: pointer; }
+  .file:hover { background: #1c1c20; }
+  .file.sel { background: rgba(239,68,68,.07); }
+  .file .p { flex: 1; min-width: 0; word-break: break-all; font-family: ui-monospace, Consolas, monospace; font-size: .78rem; }
+  .file .p .dirpart { color: #71717a; }
+  .file .d { color: #71717a; white-space: nowrap; font-size: .75rem; }
+  .tag { font-size: .68rem; padding: .05rem .4rem; border-radius: 4px; background: #27272a; color: #a1a1aa; margin-left: .4rem; }
+
+  .msg { display: none; margin-bottom: 1rem; padding: .7rem 1rem; border-radius: 6px; }
+  .msg.show { display: block; }
+  .msg.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
+  .msg.ok { background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.25); color: #86efac; }
+  .confirm { display: none; align-items: center; gap: .6rem; flex-wrap: wrap; padding: .7rem .9rem; margin-top: .6rem; background: rgba(251,191,36,.07); border: 1px solid rgba(251,191,36,.3); border-radius: 6px; color: #fde68a; }
+  .confirm.show { display: flex; }
+  .confirm span { flex: 1; min-width: 200px; }
+  .empty { text-align: center; padding: 2rem; color: #71717a; }
+  .more { text-align: center; margin: .75rem 0; }
+</style>
+</head>
+<body>
+<h1>🧬 Doublons</h1>
+
+<div class="card">
+  <div class="form">
+    <div class="f grow"><span class="lbl">Dossier à analyser (chemin absolu)</span><input type="text" id="folder" class="mono" placeholder="D:\Photos" /></div>
+    <div class="f"><span class="lbl">Taille min.</span>
+      <div style="display:flex;gap:.3rem"><input type="number" id="minSize" value="1" min="0" style="width:80px" />
+        <select id="minUnit"><option value="1">o</option><option value="1024" selected>Ko</option><option value="1048576">Mo</option></select></div>
+    </div>
+    <label class="opt" style="padding-bottom:.5rem"><input type="checkbox" id="recursive" checked /> Sous-dossiers</label>
+    <button class="btn-primary" id="scanBtn">Analyser</button>
+  </div>
+  <div class="progress" id="progress">
+    <div class="bar indet" id="bar"><div></div></div>
+    <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+      <span class="muted" id="progTxt" style="flex:1"></span>
+      <button class="btn-ghost btn-sm" id="cancelBtn">Arrêter</button>
+    </div>
+  </div>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<div id="results" style="display:none">
+  <div class="summary" id="summary"></div>
+  <div class="sticky">
+    <div class="toolbar" style="margin-top:0">
+      <span class="muted">Sélection auto :</span>
+      <button class="btn-ghost btn-sm" id="keepNewest">Garder le plus récent</button>
+      <button class="btn-ghost btn-sm" id="keepOldest">Garder le plus ancien</button>
+      <button class="btn-ghost btn-sm" id="selNone">Tout désélectionner</button>
+    </div>
+    <div class="toolbar">
+      <span class="sel-info" id="selInfo"></span>
+      <button class="btn-danger" id="trashBtn" disabled>🗑 Mettre à la corbeille</button>
+    </div>
+    <div class="confirm" id="confirm">
+      <span id="confirmTxt"></span>
+      <button class="btn-danger" id="confirmYes">Confirmer</button>
+      <button class="btn-ghost" id="confirmNo">Annuler</button>
+    </div>
+  </div>
+  <div id="groups"></div>
+  <div class="more" id="more"></div>
+</div>
+
+<script>
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/duplicate-finder/api`
+const $ = id => document.getElementById(id)
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const PAGE = 100
+
+let jobId = null, pollTimer = null
+let groups = [], selected = new Set(), shown = PAGE, lastInfo = null
+
+function fmtSize(b) {
+  if (b < 1024) return b + ' o'
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' Ko'
+  if (b < 1073741824) return (b / 1048576).toFixed(1) + ' Mo'
+  return (b / 1073741824).toFixed(2) + ' Go'
+}
+const fmtDate = t => new Date(t * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+
+async function call(method, path, body) {
+  try {
+    const r = await fetch(BASE + path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
+    let d
+    try { d = await r.json() } catch (_) { d = { error: `Réponse invalide (HTTP ${r.status}).` } }
+    if (!r.ok && !d.error) d.error = `Erreur HTTP ${r.status}.`
+    return d
+  } catch (e) { return { error: 'Impossible de joindre le backend du module.' } }
+}
+function showMsg(kind, text) { const m = $('msg'); m.className = 'msg show ' + kind; m.textContent = text }
+function hideMsg() { $('msg').className = 'msg' }
+function errText(d) { return '⚠️ ' + d.error + (d.code === 'MISSING_DEP' ? ' — Installez les dépendances du module (bouton « Dépendances » dans le gestionnaire de modules).' : '') }
+
+$('scanBtn').onclick = async () => {
+  hideMsg()
+  const folder = $('folder').value.trim()
+  if (!folder) return showMsg('err', '⚠️ Indiquez un dossier.')
+  const min = Math.max(0, Math.round((parseFloat($('minSize').value) || 0) * parseInt($('minUnit').value)))
+  const d = await call('POST', '/scan', { folder, recursive: $('recursive').checked, min_size: min })
+  if (d.error) return showMsg('err', errText(d))
+  jobId = d.job_id
+  $('results').style.display = 'none'
+  $('scanBtn').disabled = true
+  $('progress').classList.add('show')
+  $('bar').classList.add('indet')
+  $('progTxt').textContent = 'Démarrage…'
+  clearTimeout(pollTimer)
+  poll()
+}
+
+$('cancelBtn').onclick = async () => { if (jobId) await call('POST', `/cancel/${jobId}`) }
+
+async function poll() {
+  const my = jobId
+  const d = await call('GET', `/status/${my}`)
+  if (my !== jobId) return
+  if (d.error && !d.state) { finishScan(); return showMsg('err', errText(d)) }
+  if (d.state === 'running') {
+    const bar = $('bar')
+    if (d.phase === 'hashing' && d.bytes_total) {
+      bar.classList.remove('indet')
+      const pct = Math.min(100, d.bytes_done / d.bytes_total * 100)
+      bar.firstElementChild.style.width = pct.toFixed(1) + '%'
+      $('progTxt').textContent = `Calcul des empreintes SHA-256… ${pct.toFixed(0)} % (${fmtSize(d.bytes_done)} / ${fmtSize(d.bytes_total)}) · ${d.candidates} candidat(s)`
+    } else {
+      bar.classList.add('indet')
+      $('progTxt').textContent = d.phase === 'listing'
+        ? `Inventaire des fichiers… ${d.files_seen} fichier(s) trouvé(s)`
+        : `Pré-filtrage de ${d.candidates} fichier(s) de même taille…`
+    }
+    pollTimer = setTimeout(poll, 500)
+    return
+  }
+  finishScan()
+  if (d.state === 'cancelled') return showMsg('err', 'Analyse arrêtée.')
+  if (d.state === 'error') return showMsg('err', '⚠️ Erreur pendant l\'analyse : ' + (d.error || '?'))
+  groups = d.groups; lastInfo = d
+  selected = new Set(); shown = PAGE
+  renderSummary(d)
+  renderGroups()
+  $('results').style.display = 'block'
+}
+function finishScan() { $('scanBtn').disabled = false; $('progress').classList.remove('show') }
+
+function renderSummary(d) {
+  const s = d.summary
+  $('summary').innerHTML = `
+    <div class="stat accent"><div class="v">${fmtSize(s.reclaimable)}</div><div class="k">Espace récupérable</div></div>
+    <div class="stat"><div class="v">${s.groups}</div><div class="k">Groupes</div></div>
+    <div class="stat"><div class="v">${s.files}</div><div class="k">Fichiers en double</div></div>
+    <div class="stat"><div class="v">${d.files_seen}</div><div class="k">Fichiers analysés</div></div>
+    <div class="stat"><div class="v">${d.elapsed} s</div><div class="k">Durée${d.errors ? ` · ${d.errors} illisible(s)` : ''}</div></div>`
+}
+
+function splitPath(p) { const i = Math.max(p.lastIndexOf('\\'), p.lastIndexOf('/')); return [p.slice(0, i + 1), p.slice(i + 1)] }
+
+function renderGroups() {
+  const box = $('groups')
+  if (!groups.length) { box.innerHTML = '<div class="card empty">🎉 Aucun doublon trouvé.</div>'; $('more').innerHTML = ''; updateSel(); return }
+  box.innerHTML = groups.slice(0, shown).map((g, gi) => {
+    const newest = Math.max(...g.files.map(f => f.mtime)), oldest = Math.min(...g.files.map(f => f.mtime))
+    const all = g.files.every(f => selected.has(f.path))
+    return `<div class="group${all ? ' allsel' : ''}">
+      <div class="ghead"><span class="t">${g.files.length} × ${fmtSize(g.size)}</span>
+        <span class="muted">récupérable : ${fmtSize(g.size * (g.files.length - 1))}</span>
+        <span class="h" title="${g.hash}">${g.hash.slice(0, 16)}…</span>
+        ${all ? '<span class="warn">⚠️ Tous les exemplaires sont sélectionnés</span>' : ''}</div>
+      ${g.files.map((f, fi) => {
+        const [dir, name] = splitPath(f.path)
+        const tag = g.files.length > 1 && newest !== oldest ? (f.mtime === newest ? '<span class="tag">plus récent</span>' : f.mtime === oldest ? '<span class="tag">plus ancien</span>' : '') : ''
+        return `<label class="file${selected.has(f.path) ? ' sel' : ''}">
+          <input type="checkbox" data-g="${gi}" data-f="${fi}" ${selected.has(f.path) ? 'checked' : ''} />
+          <span class="p"><span class="dirpart">${esc(dir)}</span>${esc(name)}${tag}</span>
+          <span class="d">${fmtDate(f.mtime)}</span></label>`
+      }).join('')}
+    </div>`
+  }).join('')
+  $('more').innerHTML = groups.length > shown ? `<button class="btn-ghost" id="moreBtn">Afficher plus (${groups.length - shown} groupe(s) restant(s))</button>` : ''
+  if ($('moreBtn')) $('moreBtn').onclick = () => { shown += PAGE; renderGroups() }
+  updateSel()
+}
+
+$('groups').addEventListener('change', e => {
+  const cb = e.target
+  if (cb.type !== 'checkbox') return
+  const f = groups[+cb.dataset.g].files[+cb.dataset.f]
+  cb.checked ? selected.add(f.path) : selected.delete(f.path)
+  renderGroups()
+})
+
+function updateSel() {
+  let n = 0, size = 0, bad = 0
+  groups.forEach(g => {
+    const k = g.files.filter(f => selected.has(f.path)).length
+    n += k; size += k * g.size
+    if (k && k === g.files.length) bad++
+  })
+  $('selInfo').innerHTML = n ? `<strong>${n}</strong> fichier(s) sélectionné(s) · <strong>${fmtSize(size)}</strong> libérés`
+    + (bad ? ` · <span style="color:#fca5a5">${bad} groupe(s) sans exemplaire conservé</span>` : '') : '<span class="muted">Aucun fichier sélectionné</span>'
+  $('trashBtn').disabled = !n || bad > 0
+  $('confirm').classList.remove('show')
+}
+
+function autoSelect(keepNewest) {
+  selected = new Set()
+  groups.forEach(g => {
+    let keep = g.files[0]
+    g.files.forEach(f => { if (keepNewest ? f.mtime > keep.mtime : f.mtime < keep.mtime) keep = f })
+    g.files.forEach(f => { if (f !== keep) selected.add(f.path) })
+  })
+  renderGroups()
+}
+$('keepNewest').onclick = () => autoSelect(true)
+$('keepOldest').onclick = () => autoSelect(false)
+$('selNone').onclick = () => { selected = new Set(); renderGroups() }
+
+$('trashBtn').onclick = () => {
+  let size = 0
+  groups.forEach(g => g.files.forEach(f => { if (selected.has(f.path)) size += g.size }))
+  $('confirmTxt').textContent = `Envoyer ${selected.size} fichier(s) (${fmtSize(size)}) à la corbeille de Windows ?`
+  $('confirm').classList.add('show')
+}
+$('confirmNo').onclick = () => $('confirm').classList.remove('show')
+$('confirmYes').onclick = async () => {
+  $('confirm').classList.remove('show')
+  $('trashBtn').disabled = true
+  hideMsg()
+  const d = await call('POST', '/trash', { job_id: jobId, paths: [...selected] })
+  if (d.error) { showMsg('err', errText(d)); updateSel(); return }
+  const moved = new Set(d.moved_paths)
+  groups.forEach(g => { g.files = g.files.filter(f => !moved.has(f.path)) })
+  groups = groups.filter(g => g.files.length > 1)
+  moved.forEach(p => selected.delete(p))
+  let t = `✅ ${d.moved} fichier(s) envoyé(s) à la corbeille (${fmtSize(d.freed)} libérés).`
+  if (d.errors.length) t += ` ${d.errors.length} échec(s) : ` + d.errors.slice(0, 3).map(e => `${e.path} (${e.error})`).join(' ; ')
+  showMsg(d.errors.length ? 'err' : 'ok', t)
+  renderSummary({ summary: { reclaimable: groups.reduce((s, g) => s + g.size * (g.files.length - 1), 0), groups: groups.length, files: groups.reduce((s, g) => s + g.files.length, 0) }, files_seen: lastInfo.files_seen, elapsed: lastInfo.elapsed, errors: lastInfo.errors })
+  renderGroups()
+}
+$('folder').addEventListener('keydown', e => { if (e.key === 'Enter') $('scanBtn').click() })
+</script>
+</body>
+</html>

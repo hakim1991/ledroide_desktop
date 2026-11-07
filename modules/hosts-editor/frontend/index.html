@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fichier hosts</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 16px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 6px 12px; white-space: nowrap; }
+  button:hover { background: #2a2a30; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #5458e0; }
+  button.danger { color: #fca5a5; }
+  button.danger:hover { background: rgba(239,68,68,.15); border-color: var(--danger); }
+  button.sm { padding: 2px 8px; font-size: 12px; }
+  input, select, textarea { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; outline: none; min-width: 0; }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  input.bad { border-color: var(--danger); }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  h3 { margin: 0 0 10px; font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+  .top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .sp { flex: 1; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.admin { color: #bbf7d0; border-color: #166534; background: #14301f; }
+  .badge.std { color: #fde68a; border-color: #854d0e; background: #2b2110; }
+  .path { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; min-width: 0; margin-bottom: 12px; }
+  .savebar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; background: var(--card); }
+  .dirty { color: #fcd34d; font-size: 13px; }
+  .clean { color: var(--muted); font-size: 13px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .tab { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px; color: var(--muted); }
+  .tab:hover { background: none; color: var(--text); }
+  .tab.on { color: var(--text); border-bottom-color: var(--accent); }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--card); z-index: 1; }
+  td.ip { font-family: Consolas, monospace; font-size: 12px; white-space: nowrap; }
+  td.hosts { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; }
+  td.cm { color: var(--muted); font-size: 12px; }
+  td.ln { color: var(--muted); font-size: 11px; width: 40px; text-align: right; }
+  td.act { white-space: nowrap; text-align: right; width: 1%; }
+  tr.off td.ip, tr.off td.hosts { color: #6b6b75; text-decoration: line-through; }
+  tr.bad td { background: rgba(239,68,68,.08); }
+  tr.edit td { background: rgba(99,102,241,.1); }
+  tr.edit input { width: 100%; font-size: 12px; padding: 4px 6px; }
+  .tablewrap { max-height: calc(100vh - 300px); min-height: 220px; overflow: auto; }
+  .sw { position: relative; display: inline-block; width: 32px; height: 18px; flex: none; }
+  .sw input { opacity: 0; width: 0; height: 0; }
+  .sw span { position: absolute; inset: 0; background: #3f3f46; border-radius: 99px; cursor: pointer; transition: .15s; }
+  .sw span::before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: .15s; }
+  .sw input:checked + span { background: var(--ok); }
+  .sw input:checked + span::before { transform: translateX(14px); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .filters input[type=search] { flex: 1; min-width: 180px; }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+  .form { display: grid; gap: 8px; }
+  .form label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px; }
+  .form input { width: 100%; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .ferr { color: #fca5a5; font-size: 12px; }
+  textarea#raw { width: 100%; height: calc(100vh - 290px); min-height: 300px; resize: vertical; font: 13px/1.5 Consolas, 'Cascadia Mono', monospace; white-space: pre; tab-size: 8; }
+  .rawerr { font-size: 12px; color: #fca5a5; margin-top: 8px; max-height: 120px; overflow: auto; }
+  .confirm { background: #1f1416; border: 1px solid #7f1d1d; border-radius: 8px; padding: 10px 12px; font-size: 13px; width: 100%; }
+  .confirm .row { margin-top: 8px; }
+  .inl { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: #fca5a5; }
+  .bk { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .bk:last-child { border-bottom: none; }
+  .bk .d { flex: 1; min-width: 120px; }
+  pre.preview { white-space: pre; overflow: auto; max-height: 260px; font: 12px/1.45 Consolas, monospace; background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin: 8px 0 0; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .empty { text-align: center; color: var(--muted); padding: 30px; }
+  .err { background: rgba(239,68,68,.1); border: 1px solid var(--danger); color: #fecaca; padding: 12px 14px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .err b { display: block; margin-bottom: 4px; }
+  .err ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #555; border-top-color: var(--accent); border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>📝 Fichier hosts</h1>
+  <span class="badge" id="adminBadge">…</span>
+  <span class="path" id="path"></span>
+  <span class="sp"></span>
+  <button id="reloadBtn">⟳ Recharger</button>
+  <button id="flushBtn">Vider le cache DNS</button>
+</div>
+<div class="err" id="err"></div>
+
+<div class="card savebar" id="savebar">
+  <span id="dirty" class="clean">Aucune modification.</span>
+  <span class="muted" id="counts"></span>
+  <span class="sp"></span>
+  <button id="discardBtn" disabled>Annuler les modifications</button>
+  <button class="primary" id="saveBtn" disabled>💾 Enregistrer</button>
+  <div id="saveConfirm" class="confirm hide"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" data-tab="table">Entrées</button>
+  <button class="tab" data-tab="raw">Texte brut</button>
+</div>
+
+<div class="layout">
+  <div>
+    <div id="tabTable" class="card">
+      <div class="filters">
+        <input type="search" id="q" placeholder="Filtrer (IP, nom d'hôte, commentaire)…" />
+        <label class="chk"><input type="checkbox" id="showComments" /> Afficher les commentaires</label>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Actif</th><th>Adresse IP</th><th>Noms d'hôte</th><th>Commentaire</th><th style="text-align:right">L.</th><th></th></tr></thead>
+          <tbody id="tbody"><tr><td colspan="6" class="empty"><span class="spin"></span> Chargement…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="tabRaw" class="card hide">
+      <textarea id="raw" spellcheck="false"></textarea>
+      <div class="rawerr" id="rawErr"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h3>Ajouter une entrée</h3>
+      <div class="form">
+        <div><label>Adresse IP</label><input id="aIp" placeholder="ex. 127.0.0.1 ou ::1" /></div>
+        <div><label>Nom(s) d'hôte (séparés par des espaces)</label><input id="aHosts" placeholder="ex. monsite.local www.monsite.local" /></div>
+        <div><label>Commentaire (facultatif)</label><input id="aCm" placeholder="ex. serveur de test" /></div>
+        <div class="ferr" id="aErr"></div>
+        <div class="row"><button class="primary" id="addBtn">＋ Ajouter</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Préréglages rapides</h3>
+      <div class="form">
+        <div><label>Domaine</label><input id="pDom" placeholder="ex. publicite.example.com" /></div>
+        <label class="chk"><input type="checkbox" id="pWww" checked /> Inclure aussi « www. »</label>
+        <div class="ferr" id="pErr"></div>
+        <div class="row">
+          <button id="blockBtn" title="0.0.0.0 — la connexion échoue immédiatement">⛔ Bloquer (0.0.0.0)</button>
+          <button id="localBtn" title="127.0.0.1">↩ Vers localhost</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Sauvegardes automatiques</h3>
+      <div class="muted" style="margin-bottom:6px">Une copie est créée avant chaque enregistrement (10 dernières conservées).</div>
+      <div id="backups"><span class="muted">—</span></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/hosts-editor/api`;
+const $ = s => document.querySelector(s);
+let original = '', text = '', hash = null, lines = [], admin = false, tab = 'table', editN = null, delN = null, busy = false, rawTimer = null;
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+let toastT;
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 5000); }
+async function api(path, opts = {}) {
+  const r = await fetch(BASE + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  let j = null; try { j = await r.json(); } catch (_) {}
+  if (!r.ok) { const e = new Error((j && j.error) || `Erreur HTTP ${r.status}`); e.code = j && j.code; e.status = r.status; e.data = j; throw e; }
+  return j;
+}
+function showErr(html) { const b = $('#err'); if (!html) { b.style.display = 'none'; return; } b.innerHTML = html; b.style.display = 'block'; }
+
+// --- validation locale (le serveur revalide à l'enregistrement)
+const HOST_RE = /^(?=.{1,253}$)(?!-)[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*\.?$/;
+function isIPv4(s) { const p = s.split('.'); return p.length === 4 && p.every(x => /^\d{1,3}$/.test(x) && +x <= 255 && (x === '0' || !x.startsWith('0'))); }
+function isIPv6(s) {
+  s = s.split('%')[0];
+  if (!/^[0-9a-fA-F:.]+$/.test(s) || (s.match(/::/g) || []).length > 1) return false;
+  let parts = s.split(':');
+  if (parts[parts.length - 1].includes('.')) { if (!isIPv4(parts.pop())) return false; parts.push('0', '0'); }
+  if (s.includes('::')) { const n = parts.filter(p => p !== '').length; return n <= 7 && parts.every(p => p === '' || /^[0-9a-fA-F]{1,4}$/.test(p)); }
+  return parts.length === 8 && parts.every(p => /^[0-9a-fA-F]{1,4}$/.test(p));
+}
+const isIP = s => isIPv4(s) || isIPv6(s);
+const isHost = s => HOST_RE.test(s) && !isIP(s);
+function validateEntry(ip, hosts, cm) {
+  const errs = [];
+  if (!isIP(ip)) errs.push('Adresse IP invalide (IPv4 ou IPv6).');
+  if (!hosts.length) errs.push("Indiquez au moins un nom d'hôte.");
+  const bad = hosts.filter(h => !isHost(h)); if (bad.length) errs.push("Nom(s) d'hôte invalide(s) : " + bad.slice(0, 4).join(', '));
+  if (cm.includes('#')) errs.push('Le commentaire ne doit pas contenir « # ».');
+  return errs;
+}
+function fmtLine(enabled, ip, hosts, cm) {
+  const pad = ip.length < 16 ? ' '.repeat(16 - ip.length) : ' ';
+  return (enabled ? '' : '# ') + ip + pad + hosts.join(' ') + (cm ? '\t# ' + cm : '');
+}
+
+async function load() {
+  showErr(null);
+  try {
+    const r = await api('/hosts');
+    admin = r.admin;
+    $('#adminBadge').textContent = admin ? 'Administrateur' : 'Mode standard';
+    $('#adminBadge').className = 'badge ' + (admin ? 'admin' : 'std');
+    $('#path').textContent = r.path;
+    original = text = r.text; hash = r.hash; lines = r.lines; editN = delN = null;
+    $('#raw').value = text;
+    updateAll(r);
+  } catch (e) { showErr(`<b>Erreur</b>${esc(e.message)}`); $('#tbody').innerHTML = '<tr><td colspan="6" class="empty">Impossible de lire le fichier hosts.</td></tr>'; }
+  loadBackups();
+}
+function updateAll(parsed) {
+  if (parsed) { lines = parsed.lines; $('#counts').textContent = `${parsed.stats.entries} entrée(s) · ${parsed.stats.enabled} active(s) · ${parsed.stats.disabled} désactivée(s)`; renderRawErr(parsed.errors); }
+  const dirty = text !== original;
+  $('#dirty').textContent = dirty ? '● Modifications non enregistrées' : 'Aucune modification.';
+  $('#dirty').className = dirty ? 'dirty' : 'clean';
+  $('#saveBtn').disabled = !dirty || busy; $('#discardBtn').disabled = !dirty || busy;
+  renderTable();
+}
+function renderRawErr(errors) {
+  $('#rawErr').innerHTML = errors && errors.length ? errors.slice(0, 30).map(e => `Ligne ${e.line} : ${esc(e.error)}`).join('<br>') : '';
+}
+async function setText(t) {
+  text = t;
+  if (tab === 'raw') $('#raw').value = t;
+  try { updateAll(await api('/parse', { method: 'POST', body: JSON.stringify({ text }) })); }
+  catch (e) { toast(e.message); }
+}
+function linesToText(arr) { return arr.map(l => l.raw).join('\n') + '\n'; }
+function replaceLine(n, raw) { const arr = lines.map(l => ({ raw: l.raw })); if (raw === null) arr.splice(n - 1, 1); else arr[n - 1].raw = raw; return linesToText(arr); }
+
+function renderTable() {
+  const q = $('#q').value.trim().toLowerCase(), showC = $('#showComments').checked;
+  const rows = lines.filter(l => {
+    if (l.type === 'blank') return false;
+    if (l.type === 'comment' && !showC) return false;
+    if (q) { const hay = (l.type === 'entry' ? [l.ip, l.hosts.join(' '), l.comment] : [l.raw]).join(' ').toLowerCase(); if (!hay.includes(q)) return false; }
+    return true;
+  });
+  if (!rows.length) { $('#tbody').innerHTML = `<tr><td colspan="6" class="empty">${q ? 'Aucune entrée ne correspond.' : 'Aucune entrée. Ajoutez-en une avec le formulaire.'}</td></tr>`; return; }
+  $('#tbody').innerHTML = rows.map(l => {
+    if (l.type === 'comment') return `<tr><td></td><td colspan="3" class="cm">${esc(l.raw)}</td><td class="ln">${l.n}</td><td></td></tr>`;
+    if (l.type === 'invalid') return `<tr class="bad"><td>⚠</td><td colspan="3"><span class="hosts" style="font-family:Consolas,monospace;font-size:12px">${esc(l.raw)}</span><div class="ferr">${esc(l.reason)}</div></td><td class="ln">${l.n}</td>
+      <td class="act">${delN === l.n ? delConfirm(l.n) : `<button class="sm" data-a="comment" data-n="${l.n}" title="Transformer en commentaire">#</button> <button class="sm danger" data-a="del" data-n="${l.n}">✕</button>`}</td></tr>`;
+    if (editN === l.n) return `<tr class="edit"><td><label class="sw"><input type="checkbox" id="eOn" ${l.enabled ? 'checked' : ''}><span></span></label></td>
+      <td><input id="eIp" value="${esc(l.ip)}" /></td><td><input id="eHosts" value="${esc(l.hosts.join(' '))}" /></td><td><input id="eCm" value="${esc(l.comment)}" /><div class="ferr" id="eErr"></div></td>
+      <td class="ln">${l.n}</td><td class="act"><button class="sm primary" data-a="esave" data-n="${l.n}">OK</button> <button class="sm" data-a="ecancel">Annuler</button></td></tr>`;
+    return `<tr class="${l.enabled ? '' : 'off'}"><td><label class="sw" title="${l.enabled ? 'Désactiver (commenter la ligne)' : 'Activer'}"><input type="checkbox" data-a="toggle" data-n="${l.n}" ${l.enabled ? 'checked' : ''}><span></span></label></td>
+      <td class="ip">${esc(l.ip)}</td><td class="hosts">${esc(l.hosts.join(' '))}</td><td class="cm">${esc(l.comment)}</td><td class="ln">${l.n}</td>
+      <td class="act">${delN === l.n ? delConfirm(l.n) : `<button class="sm" data-a="edit" data-n="${l.n}" title="Modifier">✎</button> <button class="sm danger" data-a="del" data-n="${l.n}" title="Supprimer">✕</button>`}</td></tr>`;
+  }).join('');
+}
+const delConfirm = n => `<span class="inl">Supprimer ? <button class="sm danger" data-a="delok" data-n="${n}">Oui</button><button class="sm" data-a="delno">Non</button></span>`;
+
+$('#tbody').addEventListener('click', e => {
+  const el = e.target.closest('[data-a]'); if (!el || busy) return;
+  const a = el.dataset.a, n = +el.dataset.n, l = lines.find(x => x.n === n);
+  if (a === 'toggle') { if (l) setText(replaceLine(n, fmtLine(!l.enabled, l.ip, l.hosts, l.comment))); return; }
+  if (a === 'edit') { editN = n; delN = null; renderTable(); $('#eHosts').focus(); return; }
+  if (a === 'ecancel') { editN = null; renderTable(); return; }
+  if (a === 'esave') {
+    const ip = $('#eIp').value.trim(), hosts = $('#eHosts').value.replace(/,/g, ' ').split(/\s+/).filter(Boolean), cm = $('#eCm').value.trim();
+    const errs = validateEntry(ip, hosts, cm);
+    if (errs.length) { $('#eErr').textContent = errs.join(' '); return; }
+    editN = null; setText(replaceLine(n, fmtLine($('#eOn').checked, ip, hosts, cm))); return;
+  }
+  if (a === 'del') { delN = n; editN = null; renderTable(); return; }
+  if (a === 'delno') { delN = null; renderTable(); return; }
+  if (a === 'delok') { delN = null; setText(replaceLine(n, null)); return; }
+  if (a === 'comment') { if (l) setText(replaceLine(n, '# ' + l.raw.trim())); }
+});
+$('#tbody').addEventListener('keydown', e => { if (e.key === 'Enter' && editN !== null && e.target.matches('tr.edit input')) document.querySelector('[data-a="esave"]').click(); if (e.key === 'Escape') { editN = null; renderTable(); } });
+
+function addEntry(ip, hosts, cm, errBox) {
+  const errs = validateEntry(ip, hosts, cm);
+  if (errs.length) { errBox.textContent = errs.join(' '); return false; }
+  const dup = lines.find(l => l.type === 'entry' && l.enabled && l.hosts.some(h => hosts.map(x => x.toLowerCase()).includes(h.toLowerCase())));
+  errBox.textContent = '';
+  let t = text; if (t && !t.endsWith('\n')) t += '\n';
+  setText(t + fmtLine(true, ip, hosts, cm) + '\n');
+  toast(dup ? `Entrée ajoutée — attention, « ${dup.hosts.join(' ')} » est déjà défini ligne ${dup.n}.` : 'Entrée ajoutée (non enregistrée).', !dup);
+  return true;
+}
+$('#addBtn').addEventListener('click', () => {
+  const ok = addEntry($('#aIp').value.trim(), $('#aHosts').value.replace(/,/g, ' ').split(/\s+/).filter(Boolean), $('#aCm').value.trim(), $('#aErr'));
+  if (ok) { $('#aHosts').value = ''; $('#aCm').value = ''; }
+});
+function preset(ip, label) {
+  let d = $('#pDom').value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/^www\./, '');
+  if (!d) { $('#pErr').textContent = 'Indiquez un domaine.'; return; }
+  const hosts = [d]; if ($('#pWww').checked && d.split('.').length >= 2) hosts.push('www.' + d);
+  if (addEntry(ip, hosts, label, $('#pErr'))) $('#pDom').value = '';
+}
+$('#blockBtn').addEventListener('click', () => preset('0.0.0.0', 'bloqué'));
+$('#localBtn').addEventListener('click', () => preset('127.0.0.1', 'redirigé vers localhost'));
+
+// --- onglets / texte brut
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', async () => {
+  if (b.dataset.tab === tab) return;
+  tab = b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
+  $('#tabTable').classList.toggle('hide', tab !== 'table'); $('#tabRaw').classList.toggle('hide', tab !== 'raw');
+  if (tab === 'raw') $('#raw').value = text; else { clearTimeout(rawTimer); await setText($('#raw').value); }
+}));
+$('#raw').addEventListener('input', () => {
+  text = $('#raw').value; updateAll(null);
+  clearTimeout(rawTimer); rawTimer = setTimeout(() => setText($('#raw').value), 500);
+});
+$('#raw').addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); const ta = e.target, s = ta.selectionStart; ta.setRangeText('\t', s, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input')); } });
+$('#q').addEventListener('input', renderTable);
+$('#showComments').addEventListener('change', renderTable);
+
+// --- enregistrement
+$('#discardBtn').addEventListener('click', () => { if (!busy) { $('#raw').value = original; setText(original); hideConfirm(); } });
+$('#saveBtn').addEventListener('click', () => showSaveConfirm());
+function hideConfirm() { $('#saveConfirm').classList.add('hide'); $('#saveConfirm').innerHTML = ''; }
+function showSaveConfirm(invalid) {
+  const box = $('#saveConfirm');
+  box.innerHTML = `<b>Enregistrer le fichier hosts ?</b>
+    <div class="muted" style="margin-top:4px">Une sauvegarde du fichier actuel sera créée automatiquement.${admin ? '' : ' Une invite UAC va s\'afficher (droits administrateur requis).'}</div>
+    ${invalid ? `<div class="ferr" style="margin-top:6px">${invalid.length} ligne(s) invalide(s) : ${invalid.slice(0, 5).map(x => 'L' + x.line).join(', ')}… Windows les ignorera.</div>` : ''}
+    <label class="chk" style="margin-top:8px"><input type="checkbox" id="cFlush" checked /> Vider le cache DNS après l'enregistrement</label>
+    <div class="row"><button class="primary" id="cOk">${invalid ? 'Enregistrer quand même' : 'Confirmer'}</button><button id="cNo">Annuler</button></div>`;
+  box.classList.remove('hide');
+  $('#cNo').onclick = hideConfirm;
+  $('#cOk').onclick = () => doSave($('#cFlush').checked, !!invalid);
+}
+async function doSave(flush, force) {
+  if (busy) return;
+  if (tab === 'raw') text = $('#raw').value;
+  busy = true; $('#cOk').disabled = true; $('#cOk').innerHTML = '<span class="spin"></span> Enregistrement…';
+  try {
+    const r = await api('/save', { method: 'POST', body: JSON.stringify({ text, base_hash: hash, flush_dns: flush, force }) });
+    hideConfirm();
+    toast(r.unchanged ? 'Aucun changement à enregistrer.' : `Fichier hosts enregistré${r.backup ? ' (sauvegarde ' + r.backup + ')' : ''}${r.flush ? (r.flush.ok ? ' · cache DNS vidé' : ' · échec du vidage DNS') : ''}.`, true);
+    busy = false;
+    await load();
+  } catch (e) {
+    busy = false;
+    if (e.code === 'INVALID_LINES') { showSaveConfirm(e.data.lines); return; }
+    hideConfirm();
+    if (e.code === 'CONFLICT') showErr(`<b>Conflit</b>${esc(e.message)} <div style="margin-top:8px"><button class="sm" onclick="load()">Recharger (perd vos modifications)</button></div>`);
+    else toast(e.message);
+    updateAll(null);
+  }
+}
+
+// --- sauvegardes
+let bkConfirm = null, bkPreview = null;
+async function loadBackups() {
+  try {
+    const r = await api('/backups');
+    const box = $('#backups');
+    if (!r.backups.length) { box.innerHTML = '<span class="muted">Aucune sauvegarde pour l\'instant.</span>'; return; }
+    box.innerHTML = r.backups.map(b => `<div class="bk"><span class="d">${new Date(b.mtime * 1000).toLocaleString('fr-FR')}<br><span class="muted">${(b.size / 1024).toFixed(1)} Ko</span></span>
+      ${bkConfirm === b.name ? `<span class="inl">Restaurer ? <button class="sm danger" data-b="ok" data-n="${esc(b.name)}">Oui</button><button class="sm" data-b="no">Non</button></span>`
+        : `<button class="sm" data-b="view" data-n="${esc(b.name)}">Voir</button><button class="sm" data-b="ask" data-n="${esc(b.name)}">Restaurer</button>`}
+      ${bkPreview && bkPreview.name === b.name ? `<pre class="preview" style="width:100%">${esc(bkPreview.text)}</pre>` : ''}</div>`).join('');
+  } catch (e) { $('#backups').innerHTML = `<span class="ferr">${esc(e.message)}</span>`; }
+}
+$('#backups').addEventListener('click', async e => {
+  const b = e.target.closest('[data-b]'); if (!b || busy) return;
+  const n = b.dataset.n;
+  if (b.dataset.b === 'view') {
+    if (bkPreview && bkPreview.name === n) bkPreview = null;
+    else { try { bkPreview = await api('/backups/' + encodeURIComponent(n)); } catch (err) { toast(err.message); } }
+    loadBackups();
+  } else if (b.dataset.b === 'ask') { bkConfirm = n; loadBackups(); }
+  else if (b.dataset.b === 'no') { bkConfirm = null; loadBackups(); }
+  else if (b.dataset.b === 'ok') {
+    busy = true; b.disabled = true;
+    try {
+      const r = await api(`/backups/${encodeURIComponent(n)}/restore`, { method: 'POST', body: JSON.stringify({ base_hash: hash, flush_dns: true }) });
+      toast(r.unchanged ? 'Le fichier est déjà identique à cette sauvegarde.' : 'Sauvegarde restaurée (le fichier précédent a lui-même été sauvegardé).', true);
+      bkConfirm = null; busy = false; await load();
+    } catch (err) { busy = false; bkConfirm = null; toast(err.message); loadBackups(); }
+  }
+});
+
+// --- vidage DNS
+$('#flushBtn').addEventListener('click', () => {
+  const btn = $('#flushBtn');
+  if (btn.dataset.c) return;
+  btn.dataset.c = '1';
+  const span = document.createElement('span'); span.className = 'inl';
+  span.innerHTML = 'Vider le cache DNS ? <button class="sm danger">Oui</button><button class="sm">Non</button>';
+  btn.replaceWith(span);
+  const restore = () => { delete btn.dataset.c; span.replaceWith(btn); };
+  const [ok, no] = span.querySelectorAll('button');
+  no.onclick = restore;
+  ok.onclick = async () => {
+    ok.disabled = true;
+    try { await api('/flush-dns', { method: 'POST' }); toast('Cache DNS vidé.', true); } catch (e) { toast(e.message); }
+    restore();
+  };
+});
+$('#reloadBtn').addEventListener('click', () => { if (!busy) load(); });
+window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (!$('#saveBtn').disabled) showSaveConfirm(); } });
+load();
+</script>
+</body>
+</html>

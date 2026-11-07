@@ -1,0 +1,27 @@
+{
+  "id": "system-info",
+  "name": "Inventaire système",
+  "version": "1.0.0",
+  "description": "Inventaire complet du PC : système, matériel, stockage, logiciels, mises à jour, démarrage et variables d'environnement, avec export HTML/JSON.",
+  "category": "Système",
+  "tags": [
+    "matériel",
+    "inventaire",
+    "windows"
+  ],
+  "icon": "💻",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

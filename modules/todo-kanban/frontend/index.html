@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kanban</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8;
+    --muted: #71717a; --accent: #6366f1; --accent-h: #4f46e5; --danger: #ef4444; --ok: #22c55e;
+    --p-low: #22c55e; --p-medium: #3b82f6; --p-high: #f59e0b; --p-urgent: #ef4444;
+  }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; display: flex; flex-direction: column; overflow: hidden; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 6px 10px; transition: background .15s, border-color .15s; }
+  button:hover { background: #2a2a30; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover { background: rgba(239,68,68,.15); border-color: var(--danger); }
+  button.icon { padding: 3px 7px; background: transparent; border-color: transparent; color: var(--muted); }
+  button.icon:hover { color: var(--text); background: #2a2a30; }
+  input, select, textarea { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--card); }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 600; }
+  header .sp { flex: 1; }
+  #search { min-width: 180px; }
+  #board { flex: 1; display: flex; gap: 12px; padding: 14px 16px; overflow-x: auto; overflow-y: hidden; align-items: flex-start; }
+  .col { flex: 0 0 280px; max-height: 100%; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+  .col-h { display: flex; align-items: center; gap: 4px; padding: 10px 10px 8px 12px; border-bottom: 1px solid var(--border); }
+  .col-h .name { flex: 1; font-weight: 600; cursor: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .col-h .count { color: var(--muted); font-size: 12px; background: #111114; border-radius: 10px; padding: 1px 8px; }
+  .col-h input { flex: 1; min-width: 0; padding: 3px 6px; }
+  .cards { flex: 1; overflow-y: auto; padding: 8px; min-height: 60px; display: flex; flex-direction: column; gap: 8px; }
+  .cards.over { background: rgba(99,102,241,.06); }
+  .col-f { padding: 8px; border-top: 1px solid var(--border); }
+  .col-f button { width: 100%; background: transparent; border-style: dashed; color: var(--muted); }
+  .col-f button:hover { color: var(--text); border-color: var(--accent); }
+  .kcard { background: var(--card2); border: 1px solid var(--border); border-left: 4px solid var(--p-medium); border-radius: 8px; padding: 9px 10px; cursor: grab; user-select: none; }
+  .kcard:hover { border-color: #3f3f46; }
+  .kcard.dragging { opacity: .4; }
+  .kcard .t { font-weight: 500; word-break: break-word; }
+  .kcard .d { color: var(--muted); font-size: 12px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; max-height: 3.8em; overflow: hidden; }
+  .kcard .meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; align-items: center; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: rgba(99,102,241,.18); color: #c7d2fe; }
+  .due { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #111114; color: var(--muted); }
+  .due.overdue { background: rgba(239,68,68,.18); color: #fca5a5; font-weight: 600; }
+  .due.today { background: rgba(245,158,11,.18); color: #fcd34d; }
+  .kcard.is-overdue { box-shadow: 0 0 0 1px rgba(239,68,68,.55); }
+  .prio { font-size: 11px; padding: 1px 7px; border-radius: 10px; color: #111; font-weight: 600; }
+  .placeholder { height: 38px; border: 2px dashed var(--accent); border-radius: 8px; opacity: .6; flex: none; }
+  .add-col { flex: 0 0 240px; }
+  .add-col button { width: 100%; padding: 12px; border-style: dashed; color: var(--muted); background: transparent; }
+  .empty { margin: auto; text-align: center; color: var(--muted); }
+  .empty h2 { color: var(--text); font-weight: 600; }
+  .confirm { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: #fca5a5; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.4); padding: 2px 6px; border-radius: 6px; }
+  .confirm button { padding: 2px 8px; font-size: 12px; }
+  /* overlay editor */
+  #ov { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  #ov.show { display: flex; }
+  .dlg { width: 100%; max-width: 520px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 12px; max-height: 100%; overflow-y: auto; }
+  .dlg h3 { margin: 0; font-size: 15px; }
+  .dlg label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .dlg textarea { min-height: 110px; resize: vertical; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 140px; }
+  .prio-pick { display: flex; gap: 6px; }
+  .prio-pick button { flex: 1; font-size: 12px; padding: 5px 4px; }
+  .prio-pick button.sel { color: #111; font-weight: 600; }
+  .dlg .actions { display: flex; gap: 8px; align-items: center; }
+  .dlg .actions .sp { flex: 1; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hidden { display: none !important; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: #2f2f36; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 Kanban</h1>
+  <select id="boardSel" title="Tableau"></select>
+  <button id="newBoard" class="primary">+ Tableau</button>
+  <button id="renBoard" title="Renommer le tableau">✏️</button>
+  <span id="delBoardWrap"><button id="delBoard" class="danger" title="Supprimer le tableau">🗑️</button></span>
+  <span class="sp"></span>
+  <input id="search" type="search" placeholder="Rechercher…" />
+  <select id="fPrio">
+    <option value="">Toutes priorités</option>
+    <option value="urgent">Urgente</option><option value="high">Haute</option>
+    <option value="medium">Moyenne</option><option value="low">Basse</option>
+  </select>
+  <select id="fTag"><option value="">Toutes étiquettes</option></select>
+  <label style="display:flex;gap:4px;align-items:center;color:var(--muted);font-size:12px"><input type="checkbox" id="fOver" /> En retard</label>
+</header>
+<main id="board"></main>
+
+<div id="ov">
+  <div class="dlg" id="dlg"></div>
+</div>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/todo-kanban/api`;
+const PRIOS = { urgent: ['Urgente', 'var(--p-urgent)'], high: ['Haute', 'var(--p-high)'], medium: ['Moyenne', 'var(--p-medium)'], low: ['Basse', 'var(--p-low)'] };
+const $ = s => document.querySelector(s);
+let boards = [], board = null, dragId = null;
+const filt = { q: '', prio: '', tag: '', overdue: false };
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3500); }
+
+async function api(path, opts = {}) {
+  const o = { method: opts.method || 'GET', headers: {} };
+  if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  let r;
+  try { r = await fetch(BASE + path, o); } catch (e) { throw new Error('Backend injoignable'); }
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok || (data && data.error)) {
+    let msg = (data && (data.error || (data.detail && (data.detail.error || JSON.stringify(data.detail))))) || ('Erreur ' + r.status);
+    if (data && data.code === 'MISSING_DEP') msg += ' — Installez les dépendances du module.';
+    throw new Error(msg);
+  }
+  return data;
+}
+async function safe(fn) { try { return await fn(); } catch (e) { toast(e.message); } }
+
+function todayStr() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function dueState(due) { if (!due) return ''; const t = todayStr(); return due < t ? 'overdue' : due === t ? 'today' : ''; }
+function fmtDate(d) { const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}`; }
+
+/* Inline confirm: replaces `el` content temporarily */
+function inlineConfirm(anchor, msg, onYes) {
+  const box = document.createElement('span');
+  box.className = 'confirm';
+  box.innerHTML = `${esc(msg)} <button class="danger">Oui</button><button>Non</button>`;
+  anchor.style.display = 'none';
+  anchor.after(box);
+  const close = () => { box.remove(); anchor.style.display = ''; };
+  box.children[0].onclick = e => { e.stopPropagation(); close(); onYes(); };
+  box.children[1].onclick = e => { e.stopPropagation(); close(); };
+  setTimeout(close, 6000);
+}
+
+/* ── Boards ─────────────────────────────── */
+async function loadBoards(selectId) {
+  const r = await safe(() => api('/boards')); if (!r) return;
+  boards = r.boards;
+  if (!boards.length) {
+    const b = await safe(() => api('/boards', { method: 'POST', body: { name: 'Mon tableau' } }));
+    if (!b) return; boards = [b];
+  }
+  const saved = selectId || +localStorageGet('kanban.board') || boards[0].id;
+  const id = boards.some(b => b.id === saved) ? saved : boards[0].id;
+  $('#boardSel').innerHTML = boards.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  $('#boardSel').value = id;
+  await loadBoard(id);
+}
+function localStorageGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+async function loadBoard(id) {
+  const b = await safe(() => api('/boards/' + id)); if (!b) return;
+  board = b; localStorageSet('kanban.board', id);
+  render();
+}
+
+$('#boardSel').onchange = e => loadBoard(+e.target.value);
+$('#newBoard').onclick = () => openNameDialog('Nouveau tableau', '', async name => {
+  const b = await safe(() => api('/boards', { method: 'POST', body: { name } }));
+  if (b) await loadBoards(b.id);
+});
+$('#renBoard').onclick = () => board && openNameDialog('Renommer le tableau', board.name, async name => {
+  if (await safe(() => api('/boards/' + board.id, { method: 'PUT', body: { name } }))) await loadBoards(board.id);
+});
+$('#delBoard').onclick = e => board && inlineConfirm(e.currentTarget, `Supprimer « ${board.name} » et toutes ses cartes ?`, async () => {
+  if (await safe(() => api('/boards/' + board.id, { method: 'DELETE' }))) { toast('Tableau supprimé', true); await loadBoards(); }
+});
+
+/* ── Filters ─────────────────────────────── */
+$('#search').oninput = e => { filt.q = e.target.value.trim().toLowerCase(); render(); };
+$('#fPrio').onchange = e => { filt.prio = e.target.value; render(); };
+$('#fTag').onchange = e => { filt.tag = e.target.value; render(); };
+$('#fOver').onchange = e => { filt.overdue = e.target.checked; render(); };
+function matches(c) {
+  if (filt.prio && c.priority !== filt.prio) return false;
+  if (filt.tag && !c.tags.includes(filt.tag)) return false;
+  if (filt.overdue && dueState(c.due_date) !== 'overdue') return false;
+  if (filt.q) {
+    const hay = (c.title + ' ' + c.description + ' ' + c.tags.join(' ')).toLowerCase();
+    if (!hay.includes(filt.q)) return false;
+  }
+  return true;
+}
+function refreshTagFilter() {
+  const tags = new Set(); board.columns.forEach(c => c.cards.forEach(k => k.tags.forEach(t => tags.add(t))));
+  const cur = filt.tag;
+  $('#fTag').innerHTML = '<option value="">Toutes étiquettes</option>' + [...tags].sort().map(t => `<option>${esc(t)}</option>`).join('');
+  if (tags.has(cur)) $('#fTag').value = cur; else filt.tag = '';
+}
+
+/* ── Render ─────────────────────────────── */
+function render() {
+  const root = $('#board');
+  root.innerHTML = '';
+  if (!board) return;
+  refreshTagFilter();
+  board.columns.forEach((col, ci) => root.appendChild(renderCol(col, ci)));
+  const add = document.createElement('div');
+  add.className = 'add-col';
+  add.innerHTML = '<button>+ Ajouter une colonne</button>';
+  add.firstChild.onclick = () => openNameDialog('Nouvelle colonne', '', async name => {
+    if (await safe(() => api(`/boards/${board.id}/columns`, { method: 'POST', body: { name } }))) loadBoard(board.id);
+  });
+  root.appendChild(add);
+}
+
+function renderCol(col, ci) {
+  const el = document.createElement('section');
+  el.className = 'col'; el.dataset.id = col.id;
+  const visible = col.cards.filter(matches);
+  const cnt = visible.length === col.cards.length ? col.cards.length : `${visible.length}/${col.cards.length}`;
+  el.innerHTML = `
+    <div class="col-h">
+      <span class="name" title="Double-clic pour renommer">${esc(col.name)}</span>
+      <span class="count">${cnt}</span>
+      <button class="icon mvl" title="Déplacer à gauche" ${ci === 0 ? 'disabled' : ''}>◀</button>
+      <button class="icon mvr" title="Déplacer à droite" ${ci === board.columns.length - 1 ? 'disabled' : ''}>▶</button>
+      <button class="icon ren" title="Renommer">✏️</button>
+      <button class="icon del" title="Supprimer la colonne">🗑️</button>
+    </div>
+    <div class="cards"></div>
+    <div class="col-f"><button>+ Ajouter une carte</button></div>`;
+  const list = el.querySelector('.cards');
+  visible.forEach(c => list.appendChild(renderCard(c)));
+  const startRename = () => {
+    const nm = el.querySelector('.name');
+    const inp = document.createElement('input'); inp.value = col.name; nm.replaceWith(inp); inp.focus(); inp.select();
+    let done = false;
+    const finish = async save => {
+      if (done) return; done = true;
+      const v = inp.value.trim();
+      if (save && v && v !== col.name) { if (await safe(() => api('/columns/' + col.id, { method: 'PUT', body: { name: v } }))) col.name = v; }
+      render();
+    };
+    inp.onkeydown = e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); };
+    inp.onblur = () => finish(true);
+  };
+  el.querySelector('.name').ondblclick = startRename;
+  el.querySelector('.ren').onclick = startRename;
+  el.querySelector('.mvl').onclick = () => moveCol(ci, -1);
+  el.querySelector('.mvr').onclick = () => moveCol(ci, 1);
+  el.querySelector('.del').onclick = e => inlineConfirm(e.currentTarget, col.cards.length ? `Supprimer (${col.cards.length} carte(s)) ?` : 'Supprimer ?', async () => {
+    if (await safe(() => api('/columns/' + col.id, { method: 'DELETE' }))) loadBoard(board.id);
+  });
+  el.querySelector('.col-f button').onclick = () => openCardDialog(null, col.id);
+
+  // drag & drop target
+  list.addEventListener('dragover', e => {
+    if (dragId == null) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    list.classList.add('over');
+    const after = cardAfter(list, e.clientY);
+    const ph = getPh();
+    if (after) list.insertBefore(ph, after); else list.appendChild(ph);
+  });
+  list.addEventListener('dragleave', e => { if (!list.contains(e.relatedTarget)) { list.classList.remove('over'); } });
+  list.addEventListener('drop', e => {
+    e.preventDefault(); list.classList.remove('over');
+    if (dragId == null) return;
+    const ph = getPh();
+    // next visible card after placeholder → absolute index among full list (minus dragged)
+    let next = ph.nextElementSibling; while (next && !next.classList.contains('kcard')) next = next.nextElementSibling;
+    if (next && +next.dataset.id === dragId) { next = next.nextElementSibling; while (next && !next.classList.contains('kcard')) next = next.nextElementSibling; }
+    const others = col.cards.filter(c => c.id !== dragId);
+    let pos = others.length;
+    if (next) { const i = others.findIndex(c => c.id === +next.dataset.id); if (i >= 0) pos = i; }
+    ph.remove();
+    doMove(dragId, col.id, pos);
+  });
+  return el;
+}
+
+let _ph = null;
+function getPh() { if (!_ph) { _ph = document.createElement('div'); _ph.className = 'placeholder'; } return _ph; }
+function cardAfter(list, y) {
+  const els = [...list.querySelectorAll('.kcard:not(.dragging)')];
+  for (const el of els) { const r = el.getBoundingClientRect(); if (y < r.top + r.height / 2) return el; }
+  return null;
+}
+
+function renderCard(c) {
+  const el = document.createElement('div');
+  const ds = dueState(c.due_date);
+  el.className = 'kcard' + (ds === 'overdue' ? ' is-overdue' : '');
+  el.draggable = true; el.dataset.id = c.id;
+  el.style.borderLeftColor = PRIOS[c.priority][1];
+  el.innerHTML = `<div class="t">${esc(c.title)}</div>
+    ${c.description ? `<div class="d">${esc(c.description)}</div>` : ''}
+    <div class="meta">
+      <span class="prio" style="background:${PRIOS[c.priority][1]}">${PRIOS[c.priority][0]}</span>
+      ${c.due_date ? `<span class="due ${ds}">${ds === 'overdue' ? '⚠ ' : '📅 '}${fmtDate(c.due_date)}</span>` : ''}
+      ${c.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}
+    </div>`;
+  el.addEventListener('dragstart', e => {
+    dragId = c.id; e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', String(c.id)); } catch (_) {}
+    requestAnimationFrame(() => el.classList.add('dragging'));
+  });
+  el.addEventListener('dragend', () => {
+    el.classList.remove('dragging'); dragId = null;
+    if (_ph) _ph.remove();
+    document.querySelectorAll('.cards.over').forEach(x => x.classList.remove('over'));
+  });
+  el.onclick = () => openCardDialog(c, c.column_id);
+  return el;
+}
+
+async function doMove(cardId, colId, pos) {
+  // optimistic local update
+  let card; board.columns.forEach(col => { const i = col.cards.findIndex(k => k.id === cardId); if (i >= 0) card = col.cards.splice(i, 1)[0]; });
+  const dst = board.columns.find(c => c.id === colId);
+  if (card && dst) { card.column_id = colId; dst.cards.splice(pos, 0, card); render(); }
+  const ok = await safe(() => api(`/cards/${cardId}/move`, { method: 'POST', body: { column_id: colId, position: pos } }));
+  if (!ok) loadBoard(board.id);
+}
+
+async function moveCol(ci, dir) {
+  const cols = board.columns.slice(); const j = ci + dir;
+  if (j < 0 || j >= cols.length) return;
+  [cols[ci], cols[j]] = [cols[j], cols[ci]];
+  board.columns = cols; render();
+  if (!await safe(() => api(`/boards/${board.id}/columns/reorder`, { method: 'POST', body: { order: cols.map(c => c.id) } }))) loadBoard(board.id);
+}
+
+/* ── Dialogs ─────────────────────────────── */
+function closeDlg() { $('#ov').classList.remove('show'); }
+$('#ov').addEventListener('mousedown', e => { if (e.target.id === 'ov') closeDlg(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#ov').classList.contains('show')) closeDlg(); });
+
+function openNameDialog(title, value, onOk) {
+  const d = $('#dlg');
+  d.innerHTML = `<h3>${esc(title)}</h3><input id="nmIn" maxlength="100" value="${esc(value)}" placeholder="Nom" />
+    <div class="actions"><span class="sp"></span><button id="nmCancel">Annuler</button><button id="nmOk" class="primary">Valider</button></div>`;
+  $('#ov').classList.add('show');
+  const inp = $('#nmIn'); inp.focus(); inp.select();
+  const ok = () => { const v = inp.value.trim(); if (!v) { inp.focus(); return; } closeDlg(); onOk(v); };
+  $('#nmOk').onclick = ok; $('#nmCancel').onclick = closeDlg;
+  inp.onkeydown = e => { if (e.key === 'Enter') ok(); };
+}
+
+function openCardDialog(card, colId) {
+  const isNew = !card;
+  const c = card || { title: '', description: '', priority: 'medium', due_date: '', tags: [] };
+  let prio = c.priority;
+  const d = $('#dlg');
+  d.innerHTML = `<h3>${isNew ? 'Nouvelle carte' : 'Modifier la carte'}</h3>
+    <label>Titre<input id="cTitle" maxlength="200" value="${esc(c.title)}" /></label>
+    <label>Description<textarea id="cDesc" maxlength="5000">${esc(c.description)}</textarea></label>
+    <label>Priorité<div class="prio-pick">${Object.entries(PRIOS).reverse().map(([k, v]) => `<button type="button" data-p="${k}">${v[0]}</button>`).join('')}</div></label>
+    <div class="row">
+      <label>Échéance<input id="cDue" type="date" value="${esc(c.due_date || '')}" /></label>
+      <label>Étiquettes (séparées par des virgules)<input id="cTags" value="${esc(c.tags.join(', '))}" placeholder="ex : client, urgent" /></label>
+    </div>
+    ${!isNew ? `<label>Colonne<select id="cCol">${board.columns.map(k => `<option value="${k.id}" ${k.id === colId ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>` : ''}
+    <div class="actions">
+      ${!isNew ? '<button id="cDel" class="danger">Supprimer</button>' : ''}
+      <span class="sp"></span><button id="cCancel">Annuler</button><button id="cSave" class="primary">${isNew ? 'Créer' : 'Enregistrer'}</button>
+    </div>`;
+  const paint = () => d.querySelectorAll('.prio-pick button').forEach(b => {
+    const sel = b.dataset.p === prio; b.classList.toggle('sel', sel); b.style.background = sel ? PRIOS[b.dataset.p][1] : ''; b.style.borderColor = PRIOS[b.dataset.p][1];
+  });
+  d.querySelectorAll('.prio-pick button').forEach(b => b.onclick = () => { prio = b.dataset.p; paint(); });
+  paint();
+  $('#ov').classList.add('show');
+  $('#cTitle').focus();
+  $('#cCancel').onclick = closeDlg;
+  $('#cTitle').onkeydown = e => { if (e.key === 'Enter') save(); };
+  async function save() {
+    const title = $('#cTitle').value.trim();
+    if (!title) { $('#cTitle').focus(); toast('Le titre est requis'); return; }
+    const body = { title, description: $('#cDesc').value, priority: prio, due_date: $('#cDue').value || '', tags: $('#cTags').value.split(',').map(s => s.trim()).filter(Boolean) };
+    if (isNew) {
+      if (!body.due_date) body.due_date = null;
+      if (await safe(() => api(`/columns/${colId}/cards`, { method: 'POST', body }))) { closeDlg(); loadBoard(board.id); }
+    } else {
+      const r = await safe(() => api('/cards/' + card.id, { method: 'PUT', body }));
+      if (!r) return;
+      const newCol = +$('#cCol').value;
+      if (newCol !== colId) {
+        const dst = board.columns.find(k => k.id === newCol);
+        await safe(() => api(`/cards/${card.id}/move`, { method: 'POST', body: { column_id: newCol, position: dst ? dst.cards.length : 0 } }));
+      }
+      closeDlg(); loadBoard(board.id);
+    }
+  }
+  $('#cSave').onclick = save;
+  if (!isNew) $('#cDel').onclick = e => inlineConfirm(e.currentTarget, 'Supprimer cette carte ?', async () => {
+    if (await safe(() => api('/cards/' + card.id, { method: 'DELETE' }))) { closeDlg(); loadBoard(board.id); }
+  });
+}
+
+loadBoards();
+</script>
+</body>
+</html>

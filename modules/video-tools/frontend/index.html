@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Outils vidéo</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  body { font-family: system-ui, sans-serif; background: #0f0f12; color: #e2e2e8; min-height: 100vh; padding: 1.5rem; font-size: 14px; }
+  h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.25rem; }
+  h2 { font-size: .95rem; font-weight: 600; color: #f4f4f5; margin-bottom: .75rem; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+  .muted { color: #71717a; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: .5rem 1rem; font-size: .85rem; font-weight: 500; font-family: inherit; transition: opacity .15s, background .15s, border-color .15s; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  .btn-ghost { background: #27272a; color: #e2e2e8; }
+  .btn-ghost:hover:not(:disabled) { background: #3f3f46; }
+  .btn-dl { background: transparent; color: #a5b4fc; border: 1px solid #6366f1; }
+  .btn-dl:hover { background: rgba(99,102,241,.1); }
+  .btn-sm { padding: .3rem .6rem; font-size: .78rem; }
+  input, select { background: #09090b; border: 1px solid #27272a; color: #e2e2e8; border-radius: 6px; padding: .45rem .6rem; font: inherit; font-size: .85rem; }
+  input:focus, select:focus { outline: none; border-color: #6366f1; }
+  input[type=range] { padding: 0; accent-color: #6366f1; }
+  input[type=checkbox] { accent-color: #6366f1; }
+  label.f { display: flex; flex-direction: column; gap: .3rem; font-size: .78rem; color: #a1a1aa; }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
+  .row > label.f { flex: 1 1 130px; }
+
+  .drop-zone { border: 2px dashed #3f3f46; border-radius: 8px; padding: 2.25rem 1rem; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop-zone:hover, .drop-zone.over { border-color: #6366f1; background: rgba(99,102,241,.05); }
+  .drop-zone .icon { font-size: 2rem; margin-bottom: .5rem; }
+  .drop-zone p { color: #71717a; font-size: .875rem; }
+  .drop-zone strong { color: #a1a1aa; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1rem; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+  video { width: 100%; max-height: 360px; background: #000; border-radius: 6px; display: block; }
+  .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .5rem; margin-top: .75rem; }
+  .info-grid div { background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: .45rem .6rem; }
+  .info-grid span { display: block; font-size: .7rem; color: #71717a; text-transform: uppercase; letter-spacing: .03em; }
+  .info-grid b { font-size: .85rem; font-weight: 600; word-break: break-word; }
+  .file-head { display: flex; justify-content: space-between; gap: .5rem; align-items: center; margin-top: .75rem; }
+  .file-head .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .tabs { display: flex; gap: .25rem; flex-wrap: wrap; margin-bottom: 1rem; border-bottom: 1px solid #27272a; }
+  .tab { background: transparent; color: #a1a1aa; border-radius: 6px 6px 0 0; padding: .5rem .8rem; border-bottom: 2px solid transparent; }
+  .tab:hover { color: #e2e2e8; }
+  .tab.active { color: #e2e2e8; border-bottom-color: #6366f1; }
+  .pane { display: none; }
+  .pane.active { display: block; }
+  .pane .row + .row, .pane .row + p, .pane p + .row { margin-top: .75rem; }
+  .hint { font-size: .78rem; color: #71717a; margin-top: .6rem; line-height: 1.45; }
+  .time-in { display: flex; gap: .3rem; }
+  .time-in input { flex: 1; min-width: 0; }
+  .crf-val { font-weight: 700; color: #a5b4fc; }
+  .actions { margin-top: 1rem; display: flex; gap: .5rem; flex-wrap: wrap; }
+
+  .progress { height: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 999px; overflow: hidden; margin: .6rem 0; }
+  .progress > div { height: 100%; width: 0; background: linear-gradient(90deg, #6366f1, #818cf8); transition: width .3s; }
+  .job-line { display: flex; justify-content: space-between; align-items: center; gap: .5rem; font-size: .85rem; }
+
+  .msg { padding: .7rem 1rem; border-radius: 6px; font-size: .85rem; margin-bottom: 1rem; white-space: pre-wrap; word-break: break-word; display: none; }
+  .msg.show { display: block; }
+  .msg.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
+  .msg.ok { background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.25); color: #a5b4fc; }
+  .msg.warn { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.25); color: #fcd34d; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #3f3f46; border-top-color: #6366f1; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: .4rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none !important; }
+  .history { list-style: none; display: flex; flex-direction: column; gap: .4rem; }
+  .history li { display: flex; justify-content: space-between; gap: .5rem; align-items: center; background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: .45rem .6rem; font-size: .82rem; }
+  .history li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<h1>🎬 Outils vidéo</h1>
+
+<div class="msg warn" id="toolWarn"></div>
+<div class="msg err" id="errorMsg"></div>
+
+<div class="card" id="uploadCard">
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">🎞️</div>
+    <p><strong>Glissez une vidéo ici</strong> ou cliquez pour sélectionner</p>
+    <p style="margin-top:.4rem;font-size:.8rem;">MP4, MKV, MOV, AVI, WEBM…</p>
+  </div>
+  <input type="file" id="fileInput" accept="video/*,.mkv,.avi,.mov,.flv,.wmv,.ts,.m4v" style="display:none" />
+  <div id="uploading" class="hidden" style="margin-top:1rem">
+    <div class="job-line"><span><span class="spinner"></span><span id="upText">Envoi…</span></span><span id="upPct" class="muted"></span></div>
+    <div class="progress"><div id="upBar"></div></div>
+  </div>
+</div>
+
+<div class="layout hidden" id="workArea">
+  <div class="card">
+    <video id="player" controls preload="metadata"></video>
+    <div class="file-head">
+      <span class="name" id="vName"></span>
+      <button class="btn-ghost btn-sm" id="changeBtn">Changer de vidéo</button>
+    </div>
+    <div class="info-grid" id="infoGrid"></div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="cut">✂️ Couper</button>
+        <button class="tab" data-tab="compress">🗜️ Compresser</button>
+        <button class="tab" data-tab="gif">🖼️ GIF</button>
+        <button class="tab" data-tab="frames">📸 Images</button>
+        <button class="tab" data-tab="audio">🎵 Audio</button>
+      </div>
+
+      <div class="pane active" data-pane="cut">
+        <div class="row">
+          <label class="f">Début (s ou hh:mm:ss)
+            <span class="time-in"><input id="cutStart" value="0" /><button class="btn-ghost btn-sm" data-now="cutStart" title="Position actuelle du lecteur">⏱</button></span>
+          </label>
+          <label class="f">Fin (s ou hh:mm:ss)
+            <span class="time-in"><input id="cutEnd" /><button class="btn-ghost btn-sm" data-now="cutEnd" title="Position actuelle du lecteur">⏱</button></span>
+          </label>
+        </div>
+        <div class="row"><label style="display:flex;gap:.45rem;align-items:center;font-size:.85rem"><input type="checkbox" id="cutFast" /> Rapide sans réencodage (coupe sur les images clés, moins précis)</label></div>
+        <p class="hint">Durée de l'extrait : <b id="cutLen">—</b>. Le bouton ⏱ reprend la position du lecteur.</p>
+        <div class="actions"><button class="btn-primary run-btn" data-action="cut">Couper la vidéo</button></div>
+      </div>
+
+      <div class="pane" data-pane="compress">
+        <label class="f">Qualité (CRF) : <span><span class="crf-val" id="crfVal">28</span> <span class="muted" id="crfHint"></span></span>
+          <input type="range" id="crf" min="18" max="40" value="28" />
+        </label>
+        <div class="row">
+          <label class="f">Résolution
+            <select id="compRes">
+              <option value="">Originale</option>
+              <option value="1080">1080p</option>
+              <option value="720">720p</option>
+              <option value="480">480p</option>
+            </select>
+          </label>
+          <label class="f">Vitesse d'encodage
+            <select id="compPreset">
+              <option value="veryfast">Très rapide</option>
+              <option value="fast">Rapide</option>
+              <option value="medium" selected>Normale</option>
+              <option value="slow">Lente (meilleure compression)</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">CRF plus élevé = fichier plus léger mais qualité moindre. 23–28 est un bon compromis. Sortie H.264 + AAC (MP4).</p>
+        <div class="actions"><button class="btn-primary run-btn" data-action="compress">Compresser</button></div>
+      </div>
+
+      <div class="pane" data-pane="gif">
+        <div class="row">
+          <label class="f">Début
+            <span class="time-in"><input id="gifStart" value="0" /><button class="btn-ghost btn-sm" data-now="gifStart" title="Position actuelle du lecteur">⏱</button></span>
+          </label>
+          <label class="f">Durée (s)<input type="number" id="gifDur" value="5" min="0.1" max="120" step="0.1" /></label>
+        </div>
+        <div class="row">
+          <label class="f">Images/s<input type="number" id="gifFps" value="12" min="1" max="50" /></label>
+          <label class="f">Largeur (px)<input type="number" id="gifWidth" value="480" min="16" max="1920" step="2" /></label>
+        </div>
+        <p class="hint">Conversion en deux passes (palette optimisée) pour un rendu net. Gardez une durée courte et une largeur modeste pour un GIF léger.</p>
+        <div class="actions"><button class="btn-primary run-btn" data-action="gif">Créer le GIF</button></div>
+      </div>
+
+      <div class="pane" data-pane="frames">
+        <div class="row">
+          <label class="f">Une image toutes les (s)<input type="number" id="frEvery" value="1" min="0.04" step="0.5" /></label>
+          <label class="f">Format
+            <select id="frFmt"><option value="jpg">JPEG</option><option value="png">PNG</option></select>
+          </label>
+        </div>
+        <p class="hint">Environ <b id="frCount">—</b> image(s) seront extraites et regroupées dans un ZIP.</p>
+        <div class="actions"><button class="btn-primary run-btn" data-action="frames">Extraire les images</button></div>
+      </div>
+
+      <div class="pane" data-pane="audio">
+        <div class="row">
+          <label class="f">Débit MP3
+            <select id="audBr">
+              <option value="128">128 kb/s</option>
+              <option value="192" selected>192 kb/s</option>
+              <option value="256">256 kb/s</option>
+              <option value="320">320 kb/s</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint" id="audHint">Extrait la première piste audio au format MP3.</p>
+        <div class="actions"><button class="btn-primary run-btn" data-action="audio">Extraire l'audio</button></div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="jobCard">
+      <h2 id="jobTitle">Traitement</h2>
+      <div class="job-line"><span id="jobStatus"><span class="spinner"></span>En cours…</span><span id="jobPct" class="muted">0 %</span></div>
+      <div class="progress"><div id="jobBar"></div></div>
+      <div class="actions" style="margin-top:.5rem">
+        <button class="btn-ghost btn-sm" id="cancelBtn">Annuler</button>
+      </div>
+    </div>
+
+    <div class="card hidden" id="histCard">
+      <h2>Fichiers générés</h2>
+      <ul class="history" id="history"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/video-tools/api`
+const $ = id => document.getElementById(id)
+
+let current = null      // {file_id, name, size, info}
+let objectUrl = null
+let pollTimer = null
+let currentJob = null
+
+const ACTION_LABEL = { cut: 'Découpe', compress: 'Compression', gif: 'Conversion GIF', frames: 'Extraction d\'images', audio: 'Extraction audio' }
+
+function fmtSize(b) {
+  if (b == null) return '—'
+  if (b < 1024) return b + ' o'
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' Ko'
+  if (b < 1024 ** 3) return (b / 1024 / 1024).toFixed(1) + ' Mo'
+  return (b / 1024 ** 3).toFixed(2) + ' Go'
+}
+function fmtDur(s) {
+  if (s == null || isNaN(s)) return '—'
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60
+  const ss = sec.toFixed(2).padStart(5, '0')
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + ss
+}
+function parseTime(v) {
+  v = String(v ?? '').trim().replace(',', '.')
+  if (!v) return NaN
+  const parts = v.split(':')
+  if (parts.length > 3) return NaN
+  let t = 0
+  for (const p of parts) { const n = Number(p); if (isNaN(n)) return NaN; t = t * 60 + n }
+  return t
+}
+function showError(msg, code) {
+  const e = $('errorMsg')
+  if (!msg) { e.classList.remove('show'); return }
+  e.textContent = '⚠️ ' + msg + (code === 'MISSING_DEP' ? '\n→ Installez ffmpeg ou les dépendances du module (bouton « Installer les dépendances »).' : '')
+  e.classList.add('show')
+  e.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+async function api(path, opts = {}) {
+  let r
+  try { r = await fetch(BASE + path, opts) } catch { throw { error: 'Erreur de connexion au backend.' } }
+  let d = {}
+  try { d = await r.json() } catch {}
+  if (!r.ok || d.error) throw { error: d.error || ('Erreur HTTP ' + r.status), code: d.code }
+  return d
+}
+
+// ── ffmpeg status ──
+api('/status').then(d => {
+  if (!d.available) {
+    const w = $('toolWarn')
+    w.textContent = '⚠️ ffmpeg est introuvable. Installez ffmpeg (ajoutez-le au PATH) ou cliquez sur « Installer les dépendances » du module (imageio-ffmpeg), puis rechargez.'
+    w.classList.add('show')
+  }
+}).catch(() => {})
+
+// ── upload ──
+const dropZone = $('dropZone'), fileInput = $('fileInput')
+dropZone.addEventListener('click', () => fileInput.click())
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) uploadFile(fileInput.files[0]); fileInput.value = '' })
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over') })
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'))
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over')
+  const f = e.dataTransfer.files[0]
+  if (f) uploadFile(f)
+})
+$('changeBtn').addEventListener('click', () => {
+  if (currentJob) return
+  $('workArea').classList.add('hidden'); $('uploadCard').classList.remove('hidden')
+  if (current) fetch(`${BASE}/upload/${current.file_id}`, { method: 'DELETE' }).catch(() => {})
+  current = null; $('player').removeAttribute('src'); $('player').load()
+  if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null }
+})
+
+function uploadFile(f) {
+  showError(null)
+  $('uploading').classList.remove('hidden')
+  $('upText').textContent = 'Envoi de ' + f.name + '…'
+  $('upBar').style.width = '0'
+  const fd = new FormData(); fd.append('file', f)
+  const xhr = new XMLHttpRequest()
+  xhr.open('POST', BASE + '/upload')
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) {
+      const p = e.loaded / e.total * 100
+      $('upBar').style.width = p + '%'; $('upPct').textContent = Math.round(p) + ' %'
+      if (p >= 100) $('upText').textContent = 'Analyse de la vidéo…'
+    }
+  }
+  xhr.onerror = () => { $('uploading').classList.add('hidden'); showError('Erreur de connexion au backend.') }
+  xhr.onload = () => {
+    $('uploading').classList.add('hidden')
+    let d = {}
+    try { d = JSON.parse(xhr.responseText) } catch {}
+    if (xhr.status >= 400 || d.error) { showError(d.error || 'Erreur HTTP ' + xhr.status, d.code); return }
+    current = d
+    if (objectUrl) URL.revokeObjectURL(objectUrl)
+    objectUrl = URL.createObjectURL(f)
+    $('player').src = objectUrl
+    showVideo()
+  }
+  xhr.send(fd)
+}
+
+function showVideo() {
+  const i = current.info
+  $('vName').textContent = current.name
+  $('vName').title = current.name
+  const items = [
+    ['Durée', fmtDur(i.duration)],
+    ['Résolution', i.width ? `${i.width}×${i.height}` : '—'],
+    ['Codec vidéo', i.vcodec || '—'],
+    ['Codec audio', i.acodec || 'aucun'],
+    ['Images/s', i.fps ?? '—'],
+    ['Débit', i.bitrate ? Math.round(i.bitrate / 1000) + ' kb/s' : '—'],
+    ['Taille', fmtSize(current.size)],
+    ['Conteneur', i.format || '—'],
+  ]
+  $('infoGrid').innerHTML = ''
+  for (const [k, v] of items) {
+    const d = document.createElement('div')
+    d.innerHTML = `<span></span><b></b>`
+    d.children[0].textContent = k; d.children[1].textContent = v
+    $('infoGrid').appendChild(d)
+  }
+  $('cutStart').value = '0'
+  $('cutEnd').value = i.duration ? i.duration.toFixed(2) : ''
+  $('gifStart').value = '0'
+  $('gifDur').value = Math.min(5, i.duration || 5).toFixed(1)
+  if (i.width) $('gifWidth').value = Math.min(480, i.width - i.width % 2)
+  for (const o of $('compRes').options) if (o.value) o.disabled = !!i.height && +o.value >= i.height
+  $('audHint').textContent = i.has_audio ? 'Extrait la première piste audio au format MP3.' : '⚠️ Cette vidéo ne contient pas de piste audio.'
+  document.querySelector('.run-btn[data-action=audio]').disabled = !i.has_audio
+  updateHints()
+  $('uploadCard').classList.add('hidden')
+  $('workArea').classList.remove('hidden')
+}
+
+// ── tabs & hints ──
+$('tabs').addEventListener('click', e => {
+  const b = e.target.closest('.tab'); if (!b) return
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === b))
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.dataset.pane === b.dataset.tab))
+})
+document.querySelectorAll('[data-now]').forEach(b => b.addEventListener('click', () => {
+  $(b.dataset.now).value = $('player').currentTime.toFixed(2); updateHints()
+}))
+function crfHint(v) {
+  if (v <= 20) return '(très haute qualité)'
+  if (v <= 24) return '(haute qualité)'
+  if (v <= 28) return '(équilibré)'
+  if (v <= 33) return '(léger)'
+  return '(très compressé)'
+}
+function updateHints() {
+  const c = +$('crf').value
+  $('crfVal').textContent = c; $('crfHint').textContent = crfHint(c)
+  const s = parseTime($('cutStart').value), e = parseTime($('cutEnd').value)
+  $('cutLen').textContent = (!isNaN(s) && !isNaN(e) && e > s) ? fmtDur(e - s) : 'invalide'
+  const every = parseFloat($('frEvery').value), dur = current?.info?.duration
+  $('frCount').textContent = (every > 0 && dur) ? Math.max(1, Math.ceil(dur / every)) : '—'
+}
+;['crf', 'cutStart', 'cutEnd', 'frEvery'].forEach(id => $(id).addEventListener('input', updateHints))
+
+// ── jobs ──
+function collectParams(action) {
+  switch (action) {
+    case 'cut': {
+      const s = parseTime($('cutStart').value), e = parseTime($('cutEnd').value)
+      if (isNaN(s) || isNaN(e)) throw 'Temps invalide (ex. 12.5 ou 00:01:30).'
+      if (e <= s) throw 'La fin doit être après le début.'
+      return { start: s, end: e, fast: $('cutFast').checked }
+    }
+    case 'compress': return { crf: +$('crf').value, height: $('compRes').value ? +$('compRes').value : null, preset: $('compPreset').value }
+    case 'gif': {
+      const s = parseTime($('gifStart').value)
+      if (isNaN(s)) throw 'Début invalide.'
+      return { start: s, duration: +$('gifDur').value, fps: +$('gifFps').value, width: +$('gifWidth').value }
+    }
+    case 'frames': return { every: +$('frEvery').value, format: $('frFmt').value }
+    case 'audio': return { bitrate: +$('audBr').value }
+  }
+}
+
+document.querySelectorAll('.run-btn').forEach(b => b.addEventListener('click', async () => {
+  if (!current || currentJob) return
+  showError(null)
+  let params
+  try { params = collectParams(b.dataset.action) } catch (msg) { showError(msg); return }
+  setRunning(true)
+  try {
+    const d = await api('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_id: current.file_id, action: b.dataset.action, params }) })
+    currentJob = { id: d.job_id, action: b.dataset.action }
+    $('jobCard').classList.remove('hidden')
+    $('jobTitle').textContent = ACTION_LABEL[b.dataset.action]
+    $('jobStatus').innerHTML = '<span class="spinner"></span>En cours…'
+    $('jobBar').style.width = '0'; $('jobPct').textContent = '0 %'
+    $('cancelBtn').classList.remove('hidden')
+    poll()
+  } catch (e) { showError(e.error, e.code); setRunning(false) }
+}))
+
+function setRunning(on) {
+  document.querySelectorAll('.run-btn').forEach(b => {
+    b.disabled = on || (b.dataset.action === 'audio' && current && !current.info.has_audio)
+  })
+  $('changeBtn').disabled = on
+}
+
+async function poll() {
+  clearTimeout(pollTimer)
+  if (!currentJob) return
+  let d
+  try { d = await api('/jobs/' + currentJob.id) } catch (e) { finishJob(); showError(e.error); return }
+  const pct = Math.round((d.progress || 0) * 100)
+  $('jobBar').style.width = pct + '%'; $('jobPct').textContent = pct + ' %'
+  if (d.status === 'running') { pollTimer = setTimeout(poll, 500); return }
+  const action = currentJob.action
+  finishJob()
+  if (d.status === 'done') {
+    $('jobStatus').textContent = '✅ Terminé — ' + fmtSize(d.size) + (d.count ? ` (${d.count} images)` : '')
+    addHistory(action, d.filename, d.size)
+    download(d.filename)
+  } else if (d.status === 'cancelled') {
+    $('jobStatus').textContent = '⏹ Annulé'
+  } else {
+    $('jobStatus').textContent = '❌ Échec'
+    showError(d.error || 'Erreur inconnue')
+  }
+}
+function finishJob() { currentJob = null; setRunning(false); $('cancelBtn').classList.add('hidden') }
+$('cancelBtn').addEventListener('click', () => {
+  if (currentJob) fetch(`${BASE}/jobs/${currentJob.id}/cancel`, { method: 'POST' }).catch(() => {})
+})
+
+function download(name) {
+  const a = document.createElement('a')
+  a.href = `${BASE}/file/${encodeURIComponent(name)}`
+  a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+}
+function addHistory(action, name, size) {
+  $('histCard').classList.remove('hidden')
+  const li = document.createElement('li')
+  const s = document.createElement('span')
+  s.textContent = `${ACTION_LABEL[action]} · ${name} · ${fmtSize(size)}`; s.title = name
+  const b = document.createElement('button')
+  b.className = 'btn-dl btn-sm'; b.textContent = '⬇ Télécharger'
+  b.addEventListener('click', () => download(name))
+  li.append(s, b)
+  $('history').prepend(li)
+}
+updateHints()
+</script>
+</body>
+</html>

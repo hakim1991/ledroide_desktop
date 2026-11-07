@@ -1,0 +1,1714 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Schémas blocs</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  :root {
+    --bg: #0f0f12; --card: #18181b; --line: #27272a; --line2: #3f3f46;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e;
+  }
+  html, body { height: 100% }
+  body {
+    font-family: system-ui, sans-serif; background: var(--bg); color: var(--text);
+    --pw: 232px; --rw: 250px;
+    display: grid; grid-template-rows: auto 1fr; grid-template-columns: var(--pw) 1fr var(--rw);
+    grid-template-areas: "top top top" "pal canvas panel"; overflow: hidden; font-size: 13px;
+  }
+  button, select, input, textarea { font: inherit; color: inherit }
+  button {
+    background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .6rem;
+    cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s;
+  }
+  button:hover { background: #222226; border-color: var(--line2) }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff }
+  button.danger { color: #fca5a5 }
+  button.confirm { background: var(--danger); border-color: var(--danger); color: #fff }
+  button:disabled { opacity: .4; cursor: default }
+  select, input[type=text], input[type=number], textarea {
+    background: #111114; border: 1px solid var(--line); border-radius: 6px; padding: .35rem .5rem; outline: none;
+  }
+  select:focus, input:focus, textarea:focus { border-color: var(--accent) }
+
+  /* ── Top bar ── */
+  #top {
+    grid-area: top; display: flex; align-items: center; gap: .4rem; padding: .5rem .75rem;
+    border-bottom: 1px solid var(--line); background: var(--card); flex-wrap: wrap;
+  }
+  #top .sep { width: 1px; height: 22px; background: var(--line); margin: 0 .2rem }
+  #docSelect { max-width: 170px }
+  #docName { width: 170px }
+  #zoomLbl { min-width: 46px; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums }
+  #status { margin-left: auto; color: var(--muted); font-size: 12px }
+  #status.err { color: var(--danger) }
+  .menu { position: relative }
+  .menu-list {
+    display: none; position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; min-width: 190px;
+    background: var(--card); border: 1px solid var(--line2); border-radius: 8px; padding: .3rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,.5);
+  }
+  .menu.open .menu-list { display: block }
+  .menu-list button { display: block; width: 100%; text-align: left; border: none; background: none }
+  .menu-list button:hover { background: #26262b }
+  .menu-list label { display: flex; gap: .4rem; align-items: center; padding: .35rem .6rem; color: var(--muted) }
+  .menu-list hr { border: none; border-top: 1px solid var(--line); margin: .3rem 0 }
+
+  /* ── Palette ── */
+  body.hide-pal { --pw: 0px }
+  body.hide-panel { --rw: 0px }
+  body.hide-pal #pal, body.hide-panel #panel { display: none }
+  #pal { grid-area: pal; border-right: 1px solid var(--line); overflow-y: auto; overflow-x: hidden; background: #131316; min-width: 0 }
+  .ttl { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: .4rem 0 .5rem }
+  .pal-head {
+    position: sticky; top: 0; z-index: 2; display: flex; gap: .35rem; padding: .55rem;
+    background: #131316; border-bottom: 1px solid var(--line);
+  }
+  .pal-head input { flex: 1; min-width: 0; padding-left: 1.7rem;
+    background: #111114 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.5' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat .5rem center }
+  .icon-btn { flex: none; padding: .3rem .55rem }
+  button.toggle.on { border-color: #4f46e5; color: #c7d2fe; background: #1e1b4b66 }
+  .cat { border-bottom: 1px solid var(--line) }
+  .cat > summary, .cat-h {
+    list-style: none; cursor: pointer; padding: .55rem .7rem; display: flex; align-items: center; gap: .45rem; user-select: none;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  }
+  .cat-h { cursor: default }
+  .cat > summary::-webkit-details-marker { display: none }
+  .cat > summary::before { content: '▸'; font-size: 10px; transition: transform .15s }
+  .cat[open] > summary::before { transform: rotate(90deg) }
+  .cat > summary:hover { color: #c4c4cc }
+  .cat .count { margin-left: auto; background: #222226; border-radius: 10px; padding: 0 .45rem; font-size: 10px; letter-spacing: 0 }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: .3rem; padding: 0 .55rem .65rem }
+  .shape-btn {
+    display: flex; flex-direction: column; align-items: center; gap: .2rem; padding: .4rem .1rem .35rem; min-width: 0;
+    font-size: 10px; color: #a1a1aa; user-select: none; text-align: center; line-height: 1.15; background: #18181b;
+  }
+  .shape-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical }
+  .shape-btn svg { width: 40px; height: 28px; overflow: visible }
+  .shape-btn:hover { border-color: #4f46e5; color: #e0e7ff; background: #1e1b4b55 }
+  .shape-btn:active { cursor: grabbing }
+  #noShape { display: none; padding: .8rem }
+  #palShow {
+    position: absolute; left: 10px; top: 10px; z-index: 5; display: none;
+    background: #18181bee; box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  }
+  body.hide-pal #palShow { display: block }
+  .help-box .help { padding: 0 .75rem .8rem; margin: 0 }
+  .help { color: var(--muted); font-size: 11.5px; line-height: 1.6; margin-top: .4rem }
+  .help kbd {
+    background: #222226; border: 1px solid var(--line2); border-radius: 4px; padding: 0 .3rem; font-size: 10.5px; color: #c4c4cc;
+  }
+
+  /* ── Canvas ── */
+  #wrap { grid-area: canvas; position: relative; overflow: hidden; background-color: var(--bg) }
+  #wrap.grid {
+    background-image: radial-gradient(circle, #2a2a31 1.1px, transparent 1.2px);
+  }
+  #svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none }
+  #svg.panning { cursor: grabbing }
+  #empty {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+    color: #52525b; font-size: 14px; text-align: center; line-height: 1.7;
+  }
+  #editor {
+    position: absolute; display: none; z-index: 10; resize: none; text-align: center; overflow: hidden;
+    background: #18181bf2; border: 1.5px solid var(--accent); border-radius: 6px; padding: 4px; line-height: 1.25;
+  }
+  [data-port] { cursor: crosshair }
+  [data-handle=nw], [data-handle=se] { cursor: nwse-resize }
+  [data-handle=ne], [data-handle=sw] { cursor: nesw-resize }
+  [data-node] { cursor: move }
+  [data-texthandle] { cursor: grab }
+  .tpos { display: flex; gap: .6rem; align-items: flex-start }
+  .tgrid { display: grid; grid-template-columns: repeat(3, 22px); gap: 3px; padding: 4px; background: #111114; border: 1px solid var(--line); border-radius: 6px; flex: none }
+  .tgrid button { width: 22px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; background: #1c1c20 }
+  .tgrid button i { width: 6px; height: 6px; border-radius: 50%; background: #71717a }
+  .tgrid button:hover i { background: #f59e0b }
+  .tout { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0 }
+  .tout button { font-size: 12px; padding: .28rem .4rem; text-align: left }
+  .hint kbd { background: #222226; border: 1px solid var(--line2); border-radius: 4px; padding: 0 .3rem; font-size: 10.5px }
+  [data-edge] { cursor: pointer }
+
+  /* ── Properties ── */
+  #panel { grid-area: panel; border-left: 1px solid var(--line); padding: .7rem; overflow-y: auto; background: #131316 }
+  .field { margin-bottom: .7rem }
+  .field > label { display: block; color: var(--muted); font-size: 11.5px; margin-bottom: .3rem }
+  .field textarea, .field input[type=text], .field select { width: 100% }
+  .field textarea { min-height: 58px; resize: vertical }
+  .row { display: flex; gap: .4rem; align-items: center }
+  .row > * { flex: 1 }
+  .swatches { display: flex; flex-wrap: wrap; gap: 4px; margin-top: .35rem }
+  .sw { width: 20px; height: 20px; border-radius: 5px; border: 1px solid #ffffff22; cursor: pointer; padding: 0; flex: none }
+  .sw.none { background: repeating-linear-gradient(45deg, #333 0 3px, #18181b 3px 6px) }
+  input[type=color] { width: 36px; height: 28px; padding: 0 2px; background: #111114; border: 1px solid var(--line); border-radius: 6px; flex: none; cursor: pointer }
+  input[type=range] { accent-color: var(--accent) }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden }
+  .seg button { flex: 1; border: none; border-radius: 0; padding: .35rem .2rem; font-size: 12px; background: #111114 }
+  .seg button + button { border-left: 1px solid var(--line) }
+  .seg button.on { background: var(--accent); color: #fff }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; margin-top: .4rem }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.55 }
+  .check { display: flex; align-items: center; gap: .45rem; margin-bottom: .6rem; cursor: pointer }
+  .check input { accent-color: var(--accent) }
+  #toast {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--card);
+    border: 1px solid var(--line2); padding: .5rem .9rem; border-radius: 8px; opacity: 0; transition: opacity .2s;
+    pointer-events: none; z-index: 50;
+  }
+  #toast.show { opacity: 1 }
+  #fileIn { display: none }
+</style>
+</head>
+<body>
+  <div id="top">
+    <button id="btnPal" class="toggle on" title="Afficher / masquer les formes (Ctrl+B)">◧</button>
+    <select id="docSelect" title="Mes schémas"></select>
+    <input id="docName" type="text" placeholder="Nom du schéma" />
+    <button id="btnNew" title="Nouveau schéma">＋ Nouveau</button>
+    <button id="btnDup" title="Dupliquer le schéma">⧉</button>
+    <button id="btnDelDoc" class="danger" title="Supprimer le schéma">🗑</button>
+    <span class="sep"></span>
+    <button id="btnUndo" title="Annuler (Ctrl+Z)">↶</button>
+    <button id="btnRedo" title="Rétablir (Ctrl+Y)">↷</button>
+    <span class="sep"></span>
+    <button id="btnZoomOut" title="Zoom arrière">−</button>
+    <span id="zoomLbl">100%</span>
+    <button id="btnZoomIn" title="Zoom avant">＋</button>
+    <button id="btnFit" title="Ajuster à l'écran">⤢ Ajuster</button>
+    <span class="sep"></span>
+    <div class="menu" id="exportMenu">
+      <button id="btnExport">⇩ Exporter ▾</button>
+      <div class="menu-list">
+        <button data-exp="png">Image PNG</button>
+        <button data-exp="svg">Image SVG</button>
+        <button data-exp="json">Fichier JSON (sauvegarde)</button>
+        <label><input type="checkbox" id="expTransparent" /> Fond transparent</label>
+        <label><input type="checkbox" id="expLight" /> Fond clair</label>
+        <hr />
+        <button id="btnImport">⇧ Importer un JSON…</button>
+      </div>
+    </div>
+    <input type="file" id="fileIn" accept=".json,application/json" />
+    <span id="status"></span>
+    <button id="btnPanel" class="toggle on" title="Afficher / masquer les propriétés (Ctrl+Maj+B)">◨</button>
+  </div>
+
+  <div id="pal">
+    <div class="pal-head">
+      <input id="shapeSearch" type="search" placeholder="Rechercher une forme…" autocomplete="off" />
+      <button id="btnPalClose" class="icon-btn" title="Masquer la palette (Ctrl+B)">«</button>
+    </div>
+    <div id="recentWrap" class="cat"><div class="cat-h">Récentes</div><div class="grid3" id="recent"></div></div>
+    <div id="shapes"></div>
+    <div id="noShape" class="hint">Aucune forme ne correspond.</div>
+    <details class="cat help-box" id="helpBox"><summary>Aide et raccourcis</summary>
+    <div class="help">
+      <kbd>Ctrl</kbd>+<kbd>B</kbd> : masquer / afficher la palette<br>
+      <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>B</kbd> : masquer / afficher les propriétés<br>
+      Glisser une forme ou cliquer pour l'ajouter.<br>
+      <b>Relier</b> : survolez un bloc et tirez depuis un point bleu vers un autre bloc (ou dans le vide pour créer un bloc relié).<br>
+      <b>Nommer</b> : double-clic sur un bloc ou une liaison.<br>
+      <b>Trajet d'une flèche</b> : sélectionnez-la puis glissez la ligne, ses <b>+</b> ou ses extrémités.<br>
+      <b>Déplacer le texte</b> : poignée orange du bloc sélectionné, ou <kbd>Alt</kbd>+glisser.<br>
+      Double-clic dans le vide : nouveau bloc.<br>
+      Glisser le fond : déplacer la vue.<br>
+      <kbd>Maj</kbd>+glisser : sélection multiple.<br>
+      Molette : zoom.<br>
+      <kbd>Suppr</kbd> supprimer · <kbd>Ctrl</kbd>+<kbd>D</kbd> dupliquer<br>
+      <kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>V</kbd> copier/coller<br>
+      <kbd>F2</kbd> renommer · flèches : déplacer
+    </div>
+    </details>
+  </div>
+
+  <div id="wrap" class="grid">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+      <g id="vp"><g id="gEdges"></g><g id="gNodes"></g><g id="gOver"></g></g>
+    </svg>
+    <button id="palShow" title="Afficher les formes (Ctrl+B)">» Formes</button>
+    <div id="empty">Glissez une forme depuis la palette<br>ou double-cliquez ici pour créer un bloc</div>
+    <textarea id="editor" spellcheck="false"></textarea>
+  </div>
+
+  <div id="panel"></div>
+  <div id="toast"></div>
+
+<script>
+'use strict'
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/diagram-editor/api`
+const $ = (s) => document.querySelector(s)
+
+// ───────────────────────── Shapes ─────────────────────────
+const CATEGORIES = [['basic', 'Formes de base'], ['arrows', 'Flèches'], ['flow', 'Organigramme'], ['it', 'Informatique & réseau'], ['uml', 'UML']]
+const SHAPES = {
+  // Formes de base
+  rect:            { cat: 'basic', label: 'Rectangle',        w: 140, h: 70, kw: 'carré processus' },
+  rounded:         { cat: 'basic', label: 'Arrondi',          w: 140, h: 70 },
+  ellipse:         { cat: 'basic', label: 'Ellipse',          w: 140, h: 80, kw: 'ovale' },
+  circle:          { cat: 'basic', label: 'Cercle',           w: 90,  h: 90, kw: 'rond' },
+  triangle:        { cat: 'basic', label: 'Triangle',         w: 120, h: 100 },
+  pentagon:        { cat: 'basic', label: 'Pentagone',        w: 110, h: 105 },
+  octagon:         { cat: 'basic', label: 'Octogone',         w: 110, h: 110, kw: 'stop' },
+  star:            { cat: 'basic', label: 'Étoile',           w: 110, h: 105, text: '' },
+  cross:           { cat: 'basic', label: 'Croix',            w: 90,  h: 90, text: '', kw: 'plus' },
+  trapezoid:       { cat: 'basic', label: 'Trapèze',          w: 150, h: 75 },
+  callout:         { cat: 'basic', label: 'Bulle',            w: 150, h: 90, text: 'Commentaire', kw: 'commentaire dialogue' },
+  cloud:           { cat: 'basic', label: 'Nuage',            w: 160, h: 96, kw: 'cloud internet' },
+  note:            { cat: 'basic', label: 'Note',             w: 140, h: 90, kw: 'post-it' },
+  text:            { cat: 'basic', label: 'Texte libre',      w: 140, h: 40, kw: 'label titre' },
+  container:       { cat: 'basic', label: 'Groupe / cadre',   w: 320, h: 220, text: 'Groupe', fill: 'none', stroke: '#71717a', kw: 'conteneur zone' },
+  // Flèches
+  arrowRight:      { cat: 'arrows', label: 'Flèche droite',   w: 140, h: 70, text: '' },
+  arrowLeft:       { cat: 'arrows', label: 'Flèche gauche',   w: 140, h: 70, text: '' },
+  arrowUp:         { cat: 'arrows', label: 'Flèche haut',     w: 70,  h: 130, text: '' },
+  arrowDown:       { cat: 'arrows', label: 'Flèche bas',      w: 70,  h: 130, text: '' },
+  arrowDouble:     { cat: 'arrows', label: 'Double flèche',   w: 170, h: 70, text: '' },
+  chevron:         { cat: 'arrows', label: 'Chevron',         w: 140, h: 60, kw: 'étape' },
+  // Organigramme
+  capsule:         { cat: 'flow', label: 'Début / Fin',       w: 140, h: 56, kw: 'terminal' },
+  diamond:         { cat: 'flow', label: 'Décision',          w: 150, h: 100, kw: 'losange condition si' },
+  parallelogram:   { cat: 'flow', label: 'Entrée / Sortie',   w: 160, h: 70, kw: 'données' },
+  hexagon:         { cat: 'flow', label: 'Préparation',       w: 160, h: 70, kw: 'hexagone' },
+  predefined:      { cat: 'flow', label: 'Sous-processus',    w: 150, h: 70, kw: 'prédéfini fonction' },
+  document:        { cat: 'flow', label: 'Document',          w: 140, h: 84, kw: 'fichier' },
+  multidoc:        { cat: 'flow', label: 'Documents',         w: 150, h: 92, kw: 'plusieurs fichiers' },
+  manualInput:     { cat: 'flow', label: 'Saisie manuelle',   w: 150, h: 75, kw: 'clavier' },
+  manualOp:        { cat: 'flow', label: 'Opération manuelle', w: 150, h: 70 },
+  delay:           { cat: 'flow', label: 'Délai',             w: 130, h: 70, kw: 'attente' },
+  display:         { cat: 'flow', label: 'Affichage',         w: 150, h: 70, kw: 'écran' },
+  storedData:      { cat: 'flow', label: 'Données stockées',  w: 150, h: 70 },
+  internalStorage: { cat: 'flow', label: 'Stockage interne',  w: 120, h: 90, kw: 'mémoire' },
+  offpage:         { cat: 'flow', label: 'Renvoi de page',    w: 90,  h: 90, text: '1', kw: 'connecteur hors page' },
+  connector:       { cat: 'flow', label: 'Connecteur',        w: 46,  h: 46, text: 'A', kw: 'renvoi cercle' },
+  merge:           { cat: 'flow', label: 'Fusion',            w: 110, h: 90, text: '', kw: 'triangle inversé' },
+  // Informatique & réseau
+  cylinder:        { cat: 'it', label: 'Base de données',     w: 120, h: 100, kw: 'bdd sql cylindre database' },
+  actor:           { cat: 'it', label: 'Utilisateur',         w: 54,  h: 96, kw: 'acteur personne user' },
+  computer:        { cat: 'it', label: 'Ordinateur',          w: 96,  h: 80, kw: 'pc poste écran client' },
+  server:          { cat: 'it', label: 'Serveur',             w: 72,  h: 100, kw: 'rack' },
+  phone:           { cat: 'it', label: 'Mobile',              w: 50,  h: 88, kw: 'téléphone smartphone' },
+  globe:           { cat: 'it', label: 'Internet',            w: 90,  h: 90, kw: 'web monde globe' },
+  firewall:        { cat: 'it', label: 'Pare-feu',            w: 96,  h: 80, kw: 'firewall mur sécurité' },
+  // UML
+  umlClass:        { cat: 'uml', label: 'Classe',             w: 160, h: 120, text: 'Classe', kw: 'objet' },
+  package:         { cat: 'uml', label: 'Paquetage',          w: 160, h: 100, kw: 'package dossier module' },
+  component:       { cat: 'uml', label: 'Composant',          w: 150, h: 80, kw: 'component' },
+}
+const FILLS   = ['#1e1e24', '#312e81', '#1e3a8a', '#164e63', '#14532d', '#713f12', '#7c2d12', '#7f1d1d', '#581c87', '#3f3f46', '#f4f4f5', 'none']
+const STROKES = ['#6366f1', '#3b82f6', '#06b6d4', '#22c55e', '#eab308', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#a1a1aa', '#f4f4f5', 'none']
+const TEXTS   = ['#f4f4f5', '#a1a1aa', '#18181b', '#a5b4fc', '#86efac', '#fde047', '#fca5a5']
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
+const r1 = (v) => Math.round(v * 10) / 10
+
+function shapeMarkup(type, w, h, fill, stroke, sw) {
+  const f = fill === 'none' ? 'transparent' : fill
+  const s = stroke === 'none' || !sw ? 'none' : stroke
+  const a = `fill="${f}" stroke="${s}" stroke-width="${sw}" stroke-linejoin="round"`
+  const poly = (pts) => `<polygon points="${pts.map((p) => p.map(r1).join(',')).join(' ')}" ${a}/>`
+  switch (type) {
+    case 'rounded': return `<rect width="${w}" height="${h}" rx="${Math.min(14, h / 4)}" ${a}/>`
+    case 'capsule': return `<rect width="${w}" height="${h}" rx="${Math.min(w, h) / 2}" ${a}/>`
+    case 'ellipse':
+    case 'circle': return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" ${a}/>`
+    case 'diamond': return poly([[w / 2, 0], [w, h / 2], [w / 2, h], [0, h / 2]])
+    case 'parallelogram': { const o = Math.min(w * 0.2, h * 0.6); return poly([[o, 0], [w, 0], [w - o, h], [0, h]]) }
+    case 'hexagon': { const o = Math.min(w * 0.2, h * 0.5); return poly([[o, 0], [w - o, 0], [w, h / 2], [w - o, h], [o, h], [0, h / 2]]) }
+    case 'triangle': return poly([[w / 2, 0], [w, h], [0, h]])
+    case 'cylinder': {
+      const ry = Math.min(h * 0.15, w * 0.25)
+      return `<path d="M0,${ry} V${h - ry} A${w / 2},${ry} 0 0 0 ${w},${h - ry} V${ry} A${w / 2},${ry} 0 0 0 0,${ry} Z" ${a}/>` +
+             `<ellipse cx="${w / 2}" cy="${ry}" rx="${w / 2}" ry="${ry}" ${a}/>`
+    }
+    case 'document': {
+      const wv = Math.min(h * 0.12, 14)
+      return `<path d="M0,0 H${w} V${h - wv} Q${r1(w * 0.75)},${r1(h - wv * 3)} ${w / 2},${h - wv} T0,${h - wv} Z" ${a}/>`
+    }
+    case 'note': {
+      const c = Math.min(18, w * 0.2, h * 0.3)
+      return `<path d="M0,0 H${w - c} L${w},${c} V${h} H0 Z" ${a}/><path d="M${w - c},0 V${c} H${w}" fill="none" stroke="${s}" stroke-width="${sw}" stroke-linejoin="round"/>`
+    }
+    case 'text': return `<rect width="${w}" height="${h}" fill="${f}" stroke="${s}" stroke-width="${sw}"/>`
+    // ── more basic shapes
+    case 'star': case 'pentagon': {
+      const nPts = type === 'star' ? 10 : 5, pts = []
+      for (let i = 0; i < nPts; i++) {
+        const ang = -Math.PI / 2 + (i * 2 * Math.PI) / nPts, rr = type === 'star' && i % 2 ? 0.45 : 1
+        pts.push([w / 2 + Math.cos(ang) * (w / 2) * rr, h * 0.53 + Math.sin(ang) * h * 0.53 * rr])
+      }
+      return poly(pts)
+    }
+    case 'octagon': { const c = Math.min(w, h) * 0.29; return poly([[c, 0], [w - c, 0], [w, c], [w, h - c], [w - c, h], [c, h], [0, h - c], [0, c]]) }
+    case 'cross': {
+      const t = Math.min(w, h) / 3, x = (w - t) / 2, y = (h - t) / 2
+      return poly([[x, 0], [x + t, 0], [x + t, y], [w, y], [w, y + t], [x + t, y + t], [x + t, h], [x, h], [x, y + t], [0, y + t], [0, y], [x, y]])
+    }
+    case 'trapezoid': { const o = Math.min(w * 0.2, h * 0.6); return poly([[o, 0], [w - o, 0], [w, h], [0, h]]) }
+    case 'callout': {
+      const bh = h * 0.78, r = Math.min(10, bh / 4)
+      return `<path d="M${r},0 H${w - r} Q${w},0 ${w},${r} V${r1(bh - r)} Q${w},${r1(bh)} ${w - r},${r1(bh)} H${r1(w * 0.42)} L${r1(w * 0.2)},${h} L${r1(w * 0.26)},${r1(bh)} H${r} Q0,${r1(bh)} 0,${r1(bh - r)} V${r} Q0,0 ${r},0 Z" ${a}/>`
+    }
+    case 'cloud':
+      return `<path d="M24,58 C10,58 2,50 4,40 C0,30 8,20 20,22 C22,8 40,2 52,10 C60,0 80,2 84,18 C96,18 100,32 96,40 C100,50 92,58 82,58 Z" transform="scale(${r1(w / 100)},${r1(h / 60)})" vector-effect="non-scaling-stroke" ${a}/>`
+    case 'container': {
+      const d = Math.max(sw, 1)
+      return `<rect width="${w}" height="${h}" rx="8" ${a} stroke-dasharray="${d * 4} ${d * 3}"/>`
+    }
+    // ── block arrows
+    case 'arrowRight': case 'arrowLeft': {
+      const hl = Math.min(w * 0.4, h * 0.9)
+      let pts = [[0, h * 0.25], [w - hl, h * 0.25], [w - hl, 0], [w, h / 2], [w - hl, h], [w - hl, h * 0.75], [0, h * 0.75]]
+      if (type === 'arrowLeft') pts = pts.map(([x, y]) => [w - x, y])
+      return poly(pts)
+    }
+    case 'arrowDown': case 'arrowUp': {
+      const hl = Math.min(h * 0.4, w * 0.9)
+      let pts = [[w * 0.25, 0], [w * 0.75, 0], [w * 0.75, h - hl], [w, h - hl], [w / 2, h], [0, h - hl], [w * 0.25, h - hl]]
+      if (type === 'arrowUp') pts = pts.map(([x, y]) => [x, h - y])
+      return poly(pts)
+    }
+    case 'arrowDouble': {
+      const hl = Math.min(w * 0.3, h * 0.9)
+      return poly([[0, h / 2], [hl, 0], [hl, h * 0.25], [w - hl, h * 0.25], [w - hl, 0], [w, h / 2], [w - hl, h], [w - hl, h * 0.75], [hl, h * 0.75], [hl, h]])
+    }
+    case 'chevron': { const o = Math.min(w * 0.25, h * 0.5); return poly([[0, 0], [w - o, 0], [w, h / 2], [w - o, h], [0, h], [o, h / 2]]) }
+    // ── flowchart
+    case 'predefined': {
+      const i = Math.min(14, w * 0.12)
+      return `<rect width="${w}" height="${h}" ${a}/><path d="M${r1(i)},0 V${h} M${r1(w - i)},0 V${h}" fill="none" stroke="${s}" stroke-width="${sw}"/>`
+    }
+    case 'manualInput': return poly([[0, h * 0.28], [w, 0], [w, h], [0, h]])
+    case 'manualOp': { const o = Math.min(w * 0.18, h * 0.5); return poly([[0, 0], [w, 0], [w - o, h], [o, h]]) }
+    case 'delay': { const r = Math.min(h / 2, w / 2); return `<path d="M0,0 H${r1(w - r)} A${r1(r)},${h / 2} 0 0 1 ${r1(w - r)},${h} H0 Z" ${a}/>` }
+    case 'display': {
+      const o = Math.min(w * 0.18, h * 0.5), r = Math.min(w * 0.18, h / 2)
+      return `<path d="M0,${h / 2} L${r1(o)},0 H${r1(w - r)} A${r1(r)},${h / 2} 0 0 1 ${r1(w - r)},${h} H${r1(o)} Z" ${a}/>`
+    }
+    case 'storedData': {
+      const r = Math.min(w * 0.15, h / 2)
+      return `<path d="M${r1(r)},0 H${w} A${r1(r)},${h / 2} 0 0 0 ${w},${h} H${r1(r)} A${r1(r)},${h / 2} 0 0 1 ${r1(r)},0 Z" ${a}/>`
+    }
+    case 'internalStorage': {
+      const i = Math.min(14, w * 0.15, h * 0.25)
+      return `<rect width="${w}" height="${h}" ${a}/><path d="M${r1(i)},0 V${h} M0,${r1(i)} H${w}" fill="none" stroke="${s}" stroke-width="${sw}"/>`
+    }
+    case 'multidoc': {
+      const o = Math.min(8, w * 0.06, h * 0.08), iw = w - 2 * o, ih = h - 2 * o
+      return `<rect x="${r1(2 * o)}" y="0" width="${r1(iw)}" height="${r1(ih)}" ${a}/><rect x="${r1(o)}" y="${r1(o)}" width="${r1(iw)}" height="${r1(ih)}" ${a}/>` +
+        `<g transform="translate(0,${r1(2 * o)})">${shapeMarkup('document', iw, ih, fill, stroke, sw)}</g>`
+    }
+    case 'offpage': return poly([[0, 0], [w, 0], [w, h * 0.65], [w / 2, h], [0, h * 0.65]])
+    case 'connector': return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" ${a}/>`
+    case 'merge': return poly([[0, 0], [w, 0], [w / 2, h]])
+    // ── IT & network (icons: text goes below)
+    case 'actor': {
+      const hr = Math.min(w, h) * 0.14, la = `fill="none" stroke="${s}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"`
+      return `${hit(w, h)}<circle cx="${w / 2}" cy="${r1(hr + 1)}" r="${r1(hr)}" ${a}/>` +
+        `<path d="M${w / 2},${r1(2 * hr + 1)} V${r1(h * 0.62)} M${r1(w * 0.08)},${r1(h * 0.38)} H${r1(w * 0.92)} M${r1(w * 0.15)},${h} L${w / 2},${r1(h * 0.62)} L${r1(w * 0.85)},${h}" ${la}/>`
+    }
+    case 'computer': {
+      const sh = h * 0.74
+      return `${hit(w, h)}<rect width="${w}" height="${r1(sh)}" rx="5" ${a}/>` +
+        `<rect x="6" y="6" width="${r1(Math.max(1, w - 12))}" height="${r1(Math.max(1, sh - 12))}" rx="2" fill="none" stroke="${s}" stroke-width="${sw * 0.6}" opacity=".5"/>` +
+        `<path d="M${r1(w * 0.42)},${r1(sh)} L${r1(w * 0.38)},${r1(h * 0.92)} H${r1(w * 0.62)} L${r1(w * 0.58)},${r1(sh)}" ${a}/>` +
+        `<rect x="${r1(w * 0.26)}" y="${r1(h * 0.92)}" width="${r1(w * 0.48)}" height="${r1(h * 0.08)}" rx="2" ${a}/>`
+    }
+    case 'server': {
+      let s2 = `${hit(w, h)}<rect width="${w}" height="${h}" rx="4" ${a}/>`
+      const led = Math.max(1.5, Math.min(3.5, h * 0.035))
+      for (let i = 0; i < 3; i++) {
+        const cy = (h * (i + 0.5)) / 3
+        if (i) s2 += `<path d="M0,${r1((h * i) / 3)} H${w}" stroke="${s}" stroke-width="${sw}"/>`
+        s2 += `<path d="M${r1(w * 0.14)},${r1(cy)} H${r1(w * 0.5)}" stroke="${s}" stroke-width="${sw}" stroke-linecap="round" opacity=".7"/>` +
+          `<circle cx="${r1(w * 0.8)}" cy="${r1(cy)}" r="${r1(led)}" fill="${i ? s : '#22c55e'}"/>`
+      }
+      return s2
+    }
+    case 'phone':
+      return `${hit(w, h)}<rect width="${w}" height="${h}" rx="${r1(Math.min(10, w * 0.2))}" ${a}/>` +
+        `<rect x="${r1(w * 0.1)}" y="${r1(h * 0.1)}" width="${r1(w * 0.8)}" height="${r1(h * 0.72)}" rx="2" fill="none" stroke="${s}" stroke-width="${sw * 0.6}" opacity=".5"/>` +
+        `<circle cx="${w / 2}" cy="${r1(h * 0.91)}" r="${r1(Math.min(w, h) * 0.05)}" fill="${s}"/>`
+    case 'globe': {
+      const la = `fill="none" stroke="${s}" stroke-width="${sw * 0.8}"`
+      return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" ${a}/><ellipse cx="${w / 2}" cy="${h / 2}" rx="${r1(w * 0.2)}" ry="${h / 2}" ${la}/>` +
+        `<path d="M0,${h / 2} H${w} M${r1(w * 0.08)},${r1(h * 0.27)} H${r1(w * 0.92)} M${r1(w * 0.08)},${r1(h * 0.73)} H${r1(w * 0.92)}" ${la}/>`
+    }
+    case 'firewall': {
+      let d = ''
+      for (let k = 1; k < 4; k++) d += `M0,${r1((h * k) / 4)} H${w} `
+      for (let k = 0; k < 4; k++) {
+        const y0 = (h * k) / 4, y1 = (h * (k + 1)) / 4
+        for (const fx of k % 2 ? [0.25, 0.75] : [0.5]) d += `M${r1(w * fx)},${r1(y0)} V${r1(y1)} `
+      }
+      return `${hit(w, h)}<rect width="${w}" height="${h}" rx="2" ${a}/><path d="${d}" fill="none" stroke="${s}" stroke-width="${sw * 0.8}"/>`
+    }
+    // ── UML
+    case 'umlClass': {
+      const hd = Math.min(30, h * 0.3)
+      return `<rect width="${w}" height="${h}" rx="2" ${a}/><path d="M0,${r1(hd)} H${w} M0,${r1(hd + (h - hd) / 2)} H${w}" fill="none" stroke="${s}" stroke-width="${sw}"/>`
+    }
+    case 'package': {
+      const tab = Math.min(18, h * 0.25)
+      return `<rect width="${r1(w * 0.4)}" height="${r1(tab + 2)}" rx="2" ${a}/><rect y="${r1(tab)}" width="${w}" height="${r1(h - tab)}" rx="2" ${a}/>`
+    }
+    case 'component':
+      return `<rect x="${r1(w * 0.1)}" width="${r1(w * 0.9)}" height="${h}" rx="2" ${a}/>` +
+        `<rect y="${r1(h * 0.22)}" width="${r1(w * 0.2)}" height="${r1(h * 0.16)}" ${a}/><rect y="${r1(h * 0.6)}" width="${r1(w * 0.2)}" height="${r1(h * 0.16)}" ${a}/>`
+    default: return `<rect width="${w}" height="${h}" rx="2" ${a}/>`
+  }
+}
+
+// text area per shape: [widthFactor, verticalCenterFactor]
+// value: [widthFactor, verticalCenterFactor], a function (w, h) => that, or 'below' (icon: text under the shape)
+const TEXT_BOX = { diamond: [0.62, 0.5], ellipse: [0.74, 0.5], circle: [0.74, 0.5], triangle: [0.5, 0.66],
+  parallelogram: [0.7, 0.5], hexagon: [0.7, 0.5], cylinder: [0.9, 0.56], document: [0.9, 0.45],
+  star: [0.42, 0.58], pentagon: [0.68, 0.58], octagon: [0.8, 0.5], cross: [0.33, 0.5], trapezoid: [0.7, 0.5],
+  callout: [0.9, 0.39], cloud: [0.6, 0.56], container: (w, h) => [0.95, Math.min(16, h / 2) / h],
+  arrowRight: [0.55, 0.5], arrowLeft: [0.55, 0.5], arrowUp: [0.48, 0.58], arrowDown: [0.48, 0.42], arrowDouble: [0.5, 0.5], chevron: [0.6, 0.5],
+  predefined: [0.72, 0.5], manualInput: [0.9, 0.6], manualOp: [0.7, 0.5], delay: [0.8, 0.5], display: [0.7, 0.5],
+  storedData: [0.72, 0.5], internalStorage: [0.78, 0.56], multidoc: [0.8, 0.58], offpage: [0.9, 0.38], connector: [0.74, 0.5], merge: [0.5, 0.3],
+  actor: 'below', computer: 'below', server: 'below', phone: 'below', globe: 'below', firewall: 'below',
+  umlClass: (w, h) => [0.92, Math.min(30, h * 0.3) / 2 / h],
+  package: (w, h) => { const t = Math.min(18, h * 0.25); return [0.9, (t + (h - t) / 2) / h] },
+  component: [0.75, 0.5] }
+const ROUND_SHAPES = new Set(['ellipse', 'circle', 'connector', 'globe'])
+const hit = (w, h) => `<rect width="${w}" height="${h}" fill="transparent"/>`
+
+const mctx = document.createElement('canvas').getContext('2d')
+function measure(t, fs) { mctx.font = `${fs}px system-ui, sans-serif`; return mctx.measureText(t).width }
+function wrap(text, maxW, fs) {
+  const lines = []
+  for (const para of String(text).split('\n')) {
+    let line = ''
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      const test = line ? line + ' ' + word : word
+      if (line && measure(test, fs) > maxW) { lines.push(line); line = word } else line = test
+    }
+    lines.push(line)
+  }
+  return lines
+}
+
+// ───────────────────────── State ─────────────────────────
+let doc = { nodes: [], edges: [] }
+let docId = null, docs = []
+let sel = new Set()
+let view = { x: 0, y: 0, k: 1 }
+let undoStack = [], redoStack = []
+let mode = null, hoverId = null, spaceDown = false
+let lastClick = { id: null, t: 0 }
+let editing = null
+let clipboard = null
+let settings = { routing: 'ortho', snap: true }
+try { Object.assign(settings, JSON.parse(localStorage.getItem('de-settings') || '{}')) } catch {}
+const saveSettings = () => { try { localStorage.setItem('de-settings', JSON.stringify(settings)) } catch {} }
+
+const uid = (p) => p + Math.random().toString(36).slice(2, 10)
+const nodeById = (id) => doc.nodes.find((n) => n.id === id)
+const edgeById = (id) => doc.edges.find((e) => e.id === id)
+const snap = (v) => (settings.snap ? Math.round(v / 10) * 10 : v)
+const center = (n) => ({ x: n.x + n.w / 2, y: n.y + n.h / 2 })
+
+function snapshot() {
+  undoStack.push(JSON.stringify(doc))
+  if (undoStack.length > 200) undoStack.shift()
+  redoStack = []
+  updateUndoBtns()
+}
+function undo() {
+  if (!undoStack.length) return
+  redoStack.push(JSON.stringify(doc)); doc = JSON.parse(undoStack.pop()); afterHistory()
+}
+function redo() {
+  if (!redoStack.length) return
+  undoStack.push(JSON.stringify(doc)); doc = JSON.parse(redoStack.pop()); afterHistory()
+}
+function afterHistory() {
+  sel = new Set([...sel].filter((id) => nodeById(id) || edgeById(id)))
+  changed(true)
+}
+function updateUndoBtns() { $('#btnUndo').disabled = !undoStack.length; $('#btnRedo').disabled = !redoStack.length }
+
+function changed(panelToo = true) {
+  render(); scheduleSave(); updateUndoBtns()
+  if (panelToo) renderPanel()
+}
+
+// ───────────────────────── Geometry ─────────────────────────
+function boundary(n, tx, ty) {
+  const c = center(n), dx = tx - c.x, dy = ty - c.y
+  if (!dx && !dy) return c
+  const hw = n.w / 2, hh = n.h / 2
+  let t
+  if (ROUND_SHAPES.has(n.type)) t = 1 / Math.sqrt((dx * dx) / (hw * hw) + (dy * dy) / (hh * hh))
+  else if (n.type === 'diamond') t = 1 / (Math.abs(dx) / hw + Math.abs(dy) / hh)
+  else t = Math.min(hw / Math.max(Math.abs(dx), 1e-9), hh / Math.max(Math.abs(dy), 1e-9))
+  return { x: c.x + dx * t, y: c.y + dy * t }
+}
+function port(n, side) {
+  const c = center(n)
+  return { top: { x: c.x, y: n.y }, bottom: { x: c.x, y: n.y + n.h }, left: { x: n.x, y: c.y }, right: { x: n.x + n.w, y: c.y } }[side]
+}
+const NORMAL = { top: [0, -1], bottom: [0, 1], left: [-1, 0], right: [1, 0] }
+function autoSides(a, b) {
+  const ca = center(a), cb = center(b), dx = cb.x - ca.x, dy = cb.y - ca.y
+  if (Math.abs(dx) * (a.h + b.h) >= Math.abs(dy) * (a.w + b.w)) return dx >= 0 ? ['right', 'left'] : ['left', 'right']
+  return dy >= 0 ? ['bottom', 'top'] : ['top', 'bottom']
+}
+
+const isH = (s) => s === 'left' || s === 'right'
+const forcedSide = (s) => (s && s !== 'auto' ? s : null)
+const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y)
+function sideToward(n, pt) {
+  const c = center(n), dx = pt.x - c.x, dy = pt.y - c.y
+  if (Math.abs(dx) * n.h >= Math.abs(dy) * n.w) return dx >= 0 ? 'right' : 'left'
+  return dy >= 0 ? 'bottom' : 'top'
+}
+function nearestSide(n, p) {
+  let best = 'top', bd = Infinity
+  for (const s of ['top', 'right', 'bottom', 'left']) { const d = dist(port(n, s), p); if (d < bd) { bd = d; best = s } }
+  return best
+}
+function simplify(pts) {
+  const out = []
+  for (const p of pts) if (!out.length || dist(out[out.length - 1], p) > 0.01) out.push(p)
+  for (let i = out.length - 2; i > 0; i--) { // drop middle points of straight runs
+    const a = out[i - 1], b = out[i], c = out[i + 1]
+    const sameX = Math.abs(a.x - b.x) < 0.01 && Math.abs(b.x - c.x) < 0.01
+    const sameY = Math.abs(a.y - b.y) < 0.01 && Math.abs(b.y - c.y) < 0.01
+    if ((sameX || sameY) && (b.x - a.x) * (c.x - b.x) >= 0 && (b.y - a.y) * (c.y - b.y) >= 0) out.splice(i, 1)
+  }
+  return out
+}
+function cubicAt(p0, c1, c2, p1, t) {
+  const u = 1 - t
+  return { x: u * u * u * p0.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p1.x,
+           y: u * u * u * p0.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p1.y }
+}
+function halfway(s) {
+  let total = 0
+  for (let i = 0; i < s.length - 1; i++) total += dist(s[i], s[i + 1])
+  let h = total / 2
+  for (let i = 0; i < s.length - 1; i++) {
+    const l = dist(s[i], s[i + 1])
+    if (h <= l && l > 0) return { x: s[i].x + ((s[i + 1].x - s[i].x) * h) / l, y: s[i].y + ((s[i + 1].y - s[i].y) * h) / l }
+    h -= l
+  }
+  return s[0]
+}
+const polyD = (pts) => 'M' + pts.map((p) => `${r1(p.x)},${r1(p.y)}`).join(' L')
+
+// Geometry of a link. Honors: routing, forced sides (fromSide/toSide), waypoints (points), ortho middle segment (mid)
+function edgeGeom(e) {
+  const a = nodeById(e.from), b = nodeById(e.to)
+  if (!a || !b) return null
+  const routing = e.routing || 'ortho', wps = e.points || []
+  const fs = forcedSide(e.fromSide), ts = forcedSide(e.toSide)
+  let pts, d, start, end, samples, midSeg = null
+
+  if (routing === 'straight') {
+    const t1 = wps[0] || center(b), t2 = wps[wps.length - 1] || center(a)
+    const p1 = fs ? port(a, fs) : boundary(a, t1.x, t1.y)
+    const p2 = ts ? port(b, ts) : boundary(b, t2.x, t2.y)
+    pts = simplify([p1, ...wps, p2])
+    if (pts.length < 2) pts = [p1, p2]
+    d = polyD(pts); samples = pts
+    start = [pts[1], pts[0]]; end = [pts[pts.length - 2], pts[pts.length - 1]]
+  } else {
+    let sa, sb
+    if (!wps.length && !fs && !ts) [sa, sb] = autoSides(a, b)
+    else { sa = fs || sideToward(a, wps[0] || center(b)); sb = ts || sideToward(b, wps[wps.length - 1] || center(a)) }
+    const p1 = port(a, sa), p2 = port(b, sb)
+
+    if (routing === 'curve') {
+      const P = [p1, ...wps, p2], n = P.length, segs = []
+      for (let i = 0; i < n - 1; i++) {
+        const k = Math.max(30, dist(P[i], P[i + 1]) * 0.4)
+        const c1 = i === 0 ? { x: P[0].x + NORMAL[sa][0] * k, y: P[0].y + NORMAL[sa][1] * k }
+          : { x: P[i].x + (P[i + 1].x - P[i - 1].x) / 6, y: P[i].y + (P[i + 1].y - P[i - 1].y) / 6 }
+        const c2 = i === n - 2 ? { x: P[n - 1].x + NORMAL[sb][0] * k, y: P[n - 1].y + NORMAL[sb][1] * k }
+          : { x: P[i + 1].x - (P[i + 2].x - P[i].x) / 6, y: P[i + 1].y - (P[i + 2].y - P[i].y) / 6 }
+        segs.push([P[i], c1, c2, P[i + 1]])
+      }
+      d = `M${r1(p1.x)},${r1(p1.y)}` + segs.map(([, c1, c2, q]) => ` C${r1(c1.x)},${r1(c1.y)} ${r1(c2.x)},${r1(c2.y)} ${r1(q.x)},${r1(q.y)}`).join('')
+      samples = [p1]
+      for (const s of segs) for (let j = 1; j <= 12; j++) samples.push(cubicAt(...s, j / 12))
+      start = [segs[0][1], p1]; end = [segs[segs.length - 1][2], p2]
+    } else {
+      // orthogonal
+      const auto = !wps.length && !fs && !ts
+      if (auto) {
+        if (isH(sa)) {
+          const mx = e.mid ?? (p1.x + p2.x) / 2
+          pts = [p1, { x: mx, y: p1.y }, { x: mx, y: p2.y }, p2]
+          midSeg = { x: mx, y: (p1.y + p2.y) / 2, axis: 'x' }
+        } else {
+          const my = e.mid ?? (p1.y + p2.y) / 2
+          pts = [p1, { x: p1.x, y: my }, { x: p2.x, y: my }, p2]
+          midSeg = { x: (p1.x + p2.x) / 2, y: my, axis: 'y' }
+        }
+      } else {
+        const S = 20
+        const s1 = { x: p1.x + NORMAL[sa][0] * S, y: p1.y + NORMAL[sa][1] * S }
+        const s2 = { x: p2.x + NORMAL[sb][0] * S, y: p2.y + NORMAL[sb][1] * S }
+        const Q = [s1, ...wps, s2], dir = isH(sa) ? 'h' : 'v', endDir = isH(sb) ? 'h' : 'v'
+        pts = [p1, s1]
+        for (let i = 0; i < Q.length - 1; i++) {
+          const q0 = Q[i], q1 = Q[i + 1]
+          if (i === Q.length - 2 && dir === endDir) {
+            if (dir === 'h') {
+              const mx = !wps.length && e.mid != null ? e.mid : (q0.x + q1.x) / 2
+              pts.push({ x: mx, y: q0.y }, { x: mx, y: q1.y })
+              if (!wps.length) midSeg = { x: mx, y: (q0.y + q1.y) / 2, axis: 'x' }
+            } else {
+              const my = !wps.length && e.mid != null ? e.mid : (q0.y + q1.y) / 2
+              pts.push({ x: q0.x, y: my }, { x: q1.x, y: my })
+              if (!wps.length) midSeg = { x: (q0.x + q1.x) / 2, y: my, axis: 'y' }
+            }
+          } else pts.push(dir === 'h' ? { x: q1.x, y: q0.y } : { x: q0.x, y: q1.y })
+          pts.push(q1)
+        }
+        pts.push(p2)
+      }
+      pts = simplify(pts)
+      if (pts.length < 2) pts = [p1, { x: p2.x + 0.01, y: p2.y }]
+      d = polyD(pts); samples = pts
+      start = [pts[1], pts[0]]; end = [pts[pts.length - 2], pts[pts.length - 1]]
+    }
+  }
+  return { d, start, end, mid: halfway(samples), p1: start[1], p2: end[1], midSeg, wps }
+}
+
+function arrowHead(from, tip, size, color) {
+  const ang = Math.atan2(tip.y - from.y, tip.x - from.x), s = 0.42
+  const p = (a) => `${r1(tip.x - size * Math.cos(a))},${r1(tip.y - size * Math.sin(a))}`
+  return `<polygon points="${r1(tip.x)},${r1(tip.y)} ${p(ang - s)} ${p(ang + s)}" fill="${color}"/>`
+}
+
+// ───────────────────────── Rendering ─────────────────────────
+// Text layout of a node: lines + center of the text block (relative to the node), including the user offset
+function textLayout(n) {
+  const tb = TEXT_BOX[n.type], v = typeof tb === 'function' ? tb(n.w, n.h) : tb
+  const below = v === 'below'
+  const [wf, cf] = below ? [Math.max(1.6, 150 / n.w), 0] : v || [1, 0.5]
+  const fs = n.fs || 14, lh = fs * 1.25
+  const lines = n.text ? wrap(n.text, Math.max(20, n.w * wf - 14), fs) : []
+  const bw = lines.length ? Math.max(...lines.map((l) => measure(l, fs))) : 0
+  const bh = lines.length * lh, baseY = below ? n.h + 6 + bh / 2 : n.h * cf
+  return { lines, fs, lh, bw, bh, base: { x: n.w / 2, y: baseY },
+           cx: n.w / 2 + (n.tdx || 0), cy: baseY + (n.tdy || 0) }
+}
+
+function nodeMarkup(n) {
+  let s = `<g data-node="${n.id}" transform="translate(${r1(n.x)},${r1(n.y)})">` + shapeMarkup(n.type, n.w, n.h, n.fill, n.stroke, n.sw)
+  if (n.text) {
+    const L = textLayout(n)
+    const y0 = L.cy - ((L.lines.length - 1) * L.lh) / 2
+    s += `<text font-size="${L.fs}" fill="${n.color}" text-anchor="middle" dominant-baseline="central" font-weight="${n.bold ? 700 : 400}" style="pointer-events:none">` +
+      L.lines.map((l, i) => `<tspan x="${r1(L.cx)}" y="${r1(y0 + i * L.lh)}">${esc(l)}</tspan>`).join('') + '</text>'
+  }
+  return s + '</g>'
+}
+
+// Preset text positions: [col, row] in -1..1 inside the shape, or 'above' / 'below' outside
+function textPreset(n, pos) {
+  const L = textLayout(n), pad = 8
+  if (pos === 'below') return { tdx: 0, tdy: n.h + pad + L.bh / 2 - L.base.y }
+  if (pos === 'above') return { tdx: 0, tdy: -pad - L.bh / 2 - L.base.y }
+  const [cx, cy] = pos
+  const tx = cx === 0 ? n.w / 2 : cx < 0 ? pad + L.bw / 2 : n.w - pad - L.bw / 2
+  const ty = cy === 0 ? (L.base.y > n.h ? n.h / 2 : L.base.y) : cy < 0 ? pad + L.bh / 2 : n.h - pad - L.bh / 2
+  return { tdx: Math.round(tx - n.w / 2), tdy: Math.round(ty - L.base.y) }
+}
+
+function edgeMarkup(e, labelBg) {
+  const g = edgeGeom(e)
+  if (!g) return ''
+  const sw = e.sw || 2, col = e.color || '#a1a1aa', size = 8 + sw * 2
+  const dash = e.style === 'dashed' ? `stroke-dasharray="${sw * 4} ${sw * 3}"` : e.style === 'dotted' ? `stroke-dasharray="${sw} ${sw * 2.2}" stroke-linecap="round"` : ''
+  let s = `<g data-edge="${e.id}"><path d="${g.d}" fill="none" stroke="transparent" stroke-width="14"/>` +
+    `<path d="${g.d}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linejoin="round" ${dash}/>`
+  const arrow = e.arrow || 'end'
+  if (arrow === 'end' || arrow === 'both') s += arrowHead(g.end[0], g.end[1], size, col)
+  if (arrow === 'start' || arrow === 'both') s += arrowHead(g.start[0], g.start[1], size, col)
+  if (e.label) {
+    const fs = 12.5, lines = String(e.label).split('\n'), lh = fs * 1.25
+    const w = Math.max(...lines.map((l) => measure(l, fs))) + 12, h = lines.length * lh + 6
+    s += `<rect x="${r1(g.mid.x - w / 2)}" y="${r1(g.mid.y - h / 2)}" width="${r1(w)}" height="${r1(h)}" rx="4" fill="${labelBg}" stroke="${col}" stroke-opacity=".35"/>` +
+      `<text font-size="${fs}" fill="${e.labelColor || '#e2e2e8'}" text-anchor="middle" dominant-baseline="central" style="pointer-events:none">` +
+      lines.map((l, i) => `<tspan x="${r1(g.mid.x)}" y="${r1(g.mid.y - ((lines.length - 1) * lh) / 2 + i * lh)}">${esc(l)}</tspan>`).join('') + '</text>'
+  }
+  return s + '</g>'
+}
+
+function overlayMarkup() {
+  const k = view.k
+  let s = ''
+  for (const id of sel) {
+    const e = edgeById(id)
+    if (e) { const g = edgeGeom(e); if (g) s += `<path d="${g.d}" fill="none" stroke="#6366f1" stroke-opacity=".45" stroke-width="${(e.sw || 2) + 6}" stroke-linejoin="round" pointer-events="none"/>` }
+  }
+  // handles of a single selected link: endpoints, waypoints, "+" insert points, middle segment
+  const EDGE_MODES = ['wp', 'mid', 'ep', 'edgedrag']
+  const se = sel.size === 1 ? edgeById([...sel][0]) : null
+  if (se && (!mode || EDGE_MODES.includes(mode.type))) {
+    const g = edgeGeom(se)
+    if (g) {
+      const col = '#6366f1'
+      if (se.routing !== 'ortho' || g.wps.length) {
+        const ctrl = [g.p1, ...g.wps, g.p2]
+        if (se.routing !== 'ortho') for (let i = 0; i < ctrl.length - 1; i++) {
+          const m = { x: (ctrl[i].x + ctrl[i + 1].x) / 2, y: (ctrl[i].y + ctrl[i + 1].y) / 2 }
+          s += `<g data-wpadd="${i}" data-id="${se.id}" style="cursor:copy"><title>Glisser pour ajouter un point de passage</title>` +
+            `<circle cx="${m.x}" cy="${m.y}" r="${5.5 / k}" fill="#18181b" stroke="${col}" stroke-width="${1.5 / k}" opacity=".9"/>` +
+            `<path d="M${m.x - 3 / k},${m.y} H${m.x + 3 / k} M${m.x},${m.y - 3 / k} V${m.y + 3 / k}" stroke="#a5b4fc" stroke-width="${1.3 / k}"/></g>`
+        }
+        g.wps.forEach((p, i) => {
+          const hs = 9 / k
+          s += `<rect data-wp="${i}" data-id="${se.id}" x="${p.x - hs / 2}" y="${p.y - hs / 2}" width="${hs}" height="${hs}" rx="${2 / k}" fill="${col}" stroke="#e0e7ff" stroke-width="${1.5 / k}" style="cursor:move"><title>Point de passage — double-clic pour supprimer</title></rect>`
+        })
+      }
+      if (g.midSeg && !g.wps.length) {
+        const m = g.midSeg, L = 16 / k, T = 6 / k, horiz = m.axis === 'y'
+        s += `<rect data-mid="1" data-id="${se.id}" x="${m.x - (horiz ? L : T) / 2}" y="${m.y - (horiz ? T : L) / 2}" width="${horiz ? L : T}" height="${horiz ? T : L}" rx="${3 / k}" fill="#f4f4f5" stroke="${col}" stroke-width="${1.5 / k}" style="cursor:${horiz ? 'ns' : 'ew'}-resize"><title>Glisser pour déplacer ce segment — double-clic : recentrer</title></rect>`
+      }
+      for (const [end, p] of [['from', g.p1], ['to', g.p2]])
+        s += `<circle data-ep="${end}" data-id="${se.id}" cx="${p.x}" cy="${p.y}" r="${6 / k}" fill="#f4f4f5" stroke="${col}" stroke-width="${2 / k}" style="cursor:crosshair"><title>Glisser vers un autre côté ou un autre bloc</title></circle>`
+    }
+  }
+  if (mode && mode.type === 'ep' && mode.moved) {
+    const e = edgeById(mode.id), other = nodeById(mode.end === 'from' ? e.to : e.from), tgt = mode.target && nodeById(mode.target)
+    if (tgt) {
+      s += `<rect x="${tgt.x - 5 / k}" y="${tgt.y - 5 / k}" width="${tgt.w + 10 / k}" height="${tgt.h + 10 / k}" rx="${6 / k}" fill="#22c55e14" stroke="#22c55e" stroke-width="${2 / k}" pointer-events="none"/>`
+      for (const side of ['top', 'right', 'bottom', 'left']) {
+        const p = port(tgt, side), on = side === mode.side
+        s += `<circle cx="${p.x}" cy="${p.y}" r="${(on ? 7 : 4.5) / k}" fill="${on ? '#22c55e' : '#6366f1'}" stroke="#fff" stroke-width="${1.2 / k}" pointer-events="none"/>`
+      }
+    }
+    const from = other ? center(other) : mode.cur
+    const to = tgt ? port(tgt, mode.side) : mode.cur
+    s += `<path d="M${from.x},${from.y} L${to.x},${to.y}" stroke="#22c55e" stroke-width="${1.5 / k}" stroke-dasharray="${5 / k} ${4 / k}" fill="none" pointer-events="none"/>`
+  }
+
+  const selNodes = doc.nodes.filter((n) => sel.has(n.id))
+  for (const n of selNodes) {
+    const p = 4 / k
+    s += `<rect x="${n.x - p}" y="${n.y - p}" width="${n.w + 2 * p}" height="${n.h + 2 * p}" fill="none" stroke="#818cf8" stroke-width="${1.2 / k}" stroke-dasharray="${4 / k} ${3 / k}" pointer-events="none"/>`
+  }
+  const busy = mode && mode.type !== 'connect'
+  if (selNodes.length === 1 && !busy) {
+    const n = selNodes[0], hs = 8 / k
+    for (const [c, x, y] of [['nw', n.x, n.y], ['ne', n.x + n.w, n.y], ['sw', n.x, n.y + n.h], ['se', n.x + n.w, n.y + n.h]])
+      s += `<rect data-handle="${c}" data-id="${n.id}" x="${x - hs / 2}" y="${y - hs / 2}" width="${hs}" height="${hs}" rx="${1.5 / k}" fill="#f4f4f5" stroke="#6366f1" stroke-width="${1.5 / k}"/>`
+  }
+  // text handle: drag to move the label
+  const textNode = mode && mode.type === 'text' ? nodeById(mode.id) : (selNodes.length === 1 && !busy ? selNodes[0] : null)
+  if (textNode && textNode.text) {
+    const L = textLayout(textNode), x = textNode.x + L.cx, y = textNode.y + L.cy
+    const bw = L.bw + 8 / k, bh = L.bh + 4 / k
+    s += `<rect x="${x - bw / 2}" y="${y - bh / 2}" width="${bw}" height="${bh}" rx="${3 / k}" fill="none" stroke="#f59e0b" stroke-width="${1 / k}" stroke-dasharray="${3 / k} ${2 / k}" pointer-events="none"/>`
+    const r = 7 / k, hx = x - bw / 2 - r - 3 / k
+    s += `<g data-texthandle="${textNode.id}"><title>Glisser pour déplacer le texte (double-clic : recentrer)</title>` +
+      `<circle cx="${hx}" cy="${y}" r="${r}" fill="#f59e0b" stroke="#fff7ed" stroke-width="${1.5 / k}"/>` +
+      `<path d="M${hx - r * 0.55},${y} H${hx + r * 0.55} M${hx},${y - r * 0.55} V${y + r * 0.55}" stroke="#18181b" stroke-width="${1.6 / k}" stroke-linecap="round"/></g>`
+  }
+  const portNodes = new Set()
+  if (!busy) {
+    if (hoverId && nodeById(hoverId)) portNodes.add(hoverId)
+    if (selNodes.length === 1) portNodes.add(selNodes[0].id)
+  }
+  if (mode && mode.type === 'connect') {
+    const a = nodeById(mode.from), tgt = mode.target && nodeById(mode.target)
+    if (tgt) s += `<rect x="${tgt.x - 5 / k}" y="${tgt.y - 5 / k}" width="${tgt.w + 10 / k}" height="${tgt.h + 10 / k}" rx="${6 / k}" fill="#22c55e14" stroke="#22c55e" stroke-width="${2 / k}" pointer-events="none"/>`
+    const p1 = port(a, mode.side), p2 = tgt ? boundary(tgt, p1.x, p1.y) : mode.cur
+    s += `<path d="M${p1.x},${p1.y} L${p2.x},${p2.y}" stroke="#818cf8" stroke-width="${2 / k}" stroke-dasharray="${6 / k} ${4 / k}" fill="none" pointer-events="none"/>`
+    s += arrowHead(p1, p2, 12 / k, '#818cf8')
+  }
+  for (const id of portNodes) {
+    const n = nodeById(id), pr = 5.5 / k
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+      const p = port(n, side)
+      s += `<circle data-port="${side}" data-id="${id}" cx="${p.x}" cy="${p.y}" r="${pr}" fill="#6366f1" stroke="#e0e7ff" stroke-width="${1.5 / k}"/>`
+    }
+  }
+  if (mode && mode.type === 'rubber') {
+    const { x0, y0, x1, y1 } = mode
+    s += `<rect x="${Math.min(x0, x1)}" y="${Math.min(y0, y1)}" width="${Math.abs(x1 - x0)}" height="${Math.abs(y1 - y0)}" fill="#6366f122" stroke="#6366f1" stroke-width="${1 / k}" pointer-events="none"/>`
+  }
+  return s
+}
+
+function render() {
+  $('#gEdges').innerHTML = doc.edges.map((e) => edgeMarkup(e, '#0f0f12')).join('')
+  $('#gNodes').innerHTML = doc.nodes.map(nodeMarkup).join('')
+  $('#gOver').innerHTML = overlayMarkup()
+  $('#empty').style.display = doc.nodes.length ? 'none' : 'flex'
+}
+function renderOverlay() { $('#gOver').innerHTML = overlayMarkup() }
+
+function applyView() {
+  $('#vp').setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`)
+  const wrapEl = $('#wrap'), g = 20 * view.k
+  wrapEl.style.backgroundSize = `${g}px ${g}px`
+  wrapEl.style.backgroundPosition = `${view.x}px ${view.y}px`
+  $('#zoomLbl').textContent = Math.round(view.k * 100) + '%'
+  renderOverlay()
+}
+
+// ───────────────────────── Node / edge creation ─────────────────────────
+function makeNode(type, cx, cy, text) {
+  const d = SHAPES[type] || SHAPES.rect
+  const isText = type === 'text'
+  return {
+    id: uid('n'), type, w: d.w, h: d.h, x: snap(cx - d.w / 2), y: snap(cy - d.h / 2),
+    text: text ?? d.text ?? (isText ? 'Texte' : d.label),
+    fill: d.fill ?? (isText ? 'none' : '#1e1e24'), stroke: d.stroke ?? (isText ? 'none' : '#6366f1'),
+    sw: isText ? 0 : 2, color: '#f4f4f5', fs: 14, bold: false,
+  }
+}
+function addNode(type, cx, cy, edit = true) {
+  snapshot()
+  const n = makeNode(type, cx, cy)
+  if (type === 'container') doc.nodes.unshift(n) // frames go behind the other blocks
+  else doc.nodes.push(n)
+  sel = new Set([n.id])
+  changed()
+  if (edit) startEdit(n.id, true)
+  return n
+}
+function viewCenter() {
+  const r = $('#svg').getBoundingClientRect()
+  return { x: (r.width / 2 - view.x) / view.k, y: (r.height / 2 - view.y) / view.k }
+}
+function deleteSelection() {
+  if (!sel.size) return
+  snapshot()
+  doc.nodes = doc.nodes.filter((n) => !sel.has(n.id))
+  const alive = new Set(doc.nodes.map((n) => n.id))
+  doc.edges = doc.edges.filter((e) => !sel.has(e.id) && alive.has(e.from) && alive.has(e.to))
+  sel.clear(); changed()
+}
+function copySelection() {
+  const nodes = doc.nodes.filter((n) => sel.has(n.id))
+  if (!nodes.length) return false
+  const ids = new Set(nodes.map((n) => n.id))
+  clipboard = JSON.stringify({ nodes, edges: doc.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) })
+  return true
+}
+function paste(offset = 20) {
+  if (!clipboard) return
+  const data = JSON.parse(clipboard), map = {}
+  snapshot()
+  sel.clear()
+  for (const n of data.nodes) { map[n.id] = uid('n'); doc.nodes.push({ ...n, id: map[n.id], x: n.x + offset, y: n.y + offset }); sel.add(map[n.id]) }
+  for (const e of data.edges) { // same offset on both axes, so waypoints and middle segment follow
+    doc.edges.push({ ...e, id: uid('e'), from: map[e.from], to: map[e.to],
+      points: (e.points || []).map((q) => ({ x: q.x + offset, y: q.y + offset })),
+      ...(e.mid != null ? { mid: e.mid + offset } : {}) })
+  }
+  clipboard = JSON.stringify({ nodes: doc.nodes.filter((n) => sel.has(n.id)), edges: doc.edges.filter((e) => sel.has(e.from) && sel.has(e.to)) })
+  changed()
+}
+
+// ───────────────────────── Inline text editor ─────────────────────────
+function startEdit(id, selectAll = false) {
+  commitEdit()
+  const n = nodeById(id), e = !n && edgeById(id)
+  if (!n && !e) return
+  const ed = $('#editor'), k = view.k
+  let x, y, w, h, fs
+  if (n) {
+    x = n.x * k + view.x; y = n.y * k + view.y; w = Math.max(n.w * k, 90); h = Math.max(n.h * k, 34)
+    if (n.w * k < 90) x -= (90 - n.w * k) / 2
+    fs = (n.fs || 14) * k
+    ed.value = n.text || ''
+  } else {
+    const g = edgeGeom(e)
+    w = 180; h = 54; x = g.mid.x * k + view.x - w / 2; y = g.mid.y * k + view.y - h / 2; fs = 13
+    ed.value = e.label || ''
+  }
+  Object.assign(ed.style, { display: 'block', left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px', fontSize: Math.max(11, Math.min(fs, 28)) + 'px' })
+  ed.placeholder = n ? 'Nom du bloc' : 'Nom de la liaison'
+  editing = { id, orig: ed.value }
+  ed.focus()
+  if (selectAll) ed.select(); else ed.setSelectionRange(ed.value.length, ed.value.length)
+}
+function commitEdit(cancel = false) {
+  if (!editing) return
+  const ed = $('#editor'), { id, orig } = editing
+  editing = null
+  ed.style.display = 'none'
+  const val = ed.value.replace(/\s+$/, '')
+  if (cancel || val === orig) { $('#svg').focus?.(); return }
+  snapshot()
+  const n = nodeById(id), e = edgeById(id)
+  if (n) n.text = val
+  else if (e) e.label = val
+  changed()
+}
+$('#editor').addEventListener('keydown', (ev) => {
+  ev.stopPropagation()
+  if (ev.key === 'Escape') { ev.preventDefault(); commitEdit(true) }
+  else if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); commitEdit() }
+})
+$('#editor').addEventListener('blur', () => commitEdit())
+
+// ───────────────────────── Pointer interaction ─────────────────────────
+const svg = $('#svg')
+function toWorld(ev) {
+  const r = svg.getBoundingClientRect()
+  return { x: (ev.clientX - r.left - view.x) / view.k, y: (ev.clientY - r.top - view.y) / view.k }
+}
+function nodeAt(p, exclude) {
+  for (let i = doc.nodes.length - 1; i >= 0; i--) {
+    const n = doc.nodes[i]
+    if (n.id !== exclude && p.x >= n.x - 4 && p.x <= n.x + n.w + 4 && p.y >= n.y - 4 && p.y <= n.y + n.h + 4) return n.id
+  }
+  return null
+}
+function isDouble(id) {
+  const now = Date.now(), d = lastClick.id === id && now - lastClick.t < 380
+  lastClick = d ? { id: null, t: 0 } : { id, t: now }
+  return d
+}
+
+svg.addEventListener('pointerdown', (ev) => {
+  if (editing) commitEdit()
+  closeMenus()
+  // keep keyboard shortcuts working: take focus away from panel fields
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur()
+  window.focus()
+  const p = toWorld(ev)
+  const t = ev.target.closest('[data-ep],[data-wp],[data-wpadd],[data-mid],[data-texthandle],[data-handle],[data-port],[data-node],[data-edge]')
+
+  if (ev.button === 1 || ev.button === 2 || spaceDown) {
+    mode = { type: 'pan', sx: ev.clientX, sy: ev.clientY, vx: view.x, vy: view.y }
+    svg.classList.add('panning'); svg.setPointerCapture(ev.pointerId); ev.preventDefault(); return
+  }
+  if (ev.button !== 0) return
+
+  const textDragNode = t?.dataset.texthandle || (ev.altKey && t?.dataset.node) || null
+  const ds = t?.dataset || {}
+  if (ds.ep) {
+    const e = edgeById(ds.id)
+    mode = { type: 'ep', id: e.id, end: ds.ep, cur: p, start: p, target: null, side: null, moved: false }
+  } else if (ds.wp != null) {
+    const e = edgeById(ds.id), idx = +ds.wp
+    if (isDouble(`wp:${e.id}:${idx}`)) { // double-click: remove the waypoint
+      snapshot(); e.points.splice(idx, 1); changed(); ev.preventDefault(); return
+    }
+    mode = { type: 'wp', id: e.id, idx, pre: JSON.stringify(doc), moved: false }
+  } else if (ds.wpadd != null) {
+    const e = edgeById(ds.id), pre = JSON.stringify(doc)
+    e.points = e.points || []
+    e.points.splice(+ds.wpadd, 0, { x: snap(p.x), y: snap(p.y) })
+    mode = { type: 'wp', id: e.id, idx: +ds.wpadd, pre, moved: true }
+  } else if (ds.mid) {
+    const e = edgeById(ds.id)
+    if (isDouble('mid:' + e.id)) { snapshot(); delete e.mid; changed(); ev.preventDefault(); return }
+    mode = { type: 'mid', id: e.id, axis: edgeGeom(e).midSeg.axis, pre: JSON.stringify(doc), moved: false }
+  } else if (textDragNode) {
+    const n = nodeById(textDragNode)
+    if (isDouble('txt:' + n.id)) { // double-click on the handle: re-center the text
+      snapshot(); n.tdx = 0; n.tdy = 0; changed(); ev.preventDefault(); return
+    }
+    sel = new Set([n.id]); renderPanel()
+    mode = { type: 'text', id: n.id, start: p, orig: { x: n.tdx || 0, y: n.tdy || 0 }, pre: JSON.stringify(doc), moved: false }
+  } else if (t?.dataset.handle) {
+    const n = nodeById(t.dataset.id)
+    mode = { type: 'resize', id: n.id, corner: t.dataset.handle, orig: { x: n.x, y: n.y, w: n.w, h: n.h }, start: p, pre: JSON.stringify(doc), moved: false }
+  } else if (t?.dataset.port) {
+    mode = { type: 'connect', from: t.dataset.id, side: t.dataset.port, cur: p, start: p, target: null }
+  } else if (t?.dataset.node) {
+    const id = t.dataset.node
+    if (isDouble(id)) { sel = new Set([id]); render(); renderPanel(); startEdit(id); ev.preventDefault(); return }
+    if (ev.shiftKey || ev.ctrlKey) { sel.has(id) ? sel.delete(id) : sel.add(id) }
+    else if (!sel.has(id)) sel = new Set([id])
+    const origs = {}
+    for (const n of doc.nodes) if (sel.has(n.id)) origs[n.id] = { x: n.x, y: n.y }
+    // links fully inside the selection keep their custom path while moving
+    const eOrigs = {}
+    for (const e of doc.edges) if (sel.has(e.from) && sel.has(e.to) && (e.points?.length || e.mid != null)) {
+      const g = edgeGeom(e)
+      eOrigs[e.id] = { points: (e.points || []).map((q) => ({ ...q })), mid: e.mid, axis: g?.midSeg?.axis }
+    }
+    mode = { type: 'move', start: p, origs, eOrigs, pre: JSON.stringify(doc), moved: false }
+    renderPanel()
+  } else if (t?.dataset.edge) {
+    const id = t.dataset.edge
+    if (isDouble(id)) { sel = new Set([id]); render(); renderPanel(); startEdit(id); ev.preventDefault(); return }
+    if (ev.shiftKey || ev.ctrlKey) { sel.has(id) ? sel.delete(id) : sel.add(id) }
+    else {
+      sel = new Set([id])
+      // dragging the line itself bends it (waypoint) or moves its middle segment (orthogonal)
+      mode = { type: 'edgedrag', id, start: p, pre: JSON.stringify(doc), moved: false }
+    }
+    renderPanel()
+  } else {
+    if (isDouble('__bg')) { addNode('rounded', p.x, p.y); ev.preventDefault(); return }
+    if (ev.shiftKey) mode = { type: 'rubber', x0: p.x, y0: p.y, x1: p.x, y1: p.y, add: new Set(sel) }
+    else {
+      if (sel.size) { sel.clear(); renderPanel() }
+      mode = { type: 'pan', sx: ev.clientX, sy: ev.clientY, vx: view.x, vy: view.y }
+      svg.classList.add('panning')
+    }
+  }
+  svg.setPointerCapture(ev.pointerId)
+  render()
+  ev.preventDefault()
+})
+
+svg.addEventListener('pointermove', (ev) => {
+  if (!mode) {
+    const t = ev.target.closest('[data-node],[data-port]')
+    const h = t ? (t.dataset.node || t.dataset.id) : null
+    if (h !== hoverId) { hoverId = h; renderOverlay() }
+    return
+  }
+  const p = toWorld(ev)
+  switch (mode.type) {
+    case 'pan':
+      view.x = mode.vx + ev.clientX - mode.sx; view.y = mode.vy + ev.clientY - mode.sy; applyView(); return
+    case 'move': {
+      const dx = p.x - mode.start.x, dy = p.y - mode.start.y
+      if (!mode.moved && Math.hypot(dx, dy) * view.k < 3) return
+      mode.moved = true
+      let rdx = dx, rdy = dy
+      for (const id in mode.origs) { const n = nodeById(id), o = mode.origs[id]; n.x = snap(o.x + dx); n.y = snap(o.y + dy); rdx = n.x - o.x; rdy = n.y - o.y }
+      for (const id in mode.eOrigs || {}) {
+        const e = edgeById(id), o = mode.eOrigs[id]
+        e.points = o.points.map((q) => ({ x: q.x + rdx, y: q.y + rdy }))
+        if (o.mid != null) e.mid = o.mid + (o.axis === 'y' ? rdy : rdx)
+      }
+      break
+    }
+    case 'resize': {
+      const n = nodeById(mode.id), o = mode.orig, c = mode.corner, MIN = 24
+      let L = o.x, R = o.x + o.w, T = o.y, B = o.y + o.h
+      const dx = p.x - mode.start.x, dy = p.y - mode.start.y
+      if (c.includes('w')) L = Math.min(snap(o.x + dx), R - MIN)
+      if (c.includes('e')) R = Math.max(snap(o.x + o.w + dx), L + MIN)
+      if (c.includes('n')) T = Math.min(snap(o.y + dy), B - MIN)
+      if (c.includes('s')) B = Math.max(snap(o.y + o.h + dy), T + MIN)
+      let w = R - L, h = B - T
+      if (ev.shiftKey || n.type === 'circle') {
+        const s = Math.max(w, h); w = h = s
+        if (c.includes('w')) L = R - s
+        if (c.includes('n')) T = B - s
+      }
+      Object.assign(n, { x: L, y: T, w, h }); mode.moved = true
+      break
+    }
+    case 'edgedrag': {
+      if (Math.hypot(p.x - mode.start.x, p.y - mode.start.y) * view.k < 4) return
+      const e = edgeById(mode.id), g = edgeGeom(e)
+      if (!g) return
+      if (e.routing === 'ortho' && !g.wps.length && g.midSeg) {
+        mode = { type: 'mid', id: e.id, axis: g.midSeg.axis, pre: mode.pre, moved: true }
+      } else if (e.routing === 'ortho' && !g.wps.length) {
+        return // L-shaped orthogonal link: nothing to drag
+      } else {
+        // insert a waypoint on the control segment closest to where the drag started
+        const ctrl = [g.p1, ...g.wps, g.p2]
+        let best = 0, bd = Infinity
+        for (let i = 0; i < ctrl.length - 1; i++) {
+          const a = ctrl[i], b = ctrl[i + 1], L2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2
+          const tt = L2 ? Math.max(0, Math.min(1, ((mode.start.x - a.x) * (b.x - a.x) + (mode.start.y - a.y) * (b.y - a.y)) / L2)) : 0
+          const dd = Math.hypot(mode.start.x - (a.x + tt * (b.x - a.x)), mode.start.y - (a.y + tt * (b.y - a.y)))
+          if (dd < bd) { bd = dd; best = i }
+        }
+        e.points = e.points || []
+        e.points.splice(best, 0, { x: snap(p.x), y: snap(p.y) })
+        mode = { type: 'wp', id: e.id, idx: best, pre: mode.pre, moved: true }
+      }
+    } // falls through: apply the first move immediately
+    case 'wp':
+    case 'mid': {
+      const e = edgeById(mode.id)
+      if (mode.type === 'wp') e.points[mode.idx] = { x: snap(p.x), y: snap(p.y) }
+      else e.mid = snap(p[mode.axis])
+      mode.moved = true
+      break
+    }
+    case 'ep': {
+      mode.cur = p
+      if (!mode.moved && Math.hypot(p.x - mode.start.x, p.y - mode.start.y) * view.k < 4) return
+      mode.moved = true
+      const e = edgeById(mode.id), other = mode.end === 'from' ? e.to : e.from
+      const tgt = nodeAt(p, other)
+      mode.target = tgt
+      mode.side = tgt ? nearestSide(nodeById(tgt), p) : null
+      renderOverlay(); return
+    }
+    case 'text': {
+      const n = nodeById(mode.id)
+      let dx = mode.orig.x + p.x - mode.start.x, dy = mode.orig.y + p.y - mode.start.y
+      if (settings.snap && !ev.shiftKey) { // magnetic: snap back to the center axes
+        if (Math.abs(dx) < 6 / view.k) dx = 0
+        if (Math.abs(dy) < 6 / view.k) dy = 0
+      }
+      n.tdx = Math.round(dx); n.tdy = Math.round(dy); mode.moved = true
+      break
+    }
+    case 'connect':
+      mode.cur = p; mode.target = nodeAt(p, mode.from); renderOverlay(); return
+    case 'rubber': {
+      mode.x1 = p.x; mode.y1 = p.y
+      const x0 = Math.min(mode.x0, p.x), x1 = Math.max(mode.x0, p.x), y0 = Math.min(mode.y0, p.y), y1 = Math.max(mode.y0, p.y)
+      sel = new Set(mode.add)
+      for (const n of doc.nodes) if (n.x < x1 && n.x + n.w > x0 && n.y < y1 && n.y + n.h > y0) sel.add(n.id)
+      renderOverlay(); return
+    }
+  }
+  render()
+})
+
+function endPointer(ev) {
+  if (!mode) return
+  const m = mode
+  mode = null
+  svg.classList.remove('panning')
+  try { svg.releasePointerCapture(ev.pointerId) } catch {}
+  if (m.type === 'ep' && m.moved) {
+    const e = edgeById(m.id)
+    if (m.target) {
+      snapshot()
+      if (m.end === 'from') { e.from = m.target; e.fromSide = m.side } else { e.to = m.target; e.toSide = m.side }
+      changed(); toast('Liaison rattachée — côté ' + { top: 'haut', right: 'droit', bottom: 'bas', left: 'gauche' }[m.side])
+    } else render()
+    return
+  }
+  if (['move', 'resize', 'text', 'wp', 'mid'].includes(m.type) && m.moved) {
+    undoStack.push(m.pre); redoStack = []; changed()
+    return
+  }
+  if (m.type === 'connect') {
+    const a = nodeById(m.from)
+    let target = m.target
+    if (!target && Math.hypot(m.cur.x - m.start.x, m.cur.y - m.start.y) * view.k > 40) {
+      snapshot()
+      const n = makeNode(a.type === 'text' ? 'rounded' : a.type, m.cur.x, m.cur.y, '')
+      n.fill = a.fill; n.stroke = a.stroke; n.sw = a.sw; n.color = a.color
+      doc.nodes.push(n); target = n.id
+      const edge = { id: uid('e'), from: a.id, to: target, label: '', routing: settings.routing, style: 'solid', arrow: 'end', color: '#a1a1aa', sw: 2 }
+      doc.edges.push(edge); sel = new Set([n.id]); changed(); startEdit(n.id)
+      return
+    }
+    if (target) {
+      snapshot()
+      const edge = { id: uid('e'), from: a.id, to: target, label: '', routing: settings.routing, style: 'solid', arrow: 'end', color: '#a1a1aa', sw: 2 }
+      doc.edges.push(edge); sel = new Set([edge.id]); changed()
+      toast('Liaison créée — double-cliquez dessus pour la nommer')
+      return
+    }
+  }
+  if (m.type === 'rubber') renderPanel()
+  render()
+}
+svg.addEventListener('pointerup', endPointer)
+svg.addEventListener('pointercancel', endPointer)
+svg.addEventListener('contextmenu', (ev) => ev.preventDefault())
+svg.addEventListener('pointerleave', () => { if (!mode && hoverId) { hoverId = null; renderOverlay() } })
+
+svg.addEventListener('wheel', (ev) => {
+  ev.preventDefault()
+  if (editing) commitEdit()
+  const r = svg.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top
+  if (ev.ctrlKey || Math.abs(ev.deltaY) >= Math.abs(ev.deltaX)) zoomAt(view.k * Math.exp(-ev.deltaY * 0.0015), mx, my)
+  else { view.x -= ev.deltaX; applyView() }
+}, { passive: false })
+
+function zoomAt(k, mx, my) {
+  k = Math.min(4, Math.max(0.15, k))
+  view.x = mx - ((mx - view.x) * k) / view.k
+  view.y = my - ((my - view.y) * k) / view.k
+  view.k = k; applyView()
+}
+function zoomStep(f) { const r = svg.getBoundingClientRect(); zoomAt(view.k * f, r.width / 2, r.height / 2) }
+
+function bbox() {
+  if (!doc.nodes.length) return null
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  for (const n of doc.nodes) {
+    x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + n.w); y1 = Math.max(y1, n.y + n.h)
+    if (n.text) { // text may sit outside the shape (moved, or under an icon)
+      const L = textLayout(n), tx = n.x + L.cx, ty = n.y + L.cy
+      x0 = Math.min(x0, tx - L.bw / 2); x1 = Math.max(x1, tx + L.bw / 2); y0 = Math.min(y0, ty - L.bh / 2); y1 = Math.max(y1, ty + L.bh / 2)
+    }
+  }
+  for (const e of doc.edges) {
+    const g = edgeGeom(e)
+    if (!g) continue
+    const lw = e.label ? 60 : 4, lh = e.label ? 20 : 4
+    x0 = Math.min(x0, g.mid.x - lw); x1 = Math.max(x1, g.mid.x + lw); y0 = Math.min(y0, g.mid.y - lh); y1 = Math.max(y1, g.mid.y + lh)
+    for (const q of [...g.wps, ...(g.midSeg ? [g.midSeg] : [])]) {
+      x0 = Math.min(x0, q.x - 10); x1 = Math.max(x1, q.x + 10); y0 = Math.min(y0, q.y - 10); y1 = Math.max(y1, q.y + 10)
+    }
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+}
+function fit() {
+  const b = bbox(), r = svg.getBoundingClientRect()
+  if (!b) { view = { x: r.width / 2, y: r.height / 2, k: 1 }; applyView(); return }
+  const k = Math.min(1.5, Math.max(0.15, Math.min((r.width - 80) / b.w, (r.height - 80) / b.h)))
+  view = { k, x: r.width / 2 - (b.x + b.w / 2) * k, y: r.height / 2 - (b.y + b.h / 2) * k }
+  applyView()
+}
+
+// Drop from palette
+const wrapEl = $('#wrap')
+wrapEl.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy' })
+wrapEl.addEventListener('drop', (ev) => {
+  ev.preventDefault()
+  const type = ev.dataTransfer.getData('text/x-shape')
+  if (SHAPES[type]) { const p = toWorld(ev); useShape(type); addNode(type, p.x, p.y) }
+})
+
+// ───────────────────────── Keyboard ─────────────────────────
+document.addEventListener('keydown', (ev) => {
+  const tag = document.activeElement?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  const ctrl = ev.ctrlKey || ev.metaKey, key = ev.key.toLowerCase()
+  if (ev.key === ' ') { spaceDown = true; ev.preventDefault(); return }
+  if (ev.key === 'Delete' || ev.key === 'Backspace') { deleteSelection(); ev.preventDefault() }
+  else if (ctrl && key === 'z' && !ev.shiftKey) { undo(); ev.preventDefault() }
+  else if (ctrl && (key === 'y' || (key === 'z' && ev.shiftKey))) { redo(); ev.preventDefault() }
+  else if (ctrl && key === 'b') { ev.shiftKey ? togglePanel() : togglePal(); ev.preventDefault() }
+  else if (ctrl && key === 'f') { if (ui.hidePal) togglePal(); $('#shapeSearch').focus(); ev.preventDefault() }
+  else if (ctrl && key === 'c') { copySelection() }
+  else if (ctrl && key === 'x') { if (copySelection()) deleteSelection() }
+  else if (ctrl && key === 'v') { paste(); ev.preventDefault() }
+  else if (ctrl && key === 'd') { if (copySelection()) paste(20); ev.preventDefault() }
+  else if (ctrl && key === 'a') { sel = new Set(doc.nodes.map((n) => n.id)); render(); renderPanel(); ev.preventDefault() }
+  else if (ctrl && key === 's') { saveNow(); ev.preventDefault() }
+  else if (ev.key === 'F2' || ev.key === 'Enter') { if (sel.size === 1) { startEdit([...sel][0], true); ev.preventDefault() } }
+  else if (ev.key === 'Escape') { sel.clear(); render(); renderPanel() }
+  else if (ev.key.startsWith('Arrow')) {
+    const nodes = doc.nodes.filter((n) => sel.has(n.id))
+    if (!nodes.length) return
+    const d = ev.shiftKey ? 10 : 1
+    const [dx, dy] = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] }[ev.key]
+    snapshot(); nodes.forEach((n) => { n.x += dx; n.y += dy }); changed(false); ev.preventDefault()
+  }
+})
+document.addEventListener('keyup', (ev) => { if (ev.key === ' ') spaceDown = false })
+
+// ───────────────────────── Properties panel ─────────────────────────
+let panelSnap = false
+const panel = $('#panel')
+panel.addEventListener('focusin', () => { panelSnap = false })
+function mutate(fn, renderPanelToo = false) {
+  if (!panelSnap) { snapshot(); panelSnap = true }
+  fn(); changed(renderPanelToo)
+}
+function swatchRow(colors, prop) {
+  return `<div class="swatches">${colors.map((c) => `<button class="sw ${c === 'none' ? 'none' : ''}" title="${c === 'none' ? 'Aucun' : c}" data-sw="${prop}" data-c="${c}" style="${c === 'none' ? '' : `background:${c}`}"></button>`).join('')}</div>`
+}
+const colorVal = (c, fb) => (c && c !== 'none' ? c : fb)
+const SIDE_OPTS = [['auto', 'Auto'], ['top', '↑'], ['right', '→'], ['bottom', '↓'], ['left', '←']]
+
+function renderPanel() {
+  const nodes = doc.nodes.filter((n) => sel.has(n.id))
+  const edges = doc.edges.filter((e) => sel.has(e.id))
+  panelSnap = false
+  if (nodes.length) {
+    const n = nodes[0], multi = nodes.length > 1
+    panel.innerHTML = `
+      <div class="ttl">${multi ? nodes.length + ' blocs sélectionnés' : 'Bloc'}</div>
+      ${multi ? '' : `<div class="field"><label>Nom / texte</label><textarea id="pText" placeholder="Nom du bloc">${esc(n.text)}</textarea></div>`}
+      <div class="field"><label>Forme</label><select id="pType">${CATEGORIES.map(([c, l]) => `<optgroup label="${l}">${Object.entries(SHAPES).filter(([, v]) => v.cat === c).map(([k, v]) => `<option value="${k}" ${k === n.type ? 'selected' : ''}>${v.label}</option>`).join('')}</optgroup>`).join('')}</select></div>
+      <div class="field"><label>Remplissage</label><div class="row"><input type="color" id="pFill" value="${colorVal(n.fill, '#1e1e24')}"><span class="hint">${n.fill === 'none' ? 'Transparent' : n.fill}</span></div>${swatchRow(FILLS, 'fill')}</div>
+      <div class="field"><label>Bordure</label><div class="row"><input type="color" id="pStroke" value="${colorVal(n.stroke, '#6366f1')}"><input type="range" id="pSw" min="0" max="8" step="0.5" value="${n.sw}" title="Épaisseur"></div>${swatchRow(STROKES, 'stroke')}</div>
+      <div class="field"><label>Texte</label><div class="row"><input type="color" id="pColor" value="${colorVal(n.color, '#f4f4f5')}"><input type="number" id="pFs" min="8" max="72" value="${n.fs || 14}" title="Taille"><button id="pBold" class="${n.bold ? 'primary' : ''}" style="flex:none;font-weight:700">G</button></div>${swatchRow(TEXTS, 'color')}</div>
+      <div class="field"><label>Position du texte</label>
+        <div class="tpos">
+          <div class="tgrid">${[-1, 0, 1].map((r) => [-1, 0, 1].map((c) => `<button data-tpos="${c},${r}" title="${['Haut', 'Milieu', 'Bas'][r + 1]} ${['gauche', 'centre', 'droite'][c + 1]}"><i></i></button>`).join('')).join('')}</div>
+          <div class="tout">
+            <button data-tpos="above" title="Au-dessus de la forme">⤒ Au-dessus</button>
+            <button data-tpos="below" title="En dessous de la forme">⤓ En dessous</button>
+            <span class="hint">${n.tdx || n.tdy ? `Décalage ${n.tdx || 0}, ${n.tdy || 0}` : 'Centré'}</span>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:.35rem">Ou glissez la poignée <span style="color:#f59e0b">●</span> (ou <kbd>Alt</kbd>+glisser le bloc).</div>
+      </div>
+      ${multi ? '' : `<div class="field"><label>Taille (L × H)</label><div class="row"><input type="number" id="pW" min="24" value="${Math.round(n.w)}"><input type="number" id="pH" min="24" value="${Math.round(n.h)}"></div></div>`}
+      <div class="btns">
+        <button id="pDup">⧉ Dupliquer</button><button id="pFront">⬆ Premier plan</button>
+        <button id="pBack">⬇ Arrière-plan</button><button id="pDel" class="danger">🗑 Supprimer</button>
+      </div>`
+    const all = (fn) => () => mutate(() => nodes.forEach(fn))
+    if (!multi) {
+      $('#pText').addEventListener('input', (ev) => mutate(() => { n.text = ev.target.value }))
+      $('#pW').addEventListener('input', (ev) => { const v = +ev.target.value; if (v >= 24) mutate(() => { n.w = v; if (n.type === 'circle') n.h = v }) })
+      $('#pH').addEventListener('input', (ev) => { const v = +ev.target.value; if (v >= 24) mutate(() => { n.h = v; if (n.type === 'circle') n.w = v }) })
+    }
+    $('#pType').addEventListener('change', (ev) => { panelSnap = false; mutate(() => nodes.forEach((x) => {
+      x.type = ev.target.value
+      if (x.type === 'circle') { const s = Math.max(x.w, x.h); x.w = x.h = s }
+    }), true) })
+    $('#pFill').addEventListener('input', (ev) => all((x) => { x.fill = ev.target.value })())
+    $('#pStroke').addEventListener('input', (ev) => all((x) => { x.stroke = ev.target.value; if (!x.sw) x.sw = 2 })())
+    $('#pSw').addEventListener('input', (ev) => all((x) => { x.sw = +ev.target.value })())
+    $('#pColor').addEventListener('input', (ev) => all((x) => { x.color = ev.target.value })())
+    $('#pFs').addEventListener('input', (ev) => { const v = +ev.target.value; if (v >= 6) all((x) => { x.fs = v })() })
+    $('#pBold').onclick = () => { panelSnap = false; mutate(() => { const b = !n.bold; nodes.forEach((x) => { x.bold = b }) }, true) }
+    panel.querySelectorAll('[data-sw]').forEach((b) => b.addEventListener('click', () => {
+      panelSnap = false
+      const prop = b.dataset.sw, c = b.dataset.c
+      mutate(() => nodes.forEach((x) => { x[prop] = c; if (prop === 'stroke' && c !== 'none' && !x.sw) x.sw = 2 }), true)
+    }))
+    panel.querySelectorAll('[data-tpos]').forEach((b) => b.addEventListener('click', () => {
+      const v = b.dataset.tpos, pos = v.includes(',') ? v.split(',').map(Number) : v
+      panelSnap = false
+      mutate(() => nodes.forEach((x) => Object.assign(x, textPreset(x, pos))), true)
+    }))
+    $('#pDup').onclick = () => { if (copySelection()) paste(20) }
+    $('#pFront').onclick = () => { snapshot(); doc.nodes = [...doc.nodes.filter((x) => !sel.has(x.id)), ...nodes]; changed(false) }
+    $('#pBack').onclick = () => { snapshot(); doc.nodes = [...nodes, ...doc.nodes.filter((x) => !sel.has(x.id))]; changed(false) }
+    $('#pDel').onclick = deleteSelection
+    return
+  }
+  if (edges.length) {
+    const e = edges[0], multi = edges.length > 1
+    const seg = (id, opts, cur) => `<div class="seg" id="${id}">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`
+    const a = nodeById(e.from), b = nodeById(e.to)
+    panel.innerHTML = `
+      <div class="ttl">${multi ? edges.length + ' liaisons' : 'Liaison'}</div>
+      ${multi ? '' : `<div class="hint" style="margin-bottom:.6rem">${esc(a?.text || '…')} → ${esc(b?.text || '…')}</div>
+      <div class="field"><label>Nom de la liaison</label><input type="text" id="eLabel" placeholder="ex : oui, non, envoie…" value="${esc(e.label)}"></div>`}
+      <div class="field"><label>Tracé</label>${seg('eRouting', [['straight', 'Droit'], ['ortho', 'Angles'], ['curve', 'Courbe']], e.routing || 'ortho')}</div>
+      <div class="field"><label>Part de… (côté du bloc de départ)</label>${seg('eFromSide', SIDE_OPTS, e.fromSide || 'auto')}</div>
+      <div class="field"><label>Arrive par… (côté du bloc d'arrivée)</label>${seg('eToSide', SIDE_OPTS, e.toSide || 'auto')}</div>
+      <div class="field"><label>Trajet</label>
+        <div class="hint" style="margin-bottom:.4rem">${(() => {
+          const np = edges.reduce((s, x) => s + (x.points?.length || 0), 0)
+          const custom = np || edges.some((x) => x.mid != null || forcedSide(x.fromSide) || forcedSide(x.toSide))
+          return custom ? `Personnalisé${np ? ` · ${np} point(s) de passage` : ''}` : 'Automatique'
+        })()}</div>
+        <button id="eResetPath" style="width:100%">↺ Revenir au trajet automatique</button>
+        <div class="hint" style="margin-top:.45rem">Glissez la ligne pour la courber (ou déplacer son segment), les <b>+</b> pour ajouter des points de passage, les extrémités ○ vers un autre côté ou bloc. Double-clic sur un point ■ : le supprimer.</div>
+      </div>
+      <div class="field"><label>Trait</label>${seg('eStyle', [['solid', 'Plein'], ['dashed', 'Tirets'], ['dotted', 'Points']], e.style || 'solid')}</div>
+      <div class="field"><label>Flèches</label>${seg('eArrow', [['end', '→'], ['both', '↔'], ['start', '←'], ['none', '—']], e.arrow || 'end')}</div>
+      <div class="field"><label>Couleur et épaisseur</label><div class="row"><input type="color" id="eColor" value="${e.color || '#a1a1aa'}"><input type="range" id="eSw" min="1" max="8" step="0.5" value="${e.sw || 2}"></div>${swatchRow(STROKES.filter((c) => c !== 'none'), 'ecolor')}</div>
+      <div class="btns"><button id="eRev">⇄ Inverser le sens</button><button id="eDel" class="danger">🗑 Supprimer</button></div>`
+    if (!multi) $('#eLabel').addEventListener('input', (ev) => mutate(() => { e.label = ev.target.value }))
+    $('#eResetPath').onclick = () => {
+      panelSnap = false
+      mutate(() => edges.forEach((x) => { x.points = []; delete x.mid; x.fromSide = 'auto'; x.toSide = 'auto' }), true)
+    }
+    for (const [id, prop] of [['eRouting', 'routing'], ['eStyle', 'style'], ['eArrow', 'arrow'], ['eFromSide', 'fromSide'], ['eToSide', 'toSide']])
+      $('#' + id).querySelectorAll('button').forEach((btn) => btn.onclick = () => {
+        panelSnap = false; mutate(() => edges.forEach((x) => { x[prop] = btn.dataset.v }), true)
+        if (prop === 'routing') { settings.routing = btn.dataset.v; saveSettings() }
+      })
+    $('#eColor').addEventListener('input', (ev) => mutate(() => edges.forEach((x) => { x.color = ev.target.value })))
+    $('#eSw').addEventListener('input', (ev) => mutate(() => edges.forEach((x) => { x.sw = +ev.target.value })))
+    panel.querySelectorAll('[data-sw]').forEach((btn) => btn.onclick = () => { panelSnap = false; mutate(() => edges.forEach((x) => { x.color = btn.dataset.c }), true) })
+    $('#eRev').onclick = () => { panelSnap = false; mutate(() => edges.forEach((x) => { [x.from, x.to] = [x.to, x.from] }), true) }
+    $('#eDel').onclick = deleteSelection
+    return
+  }
+  panel.innerHTML = `
+    <div class="ttl">Schéma</div>
+    <div class="hint" style="margin-bottom:.8rem">${doc.nodes.length} bloc(s) · ${doc.edges.length} liaison(s)</div>
+    <div class="field"><label>Tracé des nouvelles liaisons</label>
+      <div class="seg" id="sRouting">${[['straight', 'Droit'], ['ortho', 'Angles'], ['curve', 'Courbe']].map(([v, l]) => `<button data-v="${v}" class="${settings.routing === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <label class="check"><input type="checkbox" id="sSnap" ${settings.snap ? 'checked' : ''}> Grille magnétique</label>
+    <label class="check"><input type="checkbox" id="sGrid" ${$('#wrap').classList.contains('grid') ? 'checked' : ''}> Afficher la grille</label>
+    <div class="hint" style="margin-top:.8rem">Sélectionnez un bloc ou une liaison pour modifier son nom, sa forme, ses couleurs ou son style.</div>`
+  $('#sRouting').querySelectorAll('button').forEach((b) => b.onclick = () => { settings.routing = b.dataset.v; saveSettings(); renderPanel() })
+  $('#sSnap').onchange = (ev) => { settings.snap = ev.target.checked; saveSettings() }
+  $('#sGrid').onchange = (ev) => { $('#wrap').classList.toggle('grid', ev.target.checked) }
+}
+
+// ───────────────────────── Palette ─────────────────────────
+let ui = { hidePal: false, hidePanel: false, cats: {}, recent: [] }
+try { Object.assign(ui, JSON.parse(localStorage.getItem('de-ui') || '{}')) } catch {}
+const saveUi = () => { try { localStorage.setItem('de-ui', JSON.stringify(ui)) } catch {} }
+const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+let searching = false
+
+function shapeIcon(k) {
+  if (k === 'text') return `<svg viewBox="-2 -2 44 30"><text x="20" y="14" text-anchor="middle" dominant-baseline="central" font-size="15" fill="#a5b4fc" font-weight="600">Aa</text></svg>`
+  const v = SHAPES[k], s = Math.min(40 / v.w, 26 / v.h), iw = r1(v.w * s), ih = r1(v.h * s)
+  const fill = v.fill === 'none' ? 'none' : '#1e1e24', stroke = v.stroke && v.stroke !== 'none' ? v.stroke : '#818cf8'
+  return `<svg viewBox="-2 -2 44 30"><g transform="translate(${r1((40 - iw) / 2)},${r1((26 - ih) / 2)})">${shapeMarkup(k, iw, ih, fill, stroke, 1.3)}</g></svg>`
+}
+const shapeBtn = (k) => `<button class="shape-btn" draggable="true" data-shape="${k}" title="${esc(SHAPES[k].label)} — cliquer ou glisser sur le canevas">${shapeIcon(k)}<span>${esc(SHAPES[k].label)}</span></button>`
+
+function renderRecent() {
+  ui.recent = ui.recent.filter((k) => SHAPES[k])
+  $('#recent').innerHTML = ui.recent.map(shapeBtn).join('')
+  $('#recentWrap').style.display = ui.recent.length && !searching ? '' : 'none'
+}
+function useShape(k) {
+  ui.recent = [k, ...ui.recent.filter((x) => x !== k)].slice(0, 6)
+  saveUi(); renderRecent()
+}
+
+function buildPalette() {
+  $('#shapes').innerHTML = CATEGORIES.map(([c, label]) => {
+    const keys = Object.keys(SHAPES).filter((k) => SHAPES[k].cat === c)
+    return `<details class="cat" data-cat="${c}" ${ui.cats[c] === false ? '' : 'open'}><summary>${label}<span class="count">${keys.length}</span></summary>` +
+      `<div class="grid3">${keys.map(shapeBtn).join('')}</div></details>`
+  }).join('')
+  renderRecent()
+}
+
+function filterShapes() {
+  const q = norm($('#shapeSearch').value.trim())
+  searching = !!q
+  let total = 0
+  for (const det of document.querySelectorAll('#shapes .cat')) {
+    let n = 0
+    for (const b of det.querySelectorAll('[data-shape]')) {
+      const v = SHAPES[b.dataset.shape]
+      const ok = !q || norm(`${v.label} ${b.dataset.shape} ${v.kw || ''}`).includes(q)
+      b.style.display = ok ? '' : 'none'
+      if (ok) n++
+    }
+    det.style.display = n ? '' : 'none'
+    det.open = q ? true : ui.cats[det.dataset.cat] !== false
+    det.querySelector('.count').textContent = n
+    total += n
+  }
+  $('#noShape').style.display = total ? 'none' : 'block'
+  renderRecent()
+}
+
+const pal = $('#pal')
+pal.addEventListener('dragstart', (ev) => {
+  const b = ev.target.closest?.('[data-shape]')
+  if (!b) return
+  ev.dataTransfer.setData('text/x-shape', b.dataset.shape); ev.dataTransfer.effectAllowed = 'copy'
+})
+pal.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-shape]')
+  if (!b) return
+  const c = viewCenter(), off = (doc.nodes.length % 6) * 20, k = b.dataset.shape
+  useShape(k)
+  addNode(k, c.x + off, c.y + off)
+})
+$('#shapes').addEventListener('toggle', (ev) => {
+  if (searching || !ev.target.dataset?.cat) return
+  ui.cats[ev.target.dataset.cat] = ev.target.open; saveUi()
+}, true)
+$('#shapeSearch').addEventListener('input', filterShapes)
+$('#shapeSearch').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') { ev.target.value = ''; filterShapes(); ev.target.blur() }
+  if (ev.key === 'Enter') { // add the first matching shape
+    const b = [...document.querySelectorAll('#shapes [data-shape]')].find((x) => x.style.display !== 'none')
+    if (b) b.click()
+  }
+})
+
+// ── show / hide side panels (keeps the drawing still on screen)
+function setLayout(hidePal, hidePanel) {
+  if (editing) commitEdit()
+  const before = svg.getBoundingClientRect().left
+  document.body.classList.toggle('hide-pal', hidePal)
+  document.body.classList.toggle('hide-panel', hidePanel)
+  const after = svg.getBoundingClientRect().left
+  view.x += before - after
+  ui.hidePal = hidePal; ui.hidePanel = hidePanel; saveUi()
+  $('#btnPal').classList.toggle('on', !hidePal)
+  $('#btnPanel').classList.toggle('on', !hidePanel)
+  applyView()
+}
+const togglePal = () => setLayout(!ui.hidePal, ui.hidePanel)
+const togglePanel = () => setLayout(ui.hidePal, !ui.hidePanel)
+$('#btnPal').onclick = togglePal
+$('#btnPalClose').onclick = togglePal
+$('#palShow').onclick = togglePal
+$('#btnPanel').onclick = togglePanel
+
+// ───────────────────────── Persistence ─────────────────────────
+let saveTimer = null, dirty = false
+function setStatus(t, err = false) { const s = $('#status'); s.textContent = t; s.classList.toggle('err', err) }
+function scheduleSave() {
+  if (!docId) return
+  dirty = true; setStatus('Modifications non enregistrées…')
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 700)
+}
+async function saveNow() {
+  clearTimeout(saveTimer)
+  if (!docId || !dirty) return
+  dirty = false
+  try {
+    const r = await fetch(`${BASE}/diagrams/${docId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: doc }) })
+    if (!r.ok) throw new Error()
+    setStatus('Enregistré ✓')
+  } catch { dirty = true; setStatus("Erreur d'enregistrement", true) }
+}
+async function api(path, opts = {}) {
+  const r = await fetch(BASE + path, { headers: { 'Content-Type': 'application/json' }, ...opts })
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(d.error || 'Erreur serveur')
+  return d
+}
+async function refreshList() {
+  docs = await api('/diagrams')
+  $('#docSelect').innerHTML = docs.map((d) => `<option value="${d.id}" ${d.id === docId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')
+}
+async function openDoc(id) {
+  await saveNow()
+  const d = await api(`/diagrams/${id}`)
+  docId = d.id
+  doc = { nodes: Array.isArray(d.data?.nodes) ? d.data.nodes : [], edges: Array.isArray(d.data?.edges) ? d.data.edges : [] }
+  undoStack = []; redoStack = []; sel.clear(); dirty = false
+  $('#docName').value = d.name
+  try { localStorage.setItem('de-last', id) } catch {}
+  await refreshList()
+  render(); renderPanel(); updateUndoBtns(); fit()
+  setStatus('Enregistré ✓')
+}
+async function newDoc(name, data) {
+  await saveNow()
+  const d = await api('/diagrams', { method: 'POST', body: JSON.stringify({ name: name || `Schéma ${docs.length + 1}`, data: data || { nodes: [], edges: [] } }) })
+  await openDoc(d.id)
+  if (!name) { $('#docName').focus(); $('#docName').select() }
+}
+
+$('#docSelect').onchange = (ev) => openDoc(ev.target.value).catch((e) => toast(e.message))
+$('#docName').addEventListener('change', async (ev) => {
+  const name = ev.target.value.trim()
+  if (!name || !docId) return
+  await api(`/diagrams/${docId}`, { method: 'PUT', body: JSON.stringify({ name }) }).catch((e) => toast(e.message))
+  refreshList()
+})
+$('#docName').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') ev.target.blur() })
+$('#btnNew').onclick = () => newDoc().catch((e) => toast(e.message))
+$('#btnDup').onclick = async () => {
+  await saveNow()
+  const d = await api(`/diagrams/${docId}/duplicate`, { method: 'POST' }).catch((e) => toast(e.message))
+  if (d) { await openDoc(d.id); toast('Schéma dupliqué') }
+}
+let delTimer = null
+$('#btnDelDoc').onclick = async () => {
+  const b = $('#btnDelDoc')
+  if (!b.classList.contains('confirm')) {
+    b.classList.add('confirm'); b.textContent = 'Supprimer ce schéma ?'
+    delTimer = setTimeout(() => { b.classList.remove('confirm'); b.textContent = '🗑' }, 3500)
+    return
+  }
+  clearTimeout(delTimer); b.classList.remove('confirm'); b.textContent = '🗑'
+  dirty = false
+  await api(`/diagrams/${docId}`, { method: 'DELETE' }).catch((e) => toast(e.message))
+  docId = null
+  await refreshList()
+  if (docs.length) await openDoc(docs[0].id); else await newDoc('Mon schéma')
+  toast('Schéma supprimé')
+}
+window.addEventListener('beforeunload', () => {
+  if (dirty && docId) fetch(`${BASE}/diagrams/${docId}`, { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: doc }) })
+})
+
+// ───────────────────────── Export / import ─────────────────────────
+function exportSVG() {
+  const b = bbox() || { x: 0, y: 0, w: 200, h: 100 }, pad = 30
+  const transparent = $('#expTransparent').checked, light = $('#expLight').checked
+  const bg = light ? '#ffffff' : '#0f0f12'
+  let nodes = doc.nodes, edges = doc.edges
+  if (light) { // adapt default dark colors for a light background
+    const map = { '#1e1e24': '#ffffff', '#f4f4f5': '#18181b', '#e2e2e8': '#18181b' }
+    nodes = nodes.map((n) => ({ ...n, fill: map[n.fill] || n.fill, color: map[n.color] || n.color }))
+    edges = edges.map((e) => ({ ...e, color: e.color === '#a1a1aa' ? '#52525b' : e.color, labelColor: '#18181b' }))
+  }
+  const saved = doc
+  doc = { nodes, edges }
+  const body = edges.map((e) => edgeMarkup(e, transparent ? (light ? '#ffffff' : '#0f0f12') : bg)).join('') + nodes.map(nodeMarkup).join('')
+  doc = saved
+  const W = Math.ceil(b.w + pad * 2), H = Math.ceil(b.h + pad * 2)
+  return { W, H, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="${r1(b.x - pad)} ${r1(b.y - pad)} ${W} ${H}" font-family="system-ui, -apple-system, Segoe UI, sans-serif">` +
+    (transparent ? '' : `<rect x="${r1(b.x - pad)}" y="${r1(b.y - pad)}" width="${W}" height="${H}" fill="${bg}"/>`) + body + '</svg>' }
+}
+function download(blob, name) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob); a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+}
+const fileBase = () => ($('#docName').value.trim() || 'schema').replace(/[\\/:*?"<>|]+/g, '_')
+
+async function doExport(kind) {
+  closeMenus()
+  if (kind === 'json') {
+    download(new Blob([JSON.stringify({ format: 'ledroide-diagram', version: 1, name: $('#docName').value, ...doc }, null, 2)], { type: 'application/json' }), fileBase() + '.json')
+    return
+  }
+  if (!doc.nodes.length) { toast('Le schéma est vide'); return }
+  const { svg: s, W, H } = exportSVG()
+  if (kind === 'svg') { download(new Blob([s], { type: 'image/svg+xml' }), fileBase() + '.svg'); return }
+  const img = new Image(), scale = 2
+  img.onload = () => {
+    const c = document.createElement('canvas')
+    c.width = W * scale; c.height = H * scale
+    const ctx = c.getContext('2d'); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0)
+    c.toBlob((blob) => download(blob, fileBase() + '.png'), 'image/png')
+  }
+  img.onerror = () => toast("Échec de l'export PNG")
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s)
+}
+document.querySelectorAll('[data-exp]').forEach((b) => b.onclick = () => doExport(b.dataset.exp))
+$('#btnExport').onclick = (ev) => { ev.stopPropagation(); $('#exportMenu').classList.toggle('open') }
+$('#exportMenu .menu-list').addEventListener('click', (ev) => ev.stopPropagation())
+function closeMenus() { $('#exportMenu').classList.remove('open') }
+document.addEventListener('click', closeMenus)
+
+$('#btnImport').onclick = () => { closeMenus(); $('#fileIn').click() }
+$('#fileIn').onchange = async (ev) => {
+  const f = ev.target.files[0]; ev.target.value = ''
+  if (!f) return
+  try {
+    const d = JSON.parse(await f.text())
+    if (!Array.isArray(d.nodes) || !Array.isArray(d.edges)) throw new Error()
+    const ids = new Set(d.nodes.map((n) => n.id))
+    const data = {
+      nodes: d.nodes.filter((n) => n && n.id && isFinite(n.x) && isFinite(n.y)).map((n) => ({ ...makeNode(SHAPES[n.type] ? n.type : 'rect', 0, 0, ''), ...n })),
+      edges: d.edges.filter((e) => e && ids.has(e.from) && ids.has(e.to)),
+    }
+    await newDoc(d.name || f.name.replace(/\.json$/i, ''), data)
+    toast('Schéma importé')
+  } catch { toast('Fichier JSON invalide') }
+}
+
+// ───────────────────────── Misc ─────────────────────────
+let toastTimer
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400)
+}
+$('#btnUndo').onclick = undo
+$('#btnRedo').onclick = redo
+$('#btnZoomIn').onclick = () => zoomStep(1.2)
+$('#btnZoomOut').onclick = () => zoomStep(1 / 1.2)
+$('#btnFit').onclick = fit
+window.addEventListener('resize', () => applyView())
+
+async function init() {
+  buildPalette(); renderPanel()
+  document.body.classList.toggle('hide-pal', !!ui.hidePal)
+  document.body.classList.toggle('hide-panel', !!ui.hidePanel)
+  $('#btnPal').classList.toggle('on', !ui.hidePal)
+  $('#btnPanel').classList.toggle('on', !ui.hidePanel)
+  applyView()
+  try {
+    await refreshList()
+    let last = null
+    try { last = localStorage.getItem('de-last') } catch {}
+    if (docs.find((d) => d.id === last)) await openDoc(last)
+    else if (docs.length) await openDoc(docs[0].id)
+    else await newDoc('Mon schéma')
+  } catch {
+    setStatus('Backend injoignable — activez le module', true)
+  }
+}
+init()
+</script>
+</body>
+</html>

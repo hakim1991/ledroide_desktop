@@ -1,0 +1,28 @@
+{
+  "id": "todo-kanban",
+  "name": "Kanban",
+  "version": "1.0.0",
+  "description": "Tableaux Kanban : colonnes, cartes avec priorité, échéance et étiquettes, glisser-déposer.",
+  "category": "Productivité",
+  "tags": [
+    "tâches",
+    "kanban"
+  ],
+  "icon": "📋",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

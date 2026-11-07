@@ -2,18 +2,21 @@ from typing import Any, Callable
 
 
 class _Config:
-    """Read/write module config persisted by the registry in backend/configs.json."""
+    """Module config, persisted by the registry (configs.json in the data dir)."""
 
-    def __init__(self):
+    def __init__(self, defaults: dict | None = None):
+        self._defaults: dict = dict(defaults or {})
         self._values: dict = {}
-        self._save_fn: Callable = None
+        self._save_fn: Callable | None = None
 
     def _inject(self, values: dict, save_fn: Callable):
         self._values = values
         self._save_fn = save_fn
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._values.get(key, default)
+        if key in self._values:
+            return self._values[key]
+        return self._defaults.get(key, default)
 
     def set(self, key: str, value: Any):
         self._values[key] = value
@@ -21,7 +24,7 @@ class _Config:
             self._save_fn(self._values)
 
     def all(self) -> dict:
-        return dict(self._values)
+        return {**self._defaults, **self._values}
 
 
 config = _Config()

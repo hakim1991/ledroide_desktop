@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DNS / nslookup</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; --cyan: #06b6d4; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 7px 14px; white-space: nowrap; }
+  button:hover:not(:disabled) { background: #2a2a30; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #4f46e5; }
+  button.sm { padding: 3px 9px; font-size: 12px; }
+  button.danger { color: #fca5a5; border-color: rgba(239,68,68,.4); }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; outline: none; min-width: 0; }
+  input:focus, select:focus { border-color: var(--accent); }
+  header { display: flex; align-items: center; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 14px 10px 0; font-weight: 600; }
+  .tab { border: none; background: transparent; border-radius: 6px 6px 0 0; padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); background: #222226; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 16px; max-width: 1150px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .form .grow { flex: 1; min-width: 220px; }
+  .form .grow input { width: 100%; }
+  label.chk { flex-direction: row !important; align-items: center; gap: 6px !important; color: #c4c4cc !important; font-size: 13px !important; padding-bottom: 8px; cursor: pointer; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { font-size: 12px; padding: 2px 10px; border-radius: 12px; background: #222226; border: 1px solid var(--border); cursor: pointer; color: #c4c4cc; }
+  .chip:hover { border-color: var(--accent); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.val { word-break: break-all; }
+  tr.dim td { color: var(--muted); }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: #1d1d22; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #27272a; color: #a1a1aa; font-weight: 500; white-space: nowrap; }
+  .pill.ok { background: rgba(34,197,94,.15); color: #86efac; }
+  .pill.bad { background: rgba(239,68,68,.12); color: #fca5a5; }
+  .pill.warn { background: rgba(245,158,11,.15); color: #fcd34d; }
+  .pill.acc { background: rgba(99,102,241,.18); color: #c7d2fe; }
+  .summary { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .summary b { color: var(--text); font-weight: 600; }
+  .err { color: #fecaca; background: rgba(239,68,68,.1); border: 1px solid var(--danger); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .note { font-size: 12px; color: #fcd34d; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  .empty { padding: 26px; text-align: center; color: var(--muted); }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #3f3f46; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .meter { height: 8px; background: #111114; border-radius: 4px; overflow: hidden; flex: 1; min-width: 120px; }
+  .meter > i { display: block; height: 100%; background: var(--ok); }
+  .checks { display: flex; flex-direction: column; gap: 6px; }
+  .check { display: flex; gap: 10px; padding: 8px 10px; border-radius: 6px; background: #141417; border: 1px solid var(--border); }
+  .check .ic { width: 20px; text-align: center; flex-shrink: 0; }
+  .check.err { border-color: rgba(239,68,68,.45); }
+  .check.warn { border-color: rgba(245,158,11,.4); }
+  .check.ok { border-color: rgba(34,197,94,.35); }
+  .check .t { font-weight: 500; }
+  .check .d { font-size: 12px; color: var(--muted); }
+  pre.rec { background: #0b0b0e; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 0 0 10px; font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-all; color: #c4c4cc; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+  .toast { position: fixed; bottom: 16px; right: 16px; background: #27272a; border: 1px solid #3f3f46; padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .q-ok { color: #86efac; } .q-bad { color: #fca5a5; } .q-warn { color: #fcd34d; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔎 DNS / nslookup</h1>
+  <button class="tab active" data-tab="query">Requête</button>
+  <button class="tab" data-tab="prop">Propagation</button>
+  <button class="tab" data-tab="mail">Diagnostic e-mail</button>
+  <button class="tab" data-tab="hist">Historique</button>
+</header>
+<main>
+  <div id="depBanner"></div>
+
+  <!-- REQUÊTE -->
+  <section class="panel active" id="p-query">
+    <div class="card">
+      <div class="form">
+        <label class="grow">Nom de domaine ou adresse IP
+          <input id="qName" placeholder="exemple.fr, 8.8.8.8, _sip._tcp.exemple.fr…" autocomplete="off" spellcheck="false" />
+        </label>
+        <label>Type
+          <select id="qType">
+            <option>A</option><option>AAAA</option><option>MX</option><option>TXT</option><option>NS</option><option>CNAME</option>
+            <option>SOA</option><option>PTR</option><option>SRV</option><option>CAA</option><option value="ALL">Tous</option>
+          </select>
+        </label>
+        <label>Résolveur
+          <select id="qResolver"></select>
+        </label>
+        <label id="qCustomWrap" style="display:none">IP du serveur
+          <input id="qCustom" placeholder="192.168.1.1" style="width:150px" />
+        </label>
+        <label class="chk"><input type="checkbox" id="qTcp" /> TCP</label>
+        <button class="primary" id="qGo">Rechercher</button>
+      </div>
+      <div class="chips" id="recentChips"></div>
+    </div>
+    <div id="qOut"></div>
+  </section>
+
+  <!-- PROPAGATION -->
+  <section class="panel" id="p-prop">
+    <div class="card">
+      <div class="form">
+        <label class="grow">Nom de domaine
+          <input id="pName" placeholder="exemple.fr" autocomplete="off" spellcheck="false" />
+        </label>
+        <label>Type
+          <select id="pType"><option>A</option><option>AAAA</option><option>MX</option><option>TXT</option><option>NS</option><option>CNAME</option><option>SOA</option><option>CAA</option><option>SRV</option></select>
+        </label>
+        <button class="primary" id="pGo">Vérifier la propagation</button>
+      </div>
+      <p class="small muted" style="margin:10px 0 0">Interroge en parallèle votre résolveur système et une dizaine de résolveurs publics, puis compare les réponses.</p>
+    </div>
+    <div id="pOut"></div>
+  </section>
+
+  <!-- E-MAIL -->
+  <section class="panel" id="p-mail">
+    <div class="card">
+      <div class="form">
+        <label class="grow">Domaine (ou adresse e-mail)
+          <input id="mDomain" placeholder="exemple.fr" autocomplete="off" spellcheck="false" />
+        </label>
+        <label>Sélecteur(s) DKIM
+          <input id="mSel" placeholder="auto (google, selector1…)" style="width:220px" />
+        </label>
+        <label>Résolveur
+          <select id="mResolver"></select>
+        </label>
+        <button class="primary" id="mGo">Analyser</button>
+      </div>
+      <p class="small muted" style="margin:10px 0 0">Vérifie MX, SPF, DMARC (_dmarc), DKIM (sélecteur._domainkey), MTA-STS, TLS-RPT et BIMI. Le sélecteur DKIM figure dans l'en-tête <span class="mono">DKIM-Signature: … s=<b>sélecteur</b></span> d'un e-mail reçu.</p>
+    </div>
+    <div id="mOut"></div>
+  </section>
+
+  <!-- HISTORIQUE -->
+  <section class="panel" id="p-hist">
+    <div class="card">
+      <h3>Dernières requêtes <span style="flex:1"></span>
+        <button class="sm" id="hRefresh">↻ Actualiser</button>
+        <span id="hClearWrap"><button class="sm danger" id="hClear">Effacer l'historique</button></span>
+      </h3>
+      <div id="hOut"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/dns-lookup/api`;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const spin = (t) => `<div class="card empty"><span class="spinner"></span> ${t}</div>`;
+
+function lsGet(k, d) { try { const v = localStorage.getItem('dnsl.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } }
+function lsSet(k, v) { try { localStorage.setItem('dnsl.' + k, JSON.stringify(v)); } catch {} }
+
+async function api(path, opts = {}) {
+  let r;
+  try { r = await fetch(BASE + path, { headers: { 'Content-Type': 'application/json' }, ...opts }); }
+  catch (e) { throw new Error('Backend injoignable : ' + e.message); }
+  let data = null; try { data = await r.json(); } catch {}
+  if (!r.ok) {
+    const e = new Error(data && data.error ? data.error : (data && data.detail ? 'Requête invalide' : 'Erreur HTTP ' + r.status));
+    e.code = data && data.code; throw e;
+  }
+  return data;
+}
+function errBox(e) {
+  if (e.code === 'MISSING_DEP') return `<div class="err"><b>Dépendance manquante.</b> ${esc(e.message)}<br><span class="small">Installez les dépendances du module (bouton « Dépendances » du gestionnaire de modules), puis rechargez.</span></div>`;
+  return `<div class="err">${esc(e.message)}</div>`;
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800); }
+function copyText(text) {
+  const fb = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch {} ta.remove(); toast(ok ? 'Copié' : 'Copie impossible'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast('Copié'), fb); else fb();
+}
+function fmtTtl(s) {
+  if (s == null) return '—';
+  if (s >= 86400) return `${Math.floor(s / 86400)} j ${Math.floor(s % 86400 / 3600)} h`;
+  if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`;
+  if (s >= 60) return `${Math.floor(s / 60)} min ${s % 60 ? s % 60 + ' s' : ''}`;
+  return s + ' s';
+}
+const statusPill = (st, fr) => `<span class="pill ${st === 'NOERROR' ? 'ok' : (st === 'NXDOMAIN' ? 'warn' : 'bad')}">${esc(fr || st)}</span>`;
+
+/* Tabs */
+function showTab(name) {
+  $$('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
+  $$('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + name));
+  lsSet('tab', name);
+  if (name === 'hist') loadHistory();
+}
+$$('.tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+/* Résolveurs */
+const RES_OPTS = [
+  ['system', 'Système (Windows)'], ['cloudflare', 'Cloudflare 1.1.1.1'], ['google', 'Google 8.8.8.8'],
+  ['quad9', 'Quad9 9.9.9.9'], ['opendns', 'OpenDNS 208.67.222.222'], ['custom', 'Personnalisé…'],
+];
+for (const sel of [$('#qResolver'), $('#mResolver')]) sel.innerHTML = RES_OPTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+$('#qResolver').value = lsGet('resolver', 'system');
+$('#qCustom').value = lsGet('custom', '');
+function syncCustom() { $('#qCustomWrap').style.display = $('#qResolver').value === 'custom' ? '' : 'none'; }
+$('#qResolver').onchange = () => { syncCustom(); lsSet('resolver', $('#qResolver').value); };
+syncCustom();
+$('#mResolver').onchange = () => { if ($('#mResolver').value === 'custom') { $('#qResolver').value = 'custom'; syncCustom(); if (!$('#qCustom').value) toast('Renseignez l\'IP du serveur dans l\'onglet Requête'); } };
+
+/* ── Requête ── */
+async function doQuery() {
+  const name = $('#qName').value.trim();
+  if (!name) { $('#qName').focus(); return; }
+  const body = { name, type: $('#qType').value, resolver: $('#qResolver').value, custom: $('#qCustom').value.trim() || null, tcp: $('#qTcp').checked };
+  lsSet('custom', body.custom || '');
+  $('#qGo').disabled = true; $('#qOut').innerHTML = spin('Requête en cours…');
+  try {
+    const d = await api('/query', { method: 'POST', body: JSON.stringify(body) });
+    renderQuery(d); addRecent(name, body.type);
+  } catch (e) { $('#qOut').innerHTML = errBox(e); }
+  finally { $('#qGo').disabled = false; }
+}
+let lastQuery = null;
+function renderQuery(d) {
+  lastQuery = d;
+  const multi = d.results.length > 1;
+  const r0 = d.results[0];
+  let html = '';
+  if (d.is_ip) html += `<div class="note">Adresse IP détectée : résolution inverse (PTR) de <b class="mono">${esc(d.reverse_of)}</b> via <span class="mono">${esc(d.qname)}</span>.</div>`;
+  html += `<div class="summary"><span>Nom : <b class="mono">${esc(d.qname)}</b></span><span>Résolveur : <b>${esc(d.resolver)}</b></span>`;
+  if (!multi) {
+    html += `<span>Serveur : <b class="mono">${esc(r0.server || '—')}</b></span><span>Temps : <b>${r0.ms != null ? r0.ms + ' ms' : '—'}</b></span>${statusPill(r0.status, r0.status_fr)}${flagPills(r0.flags)}`;
+  } else {
+    html += `<span>Durée totale : <b>${d.total_ms} ms</b></span><span>${d.results.filter(r => r.count).length} type(s) avec réponse</span>`;
+  }
+  html += `<span style="flex:1"></span><button class="sm" id="qCopy">📋 Copier</button></div>`;
+  for (const r of d.results) {
+    if (multi && !r.answers.length && r.ok) continue;
+    html += `<div class="card"><h3><span class="pill acc">${esc(r.type)}</span> ${r.count} enregistrement(s)
+      ${multi ? `${statusPill(r.status, r.status_fr)} <span class="muted small">${r.ms != null ? r.ms + ' ms' : ''}</span>${flagPills(r.flags)}` : ''}</h3>`;
+    if (r.error) html += `<div class="err">${esc(r.error)}</div>`;
+    if (r.answers.length) html += recTable(r.answers, r.type, d.ptr);
+    else if (!r.error) {
+      html += `<div class="muted small">${r.status === 'NXDOMAIN' ? 'Ce nom n\'existe pas.' : 'Aucun enregistrement de ce type.'}</div>`;
+      const soa = r.authority.find(a => a.type === 'SOA');
+      if (soa) html += `<div class="small muted" style="margin-top:6px">Autorité : <span class="mono">${esc(soa.name)}</span> — SOA <span class="mono">${esc(soa.value)}</span> (TTL négatif ${fmtTtl(soa.data.minimum != null ? Math.min(soa.ttl, soa.data.minimum) : soa.ttl)})</div>`;
+    }
+    html += `</div>`;
+  }
+  if (multi && d.results.every(r => !r.answers.length)) html += `<div class="card empty">Aucun enregistrement trouvé.</div>`;
+  $('#qOut').innerHTML = html;
+  $('#qCopy').onclick = () => copyText(queryText(d));
+}
+function flagPills(f) {
+  if (!f || f.aa === undefined) return '';
+  return `<span class="pill ${f.aa ? 'ok' : ''}" title="Réponse faisant autorité (AA)">${f.aa ? 'Autoritaire' : 'Non autoritaire'}</span>`
+    + (f.ad ? '<span class="pill ok" title="Données authentifiées DNSSEC (AD)">DNSSEC ✓</span>' : '')
+    + (f.ra === false ? '<span class="pill warn" title="Le serveur n\'accepte pas la récursion">Récursion indisponible</span>' : '')
+    + (f.tc ? '<span class="pill warn">Tronquée</span>' : '');
+}
+function recTable(answers, qtype, ptr) {
+  const hasMx = answers.some(a => a.type === 'MX'), hasSrv = answers.some(a => a.type === 'SRV');
+  const rows = answers.map(a => {
+    let val = esc(a.value);
+    if (a.type === 'MX') val = `<span class="pill">${a.data.preference}</span> <span class="mono">${esc(a.data.exchange)}</span>`;
+    else if (a.type === 'SRV') val = `<span class="mono">${esc(a.data.target)}:${a.data.port}</span> <span class="muted small">priorité ${a.data.priority}, poids ${a.data.weight}</span>`;
+    else if (a.type === 'SOA') val = soaHtml(a.data);
+    else if (a.type === 'CAA') val = `<span class="pill">${esc(a.data.tag)}</span> <span class="mono">${esc(a.data.value)}</span>${a.data.flags ? ' <span class="pill warn">critique</span>' : ''}`;
+    else if (a.type === 'TXT') val = `<span class="mono">${esc(a.value)}</span>${txtHint(a.value)}`;
+    else val = `<span class="mono">${val}</span>`;
+    if ((a.type === 'A' || a.type === 'AAAA') && ptr && ptr[a.value] && ptr[a.value].length) val += ` <span class="muted small">↩ ${esc(ptr[a.value].join(', '))}</span>`;
+    const dim = a.type !== qtype && qtype !== 'ALL';
+    return `<tr class="${dim ? 'dim' : ''}"><td class="mono">${esc(a.name)}</td><td>${esc(a.type)}</td><td class="num" title="${a.ttl} s">${fmtTtl(a.ttl)}</td><td class="val">${val}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr><th>Nom</th><th>Type</th><th class="num">TTL</th><th>Valeur</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function soaHtml(s) {
+  if (!s || s.serial == null) return '';
+  return `<div class="small" style="display:grid;grid-template-columns:auto 1fr;gap:1px 12px">
+    <span class="muted">Serveur primaire</span><span class="mono">${esc(s.mname)}</span>
+    <span class="muted">Responsable</span><span class="mono">${esc(s.rname.replace(/\.$/, '').replace(/(?<!\\)\./, '@'))}</span>
+    <span class="muted">Série</span><span class="mono">${s.serial}</span>
+    <span class="muted">Rafraîchissement</span><span>${fmtTtl(s.refresh)}</span>
+    <span class="muted">Nouvel essai</span><span>${fmtTtl(s.retry)}</span>
+    <span class="muted">Expiration</span><span>${fmtTtl(s.expire)}</span>
+    <span class="muted">TTL minimum (négatif)</span><span>${fmtTtl(s.minimum)}</span></div>`;
+}
+function txtHint(v) {
+  const l = v.toLowerCase();
+  const h = l.startsWith('v=spf1') ? 'SPF' : l.startsWith('v=dmarc1') ? 'DMARC' : l.startsWith('v=dkim1') ? 'DKIM' : /verification|verify|=/.test(l) && /^[a-z0-9_-]+(-site)?-?verification=/.test(l) ? 'Vérification de domaine' : l.startsWith('ms=') ? 'Microsoft 365' : '';
+  return h ? ` <span class="pill acc">${h}</span>` : '';
+}
+function queryText(d) {
+  const L = [`; ${d.qname}  — ${d.resolver}`];
+  for (const r of d.results) {
+    L.push(`;; ${r.type} : ${r.status}${r.ms != null ? ' (' + r.ms + ' ms)' : ''}${r.flags && r.flags.aa ? ' [AA]' : ''}`);
+    for (const a of r.answers) L.push(`${a.name}\t${a.ttl}\tIN\t${a.type}\t${a.type === 'TXT' ? '"' + a.value + '"' : a.value}`);
+  }
+  return L.join('\n');
+}
+$('#qGo').onclick = doQuery;
+$('#qName').addEventListener('keydown', e => { if (e.key === 'Enter') doQuery(); });
+$('#qCustom').addEventListener('keydown', e => { if (e.key === 'Enter') doQuery(); });
+$('#qType').onchange = () => { if ($('#qName').value.trim()) doQuery(); };
+
+/* Récents (chips) */
+function addRecent(name, type) {
+  let r = lsGet('recent', []).filter(x => !(x.name === name && x.type === type));
+  r.unshift({ name, type }); r = r.slice(0, 8); lsSet('recent', r); renderRecent();
+}
+function renderRecent() {
+  const r = lsGet('recent', []);
+  $('#recentChips').innerHTML = r.map((x, i) => `<span class="chip" data-i="${i}">${esc(x.name)} <span class="muted">${x.type === 'ALL' ? 'Tous' : esc(x.type)}</span></span>`).join('');
+}
+$('#recentChips').onclick = e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  const x = lsGet('recent', [])[+c.dataset.i]; if (!x) return;
+  $('#qName').value = x.name; $('#qType').value = x.type; doQuery();
+};
+renderRecent();
+
+/* ── Propagation ── */
+async function doProp() {
+  const name = $('#pName').value.trim(); if (!name) { $('#pName').focus(); return; }
+  $('#pGo').disabled = true; $('#pOut').innerHTML = spin('Interrogation des résolveurs…');
+  try {
+    const d = await api('/propagation', { method: 'POST', body: JSON.stringify({ name, type: $('#pType').value }) });
+    renderProp(d);
+  } catch (e) { $('#pOut').innerHTML = errBox(e); }
+  finally { $('#pGo').disabled = false; }
+}
+function renderProp(d) {
+  const pct = d.answered ? Math.round(d.agree / d.answered * 100) : 0;
+  const color = pct === 100 ? 'var(--ok)' : pct >= 70 ? 'var(--warn)' : 'var(--danger)';
+  let html = `<div class="card"><div class="summary" style="margin:0">
+    <span><b class="mono">${esc(d.qname)}</b> <span class="pill acc">${esc(d.type)}</span></span>
+    <span><b style="color:${color}">${d.agree} / ${d.answered}</b> résolveurs concordants${d.total > d.answered ? ` (${d.total - d.answered} sans réponse)` : ''}</span>
+    <div class="meter"><i style="width:${pct}%;background:${color}"></i></div>
+    <span>${d.consistent ? '<span class="pill ok">Propagation homogène</span>' : '<span class="pill warn">Réponses divergentes</span>'}</span>
+    <span class="small">${d.total_ms} ms</span></div></div>`;
+  html += `<div class="card"><table><thead><tr><th></th><th>Résolveur</th><th>IP</th><th>Statut</th><th class="num">Temps</th><th class="num">TTL</th><th>Réponse</th></tr></thead><tbody>`;
+  for (const r of d.rows) {
+    const ic = r.match === true ? '<span class="q-ok">✔</span>' : r.match === false ? '<span class="q-bad">✖</span>' : '<span class="muted">?</span>';
+    html += `<tr><td>${ic}</td><td>${esc(r.label)} <span class="muted small">${esc(r.where)}</span></td><td class="mono">${esc(r.ip)}</td>
+      <td>${statusPill(r.status, r.status_fr)}</td><td class="num">${r.ms != null ? r.ms + ' ms' : '—'}</td><td class="num">${r.ttl != null ? fmtTtl(r.ttl) : '—'}</td>
+      <td class="val mono small">${r.display.length ? r.display.map(esc).join('<br>') : `<span class="muted">${esc(r.error || '—')}</span>`}</td></tr>`;
+  }
+  html += `</tbody></table></div>`;
+  if (d.variants.length > 1) {
+    html += `<div class="card"><h3>Variantes observées</h3><table><thead><tr><th class="num">Résolveurs</th><th>Statut</th><th>Valeurs</th></tr></thead><tbody>${d.variants.map(v => `<tr><td class="num">${v.count}</td><td>${esc(v.status)}</td><td class="mono small">${v.values.map(esc).join('<br>') || '<span class="muted">(vide)</span>'}</td></tr>`).join('')}</tbody></table>
+      <p class="small muted" style="margin:8px 0 0">Des réponses différentes peuvent être normales pour les CDN et services géo-répartis (A/AAAA), ou indiquer une modification récente encore en cache (attendez l'expiration du TTL).</p></div>`;
+  }
+  $('#pOut').innerHTML = html;
+}
+$('#pGo').onclick = doProp;
+$('#pName').addEventListener('keydown', e => { if (e.key === 'Enter') doProp(); });
+
+/* ── Diagnostic e-mail ── */
+async function doMail() {
+  const domain = $('#mDomain').value.trim(); if (!domain) { $('#mDomain').focus(); return; }
+  const resolver = $('#mResolver').value;
+  $('#mGo').disabled = true; $('#mOut').innerHTML = spin('Analyse MX / SPF / DMARC / DKIM…');
+  try {
+    const d = await api('/email', { method: 'POST', body: JSON.stringify({ domain, selectors: $('#mSel').value, resolver, custom: resolver === 'custom' ? ($('#qCustom').value.trim() || null) : null }) });
+    renderMail(d);
+  } catch (e) { $('#mOut').innerHTML = errBox(e); }
+  finally { $('#mGo').disabled = false; }
+}
+const ICON = { ok: '<span class="q-ok">✔</span>', warn: '<span class="q-warn">⚠</span>', err: '<span class="q-bad">✖</span>', info: '<span class="muted">ℹ</span>' };
+function renderMail(d) {
+  const n = { ok: 0, warn: 0, err: 0, info: 0 }; d.checks.forEach(c => n[c.level]++);
+  let html = `<div class="card"><h3>Synthèse pour <span class="mono">${esc(d.domain)}</span>
+      <span class="pill ok">${n.ok} OK</span>${n.warn ? `<span class="pill warn">${n.warn} avertissement(s)</span>` : ''}${n.err ? `<span class="pill bad">${n.err} problème(s)</span>` : ''}
+      <span style="flex:1"></span><span class="muted small">${esc(d.resolver)}</span></h3>
+    <div class="checks">${d.checks.map(c => `<div class="check ${c.level}"><div class="ic">${ICON[c.level]}</div><div><div class="t">${esc(c.title)}</div>${c.detail ? `<div class="d">${esc(c.detail)}</div>` : ''}</div></div>`).join('')}</div></div>`;
+
+  // MX
+  html += `<div class="grid2"><div class="card"><h3><span class="pill acc">MX</span> Serveurs de messagerie</h3>`;
+  if (d.null_mx) html += `<div class="muted small">MX nul : le domaine n'accepte aucun e-mail.</div>`;
+  else if (!d.mx.length) html += `<div class="muted small">Aucun enregistrement MX (${esc(d.mx_status)}).</div>`;
+  else html += `<table><thead><tr><th class="num">Priorité</th><th>Serveur</th><th>Adresses</th></tr></thead><tbody>${d.mx.map(m => `<tr><td class="num">${m.preference}</td><td class="mono">${esc(m.exchange)}</td><td class="mono small">${(m.addresses || []).map(esc).join('<br>') || '<span class="q-bad">non résolu</span>'}</td></tr>`).join('')}</tbody></table>`;
+  html += `</div>`;
+
+  // Extras
+  html += `<div class="card"><h3>Autres mécanismes</h3><table><tbody>${d.extras.map(x => `<tr><td style="width:90px">${x.record ? ICON.ok : ICON.info} ${esc(x.name)}</td><td class="mono small val">${x.record ? esc(x.record) : `<span class="muted">absent (${esc(x.qname)})</span>`}</td></tr>`).join('')}</tbody></table>
+    <p class="small muted" style="margin:8px 0 0">MTA-STS impose TLS aux serveurs expéditeurs, TLS-RPT reçoit les rapports d'échec TLS, BIMI affiche votre logo dans les messageries compatibles.</p></div></div>`;
+
+  // SPF
+  html += `<div class="card"><h3><span class="pill acc">SPF</span> Sender Policy Framework</h3>`;
+  if (!d.spf) html += `<div class="muted small">Aucun enregistrement « v=spf1 » trouvé sur ${esc(d.domain)}.</div>`;
+  else {
+    const lk = d.spf.lookups, lc = lk > 10 ? 'var(--danger)' : lk >= 8 ? 'var(--warn)' : 'var(--ok)';
+    html += `<pre class="rec">${esc(d.spf.record)}</pre>
+      <div class="summary"><span>Requêtes DNS induites : <b style="color:${lc}">${lk} / 10</b></span><div class="meter" style="max-width:220px"><i style="width:${Math.min(100, lk * 10)}%;background:${lc}"></i></div><span>Longueur : <b>${d.spf.length}</b> car.</span>${d.spf_all_records.length > 1 ? `<span class="pill bad">${d.spf_all_records.length} enregistrements SPF !</span>` : ''}</div>
+      <table><thead><tr><th>Terme</th><th>Qualificatif</th><th>Signification</th></tr></thead><tbody>${d.spf.terms.map(t => `<tr><td class="mono">${esc(t.raw)}</td><td>${t.kind === 'mechanism' ? `<span class="pill ${t.result === 'Pass' ? (t.name === 'all' ? 'bad' : 'ok') : t.result === 'Fail' ? 'acc' : 'warn'}">${esc(t.result)}</span>` : '<span class="pill">modificateur</span>'}</td><td class="small">${esc(t.explain)}</td></tr>`).join('')}</tbody></table>`;
+    if (d.spf.notes && d.spf.notes.length) html += `<div class="small muted" style="margin-top:6px">${d.spf.notes.map(esc).join('<br>')}</div>`;
+  }
+  html += `</div>`;
+
+  // DMARC
+  html += `<div class="card"><h3><span class="pill acc">DMARC</span> _dmarc.${esc(d.domain)}${d.dmarc && d.dmarc.inherited_from ? ` <span class="pill warn">hérité de ${esc(d.dmarc.inherited_from)}</span>` : ''}</h3>`;
+  if (!d.dmarc) html += `<div class="muted small">Aucun enregistrement DMARC.</div>`;
+  else html += `<pre class="rec">${esc(d.dmarc.record)}</pre><table><thead><tr><th>Balise</th><th>Valeur</th><th>Signification</th></tr></thead><tbody>${d.dmarc.tags.map(t => `<tr><td><span class="mono">${esc(t.tag)}</span> <span class="muted small">${esc(t.label)}</span></td><td class="mono small val">${esc(t.value)}</td><td class="small">${esc(t.explain)}</td></tr>`).join('')}</tbody></table>`;
+  html += `</div>`;
+
+  // DKIM
+  html += `<div class="card"><h3><span class="pill acc">DKIM</span> DomainKeys Identified Mail ${d.dkim_auto ? '<span class="muted small">(sélecteurs courants testés automatiquement)</span>' : ''}</h3>`;
+  const found = d.dkim.filter(k => k.found && !k.wildcard);
+  const missing = d.dkim.filter(k => !k.found);
+  if (!found.length) html += `<div class="muted small">Aucune clé DKIM trouvée${d.dkim_auto ? ' parmi les sélecteurs courants. Indiquez le sélecteur exact (voir en-tête DKIM-Signature, paramètre s=).' : '.'}</div>`;
+  for (const k of found) {
+    html += `<div style="margin-bottom:10px"><div class="summary" style="margin-bottom:6px"><b class="mono">${esc(k.selector)}._domainkey.${esc(d.domain)}</b>
+      <span class="pill ${k.revoked ? 'warn' : (k.bits && k.bits < 2048 && k.key_type === 'rsa' ? 'warn' : 'ok')}">${k.revoked ? 'clé révoquée' : esc((k.key_type || 'rsa').toUpperCase()) + ' ' + (k.bits || '?') + ' bits'}</span>
+      ${k.testing ? '<span class="pill warn">mode test (t=y)</span>' : ''}${k.cname ? `<span class="small">via CNAME <span class="mono">${esc(k.cname)}</span></span>` : ''}</div>
+      <pre class="rec">${esc(k.record)}</pre></div>`;
+  }
+  if (!d.dkim_auto && missing.length) html += `<div class="small q-bad">Introuvable(s) : ${missing.map(k => esc(k.selector)).join(', ')}</div>`;
+  html += `</div>`;
+  $('#mOut').innerHTML = html;
+}
+$('#mGo').onclick = doMail;
+$('#mDomain').addEventListener('keydown', e => { if (e.key === 'Enter') doMail(); });
+$('#mSel').addEventListener('keydown', e => { if (e.key === 'Enter') doMail(); });
+
+/* ── Historique ── */
+const KIND_LABEL = { query: 'Requête', propagation: 'Propagation', email: 'E-mail' };
+async function loadHistory() {
+  try {
+    const d = await api('/history?limit=100');
+    if (!d.items.length) { $('#hOut').innerHTML = '<div class="empty">Aucune requête enregistrée.</div>'; return; }
+    $('#hOut').innerHTML = `<table><thead><tr><th>Date</th><th>Outil</th><th>Nom</th><th>Type</th><th>Résolveur</th><th>Statut</th><th class="num">Rép.</th><th class="num">Temps</th><th></th></tr></thead><tbody>${d.items.map(h => `
+      <tr class="click" data-id="${h.id}"><td class="small">${esc(new Date(h.ts).toLocaleString('fr-FR'))}</td><td>${esc(KIND_LABEL[h.kind] || h.kind)}</td><td class="mono">${esc(h.name)}</td><td>${esc(h.rdtype)}</td>
+      <td class="small">${esc(h.resolver === 'custom' ? h.custom : h.resolver)}</td><td>${statusPill(h.status, h.status === 'NOERROR' ? 'OK' : h.status)}</td><td class="num">${h.count}</td><td class="num">${h.ms != null ? Math.round(h.ms) + ' ms' : '—'}</td>
+      <td><button class="sm" data-del="${h.id}" title="Supprimer">×</button></td></tr>`).join('')}</tbody></table>`;
+    $('#hOut').querySelectorAll('tr.click').forEach(tr => tr.onclick = (e) => {
+      if (e.target.closest('[data-del]')) return;
+      const h = d.items.find(x => String(x.id) === tr.dataset.id); if (h) replay(h);
+    });
+  } catch (e) { $('#hOut').innerHTML = errBox(e); }
+}
+function replay(h) {
+  if (h.kind === 'email') { $('#mDomain').value = h.name; showTab('mail'); doMail(); return; }
+  if (h.kind === 'propagation') { $('#pName').value = h.name; $('#pType').value = h.rdtype; showTab('prop'); doProp(); return; }
+  $('#qName').value = h.name;
+  $('#qType').value = h.rdtype === 'Tous' ? 'ALL' : h.rdtype;
+  if ([...$('#qResolver').options].some(o => o.value === h.resolver)) $('#qResolver').value = h.resolver;
+  if (h.resolver === 'custom') $('#qCustom').value = h.custom;
+  syncCustom(); showTab('query'); doQuery();
+}
+$('#hOut').addEventListener('click', async e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  e.stopPropagation();
+  try { await api('/history/' + b.dataset.del, { method: 'DELETE' }); loadHistory(); } catch (er) { toast(er.message); }
+});
+$('#hRefresh').onclick = loadHistory;
+function askClear() {
+  const w = $('#hClearWrap');
+  w.innerHTML = `<span class="small">Tout effacer ?</span> <button class="sm danger" id="hYes">Oui, effacer</button> <button class="sm" id="hNo">Annuler</button>`;
+  $('#hNo').onclick = resetClear;
+  $('#hYes').onclick = async () => { try { await api('/history', { method: 'DELETE' }); toast('Historique effacé'); } catch (er) { toast(er.message); } resetClear(); loadHistory(); };
+}
+function resetClear() { $('#hClearWrap').innerHTML = '<button class="sm danger" id="hClear">Effacer l\'historique</button>'; $('#hClear').onclick = askClear; }
+$('#hClear').onclick = askClear;
+
+/* Init */
+(async () => {
+  try {
+    const s = await api('/status');
+    if (!s.ok) $('#depBanner').innerHTML = `<div class="err"><b>Dépendance manquante : dnspython.</b> Installez les dépendances du module (bouton « Dépendances » du gestionnaire de modules), puis rechargez.</div>`;
+  } catch (e) { $('#depBanner').innerHTML = errBox(e); }
+})();
+showTab(lsGet('tab', 'query'));
+$('#qName').focus();
+</script>
+</body>
+</html>

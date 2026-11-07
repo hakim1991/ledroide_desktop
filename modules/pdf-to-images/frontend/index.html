@@ -105,6 +105,22 @@
     }
     .error-msg.show { display: block; }
     .error-msg a { color: #818cf8; }
+
+    .help { margin-top: 1rem; font-size: .85rem; color: #a1a1aa; }
+    .help summary { cursor: pointer; font-weight: 600; color: #e2e2e8; }
+    .help ol { margin: .75rem 0 0 1.25rem; line-height: 1.6; }
+    .help li { margin-bottom: .4rem; }
+    .help code {
+      background: #09090b; border: 1px solid #27272a; border-radius: 4px;
+      padding: .05rem .35rem; font-size: .8rem; color: #e2e2e8;
+    }
+    .help pre {
+      background: #09090b; border: 1px solid #27272a; border-radius: 6px;
+      padding: .5rem .75rem; margin-top: .35rem; font-size: .78rem; color: #e2e2e8;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    .help a { color: #818cf8; }
+    .help .warn { color: #fbbf24; }
   </style>
 </head>
 <body>
@@ -141,6 +157,22 @@
     <br>
     <button class="btn-dl" id="dlBtn">⬇ Télécharger le ZIP</button>
   </div>
+
+  <details class="card help" id="popplerHelp">
+    <summary>⚙️ Prérequis : installer Poppler (Windows)</summary>
+    <ol>
+      <li>Téléchargez <strong>Release-xx.xx.x-0.zip</strong> (section « Assets ») sur
+        <a href="https://github.com/oschwartz10612/poppler-windows/releases" target="_blank">poppler-windows/releases</a>.<br>
+        <span class="warn">⚠️ Pas « Source code » : il ne contient aucun .exe.</span></li>
+      <li>Extrayez-le, par exemple dans <code>C:\poppler-26.09.0</code>. Le fichier
+        <code>Library\bin\pdftoppm.exe</code> doit exister.</li>
+      <li>Ajoutez le dossier <code>C:\poppler-26.09.0\Library\bin</code> au <strong>PATH</strong> :<br>
+        Menu Démarrer → « Modifier les variables d'environnement pour votre compte » → <code>Path</code> → Modifier → Nouveau.</li>
+      <li>Vérifiez dans un <strong>nouveau</strong> terminal :
+        <pre>pdftoppm -v</pre></li>
+      <li><strong>Fermez complètement LedroideDesktop puis relancez-le.</strong></li>
+    </ol>
+  </details>
 
   <script>
     const PORT   = parseInt(window.location.port) || 8765
@@ -204,6 +236,10 @@
           let html = `⚠️ ${d.error}`
           if (d.code === 'POPPLER_MISSING') {
             html += ` <a href="https://github.com/oschwartz10612/poppler-windows/releases" target="_blank">Télécharger Poppler →</a>`
+            html += `<br>Suivez les étapes d'installation ci-dessous.`
+            const help = document.getElementById('popplerHelp')
+            help.open = true
+            help.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }
           errorMsg.innerHTML = html
           errorMsg.classList.add('show')

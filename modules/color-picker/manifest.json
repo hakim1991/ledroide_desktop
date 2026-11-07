@@ -1,0 +1,31 @@
+{
+  "id": "color-picker",
+  "name": "Couleurs",
+  "version": "1.0.0",
+  "description": "Pipette écran, conversions HEX/RGB/HSL/HSV/CMYK, harmonies, contraste WCAG et palette enregistrée.",
+  "category": "Images & médias",
+  "tags": [
+    "couleur",
+    "design",
+    "accessibilité"
+  ],
+  "icon": "🎨",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "Pillow>=11,<12"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

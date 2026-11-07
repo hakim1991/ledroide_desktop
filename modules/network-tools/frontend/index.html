@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Outils réseau</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; --cyan: #06b6d4; --pink: #ec4899; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 7px 14px; }
+  button:hover { background: #2a2a30; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #4f46e5; }
+  button.danger { color: #fca5a5; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; outline: none; min-width: 0; }
+  input:focus, select:focus { border-color: var(--accent); }
+  header { display: flex; align-items: center; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 14px 10px 0; font-weight: 600; }
+  .tab { border: none; background: transparent; border-radius: 6px 6px 0 0; padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); background: #222226; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 16px; max-width: 1100px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .form .grow { flex: 1; min-width: 200px; }
+  .form .grow input { width: 100%; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .stat { background: #111114; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; word-break: break-all; }
+  pre.out { background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0; max-height: 300px; overflow: auto; font: 12px/1.5 ui-monospace, 'Cascadia Mono', Consolas, monospace; white-space: pre-wrap; color: #c4c4cc; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .iface { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: #141417; }
+  .ifaces { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .iface h3 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #27272a; color: var(--muted); font-weight: 500; }
+  .pill.up { background: rgba(34,197,94,.15); color: #86efac; }
+  .pill.down { background: rgba(239,68,68,.12); color: #fca5a5; }
+  .note { font-size: 12px; color: #fcd34d; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  .err { color: #fecaca; background: rgba(239,68,68,.1); border: 1px solid var(--danger); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .progress { height: 6px; background: #111114; border-radius: 3px; overflow: hidden; margin: 10px 0; }
+  .progress > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 70px; margin-top: 10px; }
+  .bars i { flex: 1; max-width: 18px; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; }
+  .bars i.lost { background: var(--danger); height: 100% !important; opacity: .35; }
+  .gauge { text-align: center; }
+  .gauge .v { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .gauge .u { color: var(--muted); font-size: 13px; }
+  .open { color: #86efac; font-weight: 600; }
+  .copy { cursor: pointer; border-bottom: 1px dashed #52525b; }
+  .copy:hover { color: #a5b4fc; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌐 Outils réseau</h1>
+  <button class="tab active" data-tab="info">Infos</button>
+  <button class="tab" data-tab="ping">Ping</button>
+  <button class="tab" data-tab="dns">DNS</button>
+  <button class="tab" data-tab="scan">Scan de ports</button>
+  <button class="tab" data-tab="trace">Traceroute</button>
+  <button class="tab" data-tab="speed">Test de débit</button>
+</header>
+<main>
+  <!-- INFOS -->
+  <section class="panel active" id="p-info">
+    <div class="err hide" id="infoErr"></div>
+    <div class="card">
+      <div class="stats">
+        <div class="stat"><div class="l">Nom d'hôte</div><div class="v copy" id="iHost">–</div></div>
+        <div class="stat"><div class="l">IP locale principale</div><div class="v copy" id="iLocal">–</div></div>
+        <div class="stat"><div class="l">IP publique</div><div class="v copy" id="iPub">–</div><div class="small muted" id="iPubRev"></div></div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px"><button id="iRefresh">↻ Actualiser</button></div>
+    </div>
+    <div class="ifaces" id="ifaces"></div>
+  </section>
+
+  <!-- PING -->
+  <section class="panel" id="p-ping">
+    <div class="card">
+      <form class="form" id="pingForm">
+        <label class="grow">Hôte ou adresse IP<input id="pingHost" value="1.1.1.1" required /></label>
+        <label>Requêtes<input id="pingCount" type="number" min="1" max="100" value="4" style="width:80px" /></label>
+        <label>Délai (ms)<input id="pingTo" type="number" min="200" max="10000" step="100" value="2000" style="width:100px" /></label>
+        <button class="primary" id="pingGo">Lancer</button>
+        <button type="button" class="danger hide" id="pingStop">Arrêter</button>
+      </form>
+    </div>
+    <div class="card hide" id="pingRes">
+      <div class="stats">
+        <div class="stat"><div class="l">Reçues / envoyées</div><div class="v" id="pRecv">–</div></div>
+        <div class="stat"><div class="l">Pertes</div><div class="v" id="pLoss">–</div></div>
+        <div class="stat"><div class="l">Min</div><div class="v" id="pMin">–</div></div>
+        <div class="stat"><div class="l">Moyenne</div><div class="v" id="pAvg">–</div></div>
+        <div class="stat"><div class="l">Max</div><div class="v" id="pMax">–</div></div>
+      </div>
+      <div class="bars" id="pBars"></div>
+      <div class="progress"><i id="pProg"></i></div>
+      <pre class="out" id="pOut"></pre>
+    </div>
+  </section>
+
+  <!-- DNS -->
+  <section class="panel" id="p-dns">
+    <div class="card">
+      <form class="form" id="dnsForm">
+        <label class="grow">Nom de domaine ou adresse IP (recherche inverse)<input id="dnsHost" value="example.com" required /></label>
+        <button class="primary" id="dnsGo">Résoudre</button>
+      </form>
+    </div>
+    <div class="card hide" id="dnsRes"></div>
+  </section>
+
+  <!-- SCAN -->
+  <section class="panel" id="p-scan">
+    <div class="note">⚠️ N'analysez que vos propres machines ou un réseau dont vous avez l'autorisation. Limite : 1024 ports par scan.</div>
+    <div class="card">
+      <form class="form" id="scanForm">
+        <label class="grow">Hôte ou adresse IP<input id="scanHost" value="127.0.0.1" required /></label>
+        <label>Mode<select id="scanMode"><option value="common">Ports courants</option><option value="range">Plage / liste</option></select></label>
+        <label id="scanPortsL" class="hide">Ports (ex. 1-1024 ou 22,80,443)<input id="scanPorts" value="1-1024" style="width:200px" /></label>
+        <label>Délai (ms)<input id="scanTo" type="number" min="100" max="5000" step="100" value="600" style="width:90px" /></label>
+        <button class="primary" id="scanGo">Scanner</button>
+        <button type="button" class="danger hide" id="scanStop">Arrêter</button>
+      </form>
+    </div>
+    <div class="card hide" id="scanRes">
+      <div class="stats">
+        <div class="stat"><div class="l">Adresse</div><div class="v" id="sIp" style="font-size:16px">–</div></div>
+        <div class="stat"><div class="l">Ports testés</div><div class="v" id="sDone">–</div></div>
+        <div class="stat"><div class="l">Ouverts</div><div class="v open" id="sOpen">–</div></div>
+        <div class="stat"><div class="l">Durée</div><div class="v" id="sTime">–</div></div>
+      </div>
+      <div class="progress"><i id="sProg"></i></div>
+      <table><thead><tr><th class="num" style="width:80px">Port</th><th>État</th><th>Service</th><th class="num">Temps</th></tr></thead><tbody id="sBody"></tbody></table>
+      <div class="muted small" id="sEmpty" style="padding:8px">Aucun port ouvert trouvé pour l'instant.</div>
+    </div>
+  </section>
+
+  <!-- TRACE -->
+  <section class="panel" id="p-trace">
+    <div class="card">
+      <form class="form" id="traceForm">
+        <label class="grow">Hôte ou adresse IP<input id="traceHost" value="1.1.1.1" required /></label>
+        <label>Sauts max<input id="traceHops" type="number" min="1" max="64" value="30" style="width:80px" /></label>
+        <button class="primary" id="traceGo">Lancer</button>
+        <button type="button" class="danger hide" id="traceStop">Arrêter</button>
+      </form>
+    </div>
+    <div class="card hide" id="traceRes">
+      <div class="small muted" id="tStatus"></div>
+      <div class="progress"><i id="tProg"></i></div>
+      <table><thead><tr><th class="num" style="width:50px">#</th><th class="num">RTT 1</th><th class="num">RTT 2</th><th class="num">RTT 3</th><th>Adresse</th></tr></thead><tbody id="tBody"></tbody></table>
+      <details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">Sortie brute</summary><pre class="out" id="tOut" style="margin-top:8px"></pre></details>
+    </div>
+  </section>
+
+  <!-- SPEED -->
+  <section class="panel" id="p-speed">
+    <div class="card">
+      <form class="form" id="speedForm">
+        <label>Téléchargement<select id="spDl"><option value="10">10 Mo</option><option value="25" selected>25 Mo</option><option value="50">50 Mo</option><option value="100">100 Mo</option></select></label>
+        <label>Envoi<select id="spUl"><option value="5">5 Mo</option><option value="10" selected>10 Mo</option><option value="25">25 Mo</option></select></label>
+        <button class="primary" id="speedGo">Démarrer le test</button>
+        <button type="button" class="danger hide" id="speedStop">Arrêter</button>
+        <span class="small muted">Serveur : speed.cloudflare.com</span>
+      </form>
+    </div>
+    <div class="card hide" id="speedRes">
+      <div class="stats">
+        <div class="stat gauge"><div class="l">Latence</div><div class="v" id="spPing">–</div><div class="u">ms <span id="spJit"></span></div></div>
+        <div class="stat gauge"><div class="l">↓ Téléchargement</div><div class="v" id="spDown" style="color:var(--cyan)">–</div><div class="u">Mbit/s</div></div>
+        <div class="stat gauge"><div class="l">↑ Envoi</div><div class="v" id="spUp" style="color:var(--pink)">–</div><div class="u">Mbit/s</div></div>
+      </div>
+      <div class="small muted" style="margin-top:10px" id="spPhase"></div>
+      <div class="progress"><i id="spProg"></i></div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/network-tools/api`;
+const $ = s => document.querySelector(s);
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3500); }
+function fmtB(b) { const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return b.toFixed(i ? 1 : 0) + ' ' + u[i]; }
+async function api(path, opts = {}) {
+  const o = { method: opts.method || 'GET', headers: {} };
+  if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  let r; try { r = await fetch(BASE + path, o); } catch (e) { throw new Error('Backend injoignable'); }
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok || (data && data.error)) {
+    let msg = (data && (data.error || (data.detail && (Array.isArray(data.detail) ? 'Paramètres invalides' : JSON.stringify(data.detail))))) || ('Erreur ' + r.status);
+    const er = new Error(msg); er.code = data && data.code;
+    if (er.code === 'MISSING_DEP') er.message += ' Installez les dépendances du module (psutil), puis rechargez.';
+    throw er;
+  }
+  return data;
+}
+function copyText(t) {
+  const done = () => toast('Copié : ' + t, true);
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+}
+document.addEventListener('click', e => { const el = e.target.closest('.copy'); if (el && el.textContent && el.textContent !== '–') copyText(el.textContent.trim()); });
+
+/* Tabs */
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + b.dataset.tab));
+});
+
+/* Job polling */
+function runJob(jobId, onUpdate, onEnd) {
+  let sl = 0, si = 0, stopped = false;
+  const poll = async () => {
+    if (stopped) return;
+    let j;
+    try { j = await api(`/jobs/${jobId}?since_line=${sl}&since_item=${si}`); }
+    catch (e) { toast(e.message); onEnd(null); return; }
+    sl = j.line_count; si = j.item_count;
+    onUpdate(j);
+    if (j.status === 'running') setTimeout(poll, 500); else onEnd(j);
+  };
+  poll();
+  return { cancel: async () => { try { await api(`/jobs/${jobId}/cancel`, { method: 'POST' }); } catch (e) { toast(e.message); } } };
+}
+function busy(go, stop, on) { $(go).disabled = on; $(stop).classList.toggle('hide', !on); }
+
+/* ── Infos ─────────────────────────────── */
+async function loadInfo() {
+  $('#infoErr').classList.add('hide');
+  try {
+    const d = await api('/info');
+    $('#iHost').textContent = d.hostname; $('#iLocal').textContent = d.primary_ip || '–';
+    $('#ifaces').innerHTML = d.interfaces.map(i => `<div class="iface">
+      <h3>${esc(i.name)} <span class="pill ${i.up ? 'up' : 'down'}">${i.up ? 'Actif' : 'Inactif'}</span>${i.speed ? `<span class="pill">${i.speed >= 1000 ? i.speed / 1000 + ' Gbit/s' : i.speed + ' Mbit/s'}</span>` : ''}</h3>
+      <table class="small">
+        ${i.ipv4.map(a => `<tr><td class="muted">IPv4</td><td class="mono"><span class="copy">${esc(a.address)}</span>${a.netmask ? ` <span class="muted">/ ${esc(a.netmask)}</span>` : ''}</td></tr>`).join('')}
+        ${i.ipv6.map(a => `<tr><td class="muted">IPv6</td><td class="mono" style="word-break:break-all"><span class="copy">${esc(a.address)}</span></td></tr>`).join('')}
+        ${i.mac ? `<tr><td class="muted">MAC</td><td class="mono"><span class="copy">${esc(i.mac)}</span></td></tr>` : ''}
+        <tr><td class="muted">Trafic</td><td>↓ ${fmtB(i.recv)} · ↑ ${fmtB(i.sent)}${i.mtu ? ` · MTU ${i.mtu}` : ''}</td></tr>
+      </table></div>`).join('');
+  } catch (e) { $('#infoErr').textContent = e.message; $('#infoErr').classList.remove('hide'); }
+  $('#iPub').textContent = '…'; $('#iPubRev').textContent = '';
+  try { const p = await api('/public-ip'); $('#iPub').textContent = p.ip; $('#iPubRev').textContent = p.reverse || ''; }
+  catch (e) { $('#iPub').textContent = '–'; $('#iPubRev').textContent = e.message; }
+}
+$('#iRefresh').onclick = loadInfo;
+
+/* ── Ping ─────────────────────────────── */
+let pingJob = null;
+$('#pingForm').onsubmit = async e => {
+  e.preventDefault();
+  let r;
+  try { r = await api('/ping', { method: 'POST', body: { host: $('#pingHost').value.trim(), count: +$('#pingCount').value, timeout_ms: +$('#pingTo').value } }); }
+  catch (er) { toast(er.message); return; }
+  $('#pingRes').classList.remove('hide'); $('#pOut').textContent = ''; $('#pBars').innerHTML = '';
+  ['#pRecv', '#pLoss', '#pMin', '#pAvg', '#pMax'].forEach(s => $(s).textContent = '–');
+  busy('#pingGo', '#pingStop', true);
+  const replies = [];
+  pingJob = runJob(r.job_id, j => {
+    if (j.lines.length) { $('#pOut').textContent += j.lines.join('\n') + '\n'; $('#pOut').scrollTop = 1e9; }
+    replies.push(...j.items);
+    const s = j.summary;
+    if (s.sent) {
+      $('#pRecv').textContent = `${s.received} / ${s.sent}`;
+      $('#pLoss').textContent = s.loss_percent != null ? s.loss_percent + ' %' : '…';
+      $('#pMin').textContent = s.min != null ? s.min + ' ms' : '–';
+      $('#pAvg').textContent = s.avg != null ? s.avg + ' ms' : '–';
+      $('#pMax').textContent = s.max != null ? s.max + ' ms' : '–';
+    }
+    const mx = Math.max(1, ...replies.map(x => x.time));
+    $('#pBars').innerHTML = replies.slice(-60).map(x => `<i style="height:${Math.max(3, x.time / mx * 100)}%" title="${x.time} ms · TTL ${x.ttl}"></i>`).join('');
+    $('#pProg').style.width = (j.progress * 100) + '%';
+  }, j => {
+    busy('#pingGo', '#pingStop', false); pingJob = null;
+    if (j && j.status === 'error') toast(j.error);
+    if (j && j.status === 'cancelled') toast('Ping arrêté', true);
+  });
+};
+$('#pingStop').onclick = () => pingJob && pingJob.cancel();
+
+/* ── DNS ─────────────────────────────── */
+$('#dnsForm').onsubmit = async e => {
+  e.preventDefault();
+  const box = $('#dnsRes'); box.classList.remove('hide'); box.innerHTML = '<span class="muted">Résolution…</span>';
+  $('#dnsGo').disabled = true;
+  try {
+    const d = await api('/dns?host=' + encodeURIComponent($('#dnsHost').value.trim()));
+    box.innerHTML = `<div class="small muted" style="margin-bottom:8px">${d.is_ip ? 'Recherche inverse' : 'Résolution directe'} de <b>${esc(d.query)}</b> en ${d.elapsed_ms} ms${d.canonical && d.canonical !== d.query ? ` · nom canonique : <span class="mono">${esc(d.canonical)}</span>` : ''}</div>
+      ${d.is_ip ? `<div class="stats"><div class="stat"><div class="l">Nom (PTR)</div><div class="v copy" style="font-size:16px">${esc(d.reverse || 'Aucun enregistrement')}</div></div></div>` : ''}
+      ${!d.is_ip ? `<table><thead><tr><th>Type</th><th>Adresse</th><th>Inverse (PTR)</th></tr></thead><tbody>
+        ${d.addresses.map(a => `<tr><td><span class="pill">${a.family === 'IPv6' ? 'AAAA' : 'A'}</span></td><td class="mono"><span class="copy">${esc(a.address)}</span></td><td class="mono muted">${esc(a.reverse || '–')}</td></tr>`).join('')}
+      </tbody></table>` : ''}
+      ${d.aliases && d.aliases.length ? `<div class="small muted" style="margin-top:8px">Alias : ${d.aliases.map(esc).join(', ')}</div>` : ''}`;
+  } catch (er) { box.innerHTML = `<div class="err" style="margin:0">${esc(er.message)}</div>`; }
+  $('#dnsGo').disabled = false;
+};
+
+/* ── Scan ─────────────────────────────── */
+let scanJob = null;
+$('#scanMode').onchange = e => $('#scanPortsL').classList.toggle('hide', e.target.value !== 'range');
+$('#scanForm').onsubmit = async e => {
+  e.preventDefault();
+  const common = $('#scanMode').value === 'common';
+  let r;
+  try { r = await api('/portscan', { method: 'POST', body: { host: $('#scanHost').value.trim(), common, ports: $('#scanPorts').value, timeout_ms: +$('#scanTo').value } }); }
+  catch (er) { toast(er.message); return; }
+  $('#scanRes').classList.remove('hide'); $('#sBody').innerHTML = ''; $('#sEmpty').classList.remove('hide');
+  $('#sEmpty').textContent = "Aucun port ouvert trouvé pour l'instant.";
+  ['#sIp', '#sDone', '#sOpen', '#sTime'].forEach(s => $(s).textContent = '–');
+  busy('#scanGo', '#scanStop', true);
+  const found = [];
+  scanJob = runJob(r.job_id, j => {
+    const s = j.summary;
+    if (s.ip) { $('#sIp').textContent = s.ip; $('#sDone').textContent = `${s.scanned} / ${s.total}`; $('#sOpen').textContent = s.open; }
+    $('#sTime').textContent = j.elapsed.toFixed(1) + ' s';
+    $('#sProg').style.width = (j.progress * 100) + '%';
+    if (j.items.length) {
+      found.push(...j.items); found.sort((a, b) => a.port - b.port);
+      $('#sEmpty').classList.add('hide');
+      $('#sBody').innerHTML = found.map(p => `<tr><td class="num mono">${p.port}</td><td class="open">Ouvert</td><td>${esc(p.service || '—')}</td><td class="num muted">${p.time_ms} ms</td></tr>`).join('');
+    }
+  }, j => {
+    busy('#scanGo', '#scanStop', false); scanJob = null;
+    if (j && j.status === 'error') toast(j.error);
+    if (j && !found.length) $('#sEmpty').textContent = j.status === 'done' ? 'Aucun port ouvert.' : 'Scan interrompu.';
+  });
+};
+$('#scanStop').onclick = () => scanJob && scanJob.cancel();
+
+/* ── Traceroute ─────────────────────────────── */
+let traceJob = null;
+$('#traceForm').onsubmit = async e => {
+  e.preventDefault();
+  let r;
+  try { r = await api('/traceroute', { method: 'POST', body: { host: $('#traceHost').value.trim(), max_hops: +$('#traceHops').value } }); }
+  catch (er) { toast(er.message); return; }
+  $('#traceRes').classList.remove('hide'); $('#tBody').innerHTML = ''; $('#tOut').textContent = '';
+  $('#tStatus').textContent = 'Traçage en cours… (peut prendre jusqu\'à une minute)';
+  busy('#traceGo', '#traceStop', true);
+  traceJob = runJob(r.job_id, j => {
+    if (j.lines.length) $('#tOut').textContent += j.lines.join('\n') + '\n';
+    $('#tProg').style.width = (j.progress * 100) + '%';
+    for (const h of j.items) {
+      const rt = [0, 1, 2].map(i => h.rtts[i] == null ? '<span class="muted">*</span>' : esc(h.rtts[i]) + ' ms');
+      $('#tBody').insertAdjacentHTML('beforeend', `<tr><td class="num">${h.hop}</td><td class="num">${rt[0]}</td><td class="num">${rt[1]}</td><td class="num">${rt[2]}</td>
+        <td class="mono">${h.ip ? `<span class="copy">${esc(h.ip)}</span>` : '<span class="muted">Délai dépassé</span>'}</td></tr>`);
+    }
+  }, j => {
+    busy('#traceGo', '#traceStop', false); traceJob = null;
+    if (!j) return;
+    $('#tProg').style.width = '100%';
+    $('#tStatus').textContent = j.status === 'error' ? 'Erreur : ' + j.error : j.status === 'cancelled' ? 'Arrêté.' :
+      `Terminé en ${j.elapsed.toFixed(1)} s — ${j.summary.hops} saut(s)${j.summary.reached ? ', destination atteinte.' : '.'}`;
+  });
+};
+$('#traceStop').onclick = () => traceJob && traceJob.cancel();
+
+/* ── Speed ─────────────────────────────── */
+let speedJob = null;
+$('#speedForm').onsubmit = async e => {
+  e.preventDefault();
+  let r;
+  try { r = await api('/speedtest', { method: 'POST', body: { download_mb: +$('#spDl').value, upload_mb: +$('#spUl').value } }); }
+  catch (er) { toast(er.message); return; }
+  $('#speedRes').classList.remove('hide');
+  ['#spPing', '#spDown', '#spUp'].forEach(s => $(s).textContent = '–'); $('#spJit').textContent = '';
+  busy('#speedGo', '#speedStop', true);
+  speedJob = runJob(r.job_id, j => {
+    const s = j.summary;
+    if (s.ping_ms != null) { $('#spPing').textContent = s.ping_ms; $('#spJit').textContent = `(gigue ${s.jitter_ms})`; }
+    if (s.download_mbps != null) $('#spDown').textContent = s.download_mbps.toFixed(1);
+    if (s.upload_mbps != null) $('#spUp').textContent = s.upload_mbps.toFixed(1);
+    $('#spPhase').textContent = s.phase ? 'Phase : ' + s.phase : '';
+    $('#spProg').style.width = (j.progress * 100) + '%';
+  }, j => {
+    busy('#speedGo', '#speedStop', false); speedJob = null;
+    if (!j) return;
+    if (j.status === 'error') { $('#spPhase').textContent = 'Erreur : ' + j.error; toast(j.error); }
+    else if (j.status === 'cancelled') $('#spPhase').textContent = 'Test arrêté.';
+    else { $('#spPhase').textContent = `Test terminé en ${j.elapsed.toFixed(1)} s.`; $('#spProg').style.width = '100%'; }
+  });
+};
+$('#speedStop').onclick = () => speedJob && speedJob.cancel();
+
+loadInfo();
+</script>
+</body>
+</html>

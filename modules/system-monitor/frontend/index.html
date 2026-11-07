@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Moniteur système</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; --cyan: #06b6d4; --pink: #ec4899; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 16px; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 5px 10px; }
+  button:hover { background: #2a2a30; }
+  button.danger { color: #fca5a5; }
+  button.danger:hover { background: rgba(239,68,68,.15); border-color: var(--danger); }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; outline: none; }
+  input:focus { border-color: var(--accent); }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  h2 { font-size: 13px; margin: 0 0 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 8px; }
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .top .sub { color: var(--muted); font-size: 12px; }
+  .sp { flex: 1; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; min-width: 0; }
+  .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .small { font-size: 12px; color: var(--muted); }
+  .bar { height: 7px; background: #111114; border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s; }
+  .cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(22px, 1fr)); gap: 3px; margin-top: 10px; }
+  .core { height: 34px; background: #111114; border-radius: 3px; position: relative; overflow: hidden; }
+  .core > i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); transition: height .4s; }
+  .core span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; text-shadow: 0 0 3px #000; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; }
+  .kv b { font-weight: 500; color: var(--muted); }
+  .kv span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .disk { margin-bottom: 10px; }
+  .disk:last-child { margin-bottom: 0; }
+  .disk .row { display: flex; justify-content: space-between; font-size: 12px; gap: 8px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .chart-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; gap: 8px; flex-wrap: wrap; }
+  .legend { font-size: 12px; display: flex; gap: 10px; }
+  .legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  canvas { width: 100%; height: 130px; display: block; }
+  .net { display: flex; gap: 16px; }
+  .net div { flex: 1; }
+  .up { color: var(--pink); } .down { color: var(--cyan); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--card); }
+  th.sorted { color: var(--text); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  tr:hover td { background: #1c1c20; }
+  .tablewrap { max-height: 480px; overflow: auto; }
+  .proc-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .proc-bar input { flex: 1; min-width: 160px; }
+  .confirm { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: #fca5a5; }
+  .confirm button { padding: 2px 8px; font-size: 12px; }
+  .err { background: rgba(239,68,68,.1); border: 1px solid var(--danger); color: #fecaca; padding: 14px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .err b { display: block; margin-bottom: 4px; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>📊 Moniteur système</h1>
+  <span class="sub" id="hostline"></span>
+  <span class="sp"></span>
+  <button id="pauseBtn">⏸ Pause</button>
+</div>
+<div class="err" id="err"></div>
+
+<div id="content" class="hide">
+<div class="grid">
+  <div class="card">
+    <h2>CPU</h2>
+    <div class="big" id="cpuPct">–</div>
+    <div class="bar"><i id="cpuBar"></i></div>
+    <div class="small" id="cpuInfo"></div>
+    <div class="cores" id="cores"></div>
+  </div>
+  <div class="card">
+    <h2>Mémoire</h2>
+    <div class="big" id="ramPct">–</div>
+    <div class="bar"><i id="ramBar" style="background:var(--ok)"></i></div>
+    <div class="small" id="ramInfo"></div>
+    <h2 style="margin-top:14px">Swap</h2>
+    <div class="bar"><i id="swapBar" style="background:var(--warn)"></i></div>
+    <div class="small" id="swapInfo"></div>
+  </div>
+  <div class="card">
+    <h2>Réseau</h2>
+    <div class="net">
+      <div><div class="small">↓ Réception</div><div class="big down" id="netDown" style="font-size:20px">–</div></div>
+      <div><div class="small">↑ Envoi</div><div class="big up" id="netUp" style="font-size:20px">–</div></div>
+    </div>
+    <div class="small" id="netTot" style="margin-top:8px"></div>
+    <h2 style="margin-top:14px">E/S disque</h2>
+    <div class="small" id="dio"></div>
+  </div>
+  <div class="card">
+    <h2>Système</h2>
+    <div class="kv" id="sysKv"></div>
+  </div>
+  <div class="card hide" id="batCard">
+    <h2>Batterie</h2>
+    <div class="big" id="batPct">–</div>
+    <div class="bar"><i id="batBar" style="background:var(--ok)"></i></div>
+    <div class="small" id="batInfo"></div>
+  </div>
+  <div class="card">
+    <h2>Disques</h2>
+    <div id="disks"></div>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="card">
+    <div class="chart-h"><h2 style="margin:0">CPU — 60 s</h2><span class="legend"><span><i style="background:var(--accent)"></i>Total</span></span></div>
+    <canvas id="chCpu"></canvas>
+  </div>
+  <div class="card">
+    <div class="chart-h"><h2 style="margin:0">Mémoire — 60 s</h2><span class="legend"><span><i style="background:var(--ok)"></i>RAM</span><span><i style="background:var(--warn)"></i>Swap</span></span></div>
+    <canvas id="chRam"></canvas>
+  </div>
+  <div class="card">
+    <div class="chart-h"><h2 style="margin:0">Réseau — 60 s</h2><span class="legend"><span><i style="background:var(--cyan)"></i>Réception</span><span><i style="background:var(--pink)"></i>Envoi</span></span></div>
+    <canvas id="chNet"></canvas>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Processus <span class="small" id="procCount" style="text-transform:none;letter-spacing:0"></span></h2>
+  <div class="proc-bar">
+    <input id="pq" type="search" placeholder="Rechercher (nom, PID, utilisateur)…" />
+    <select id="plimit"><option value="50">50 premiers</option><option value="100" selected>100 premiers</option><option value="500">500 premiers</option></select>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th data-k="pid" class="num">PID</th><th data-k="name">Nom</th><th>Utilisateur</th>
+        <th data-k="cpu" class="num">CPU %</th><th data-k="memory" class="num">Mémoire</th><th class="num">Threads</th><th>Statut</th><th></th>
+      </tr></thead>
+      <tbody id="ptbody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/system-monitor/api`;
+const $ = s => document.querySelector(s);
+const HIST = 60;
+const hist = { cpu: [], ram: [], swap: [], up: [], down: [] };
+let paused = false, sortKey = 'cpu', sortDesc = true, confirmPid = null, procTimer = null;
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3500); }
+function fmtB(b, d = 1) { if (b == null) return '–'; const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return b.toFixed(i ? d : 0) + ' ' + u[i]; }
+function fmtRate(b) { return fmtB(b) + '/s'; }
+function fmtDur(s) { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + ' j ' : '') + h + ' h ' + String(m).padStart(2, '0') + ' min'; }
+function color(p) { return p >= 90 ? 'var(--danger)' : p >= 70 ? 'var(--warn)' : null; }
+
+async function api(path, opts = {}) {
+  const o = { method: opts.method || 'GET', headers: {} };
+  if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  let r; try { r = await fetch(BASE + path, o); } catch (e) { const er = new Error('Backend injoignable'); throw er; }
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok || (data && data.error)) { const er = new Error((data && data.error) || ('Erreur ' + r.status)); er.code = data && data.code; throw er; }
+  return data;
+}
+function showErr(e) {
+  const box = $('#err');
+  if (!e) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = e.code === 'MISSING_DEP'
+    ? `<b>Dépendance manquante</b>${esc(e.message)} Installez les dépendances du module (bouton « dépendances » du gestionnaire de modules : psutil), puis rechargez.`
+    : `<b>Erreur</b>${esc(e.message)}`;
+}
+
+/* ── Charts ─────────────────────────────── */
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function drawChart(canvas, series, opts) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 46, padR = 6, padT = 6, padB = 16;
+  const cw = w - padL - padR, ch = h - padT - padB;
+  let max = opts.max;
+  if (max == null) {
+    max = Math.max(1024, ...series.flatMap(s => s.data));
+    const steps = [1, 2, 5]; let base = 1; let nice = 1;
+    outer: for (; ; base *= 10) for (const st of steps) { if (st * base >= max) { nice = st * base; break outer; } }
+    max = nice;
+  }
+  ctx.font = '10px system-ui'; ctx.fillStyle = '#71717a'; ctx.strokeStyle = '#27272a'; ctx.lineWidth = 1;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + ch * i / 4;
+    ctx.beginPath(); ctx.moveTo(padL, Math.round(y) + .5); ctx.lineTo(w - padR, Math.round(y) + .5); ctx.stroke();
+    ctx.fillText(opts.fmt(max * (4 - i) / 4), padL - 5, y);
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('-60 s', padL, h - 3); ctx.textAlign = 'right'; ctx.fillText('maintenant', w - padR, h - 3);
+  for (const s of series) {
+    const d = s.data; if (!d.length) continue;
+    const col = cssVar(s.color);
+    const x = i => padL + cw * (HIST - d.length + i) / (HIST - 1);
+    const y = v => padT + ch * (1 - Math.min(v, max) / max);
+    ctx.beginPath();
+    d.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)));
+    ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.stroke();
+    if (s.fill) {
+      ctx.lineTo(x(d.length - 1), padT + ch); ctx.lineTo(x(0), padT + ch); ctx.closePath();
+      const g = ctx.createLinearGradient(0, padT, 0, padT + ch); g.addColorStop(0, col + '55'); g.addColorStop(1, col + '05');
+      ctx.fillStyle = g; ctx.fill();
+    }
+  }
+}
+function drawAll() {
+  drawChart($('#chCpu'), [{ data: hist.cpu, color: '--accent', fill: true }], { max: 100, fmt: v => v + ' %' });
+  drawChart($('#chRam'), [{ data: hist.ram, color: '--ok', fill: true }, { data: hist.swap, color: '--warn' }], { max: 100, fmt: v => v + ' %' });
+  drawChart($('#chNet'), [{ data: hist.down, color: '--cyan', fill: true }, { data: hist.up, color: '--pink' }], { fmt: v => fmtB(v, 0) + '/s' });
+}
+window.addEventListener('resize', drawAll);
+function push(arr, v) { arr.push(v); if (arr.length > HIST) arr.shift(); }
+
+/* ── Overview ─────────────────────────────── */
+let firstNet = true;
+async function tick() {
+  if (paused || document.hidden) return;
+  let d;
+  try { d = await api('/overview'); showErr(null); } catch (e) { showErr(e); return; }
+  $('#content').classList.remove('hide');
+  const cpu = d.cpu;
+  $('#cpuPct').textContent = cpu.percent.toFixed(1) + ' %';
+  $('#cpuBar').style.width = cpu.percent + '%'; $('#cpuBar').style.background = color(cpu.percent) || 'var(--accent)';
+  $('#cpuInfo').textContent = `${cpu.physical || '?'} cœurs / ${cpu.logical} threads` + (cpu.freq ? ` · ${(cpu.freq.current / 1000).toFixed(2)} GHz` : '');
+  const cores = $('#cores');
+  if (cores.children.length !== cpu.per_core.length) cores.innerHTML = cpu.per_core.map((_, i) => `<div class="core" title="Cœur ${i}"><i></i><span></span></div>`).join('');
+  cpu.per_core.forEach((p, i) => { const c = cores.children[i]; c.firstChild.style.height = p + '%'; c.firstChild.style.background = color(p) || 'var(--accent)'; c.lastChild.textContent = Math.round(p); c.title = `Cœur ${i} : ${p.toFixed(0)} %`; });
+
+  const m = d.memory;
+  $('#ramPct').textContent = m.percent.toFixed(1) + ' %';
+  $('#ramBar').style.width = m.percent + '%';
+  $('#ramInfo').textContent = `${fmtB(m.used)} utilisés sur ${fmtB(m.total)} · ${fmtB(m.available)} disponibles`;
+  $('#swapBar').style.width = d.swap.percent + '%';
+  $('#swapInfo').textContent = d.swap.total ? `${fmtB(d.swap.used)} / ${fmtB(d.swap.total)} (${d.swap.percent.toFixed(0)} %)` : 'Aucun swap';
+
+  const n = d.network;
+  if (firstNet) { n.up = 0; n.down = 0; firstNet = false; }
+  $('#netDown').textContent = fmtRate(n.down); $('#netUp').textContent = fmtRate(n.up);
+  $('#netTot').textContent = `Total depuis le démarrage : ↓ ${fmtB(n.recv_total)} · ↑ ${fmtB(n.sent_total)}`;
+  $('#dio').textContent = `Lecture ${fmtRate(d.disk_io.read)} · Écriture ${fmtRate(d.disk_io.write)}`;
+
+  const os = d.os;
+  $('#hostline').textContent = `${os.hostname} · ${os.system} ${os.release}`;
+  $('#sysKv').innerHTML = [
+    ['Hôte', os.hostname], ['OS', `${os.system} ${os.release}`], ['Version', os.version], ['Architecture', os.machine],
+    ['Processeur', os.processor], ['Démarré il y a', fmtDur(d.uptime)], ['Démarrage', new Date(d.boot_time * 1000).toLocaleString('fr-FR')],
+    ['Processus', d.process_count ?? '–'],
+  ].map(([k, v]) => `<b>${k}</b><span title="${esc(v)}">${esc(v)}</span>`).join('');
+
+  if (d.battery) {
+    $('#batCard').classList.remove('hide');
+    const b = d.battery;
+    $('#batPct').textContent = b.percent.toFixed(0) + ' %' + (b.plugged ? ' ⚡' : '');
+    $('#batBar').style.width = b.percent + '%';
+    $('#batBar').style.background = b.percent < 20 ? 'var(--danger)' : b.percent < 40 ? 'var(--warn)' : 'var(--ok)';
+    $('#batInfo').textContent = b.plugged ? (b.percent >= 99 ? 'Branchée — chargée' : 'Branchée — en charge') : (b.secsleft ? `Sur batterie — ${fmtDur(b.secsleft)} restantes` : 'Sur batterie');
+  } else $('#batCard').classList.add('hide');
+
+  $('#disks').innerHTML = d.disks.map(k => `<div class="disk"><div class="row"><b>${esc(k.mountpoint)}</b><span class="small">${esc(k.fstype)}</span></div>
+    <div class="bar"><i style="width:${k.percent}%;background:${color(k.percent) || 'var(--accent)'}"></i></div>
+    <div class="row small"><span>${fmtB(k.used)} / ${fmtB(k.total)}</span><span>${fmtB(k.free)} libres</span></div></div>`).join('') || '<div class="small">Aucun disque</div>';
+
+  push(hist.cpu, cpu.percent); push(hist.ram, m.percent); push(hist.swap, d.swap.percent);
+  push(hist.up, n.up); push(hist.down, n.down);
+  drawAll();
+}
+
+/* ── Processes ─────────────────────────────── */
+async function loadProcs() {
+  if (paused || document.hidden || confirmPid !== null) return;
+  const p = new URLSearchParams({ sort: sortKey, desc: sortDesc, q: $('#pq').value, limit: $('#plimit').value });
+  let r; try { r = await api('/processes?' + p); } catch (e) { if (e.code !== 'MISSING_DEP') toast(e.message); return; }
+  $('#procCount').textContent = `(${r.total})`;
+  document.querySelectorAll('th[data-k]').forEach(th => { th.classList.toggle('sorted', th.dataset.k === sortKey); th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (th.dataset.k === sortKey ? (sortDesc ? ' ▼' : ' ▲') : ''); });
+  $('#ptbody').innerHTML = r.processes.map(p => `<tr data-pid="${p.pid}">
+    <td class="num">${p.pid}</td><td class="name" title="${esc(p.name)}">${esc(p.name)}</td><td class="small">${esc(p.username.split('\\').pop())}</td>
+    <td class="num" style="${p.cpu >= 50 ? 'color:#fca5a5' : ''}">${p.cpu.toFixed(1)}</td><td class="num">${fmtB(p.memory)}</td>
+    <td class="num">${p.threads}</td><td class="small">${esc(p.status)}</td>
+    <td><span class="kwrap"><button class="danger kill" data-name="${esc(p.name)}">Terminer</button></span></td></tr>`).join('');
+}
+$('#ptbody').addEventListener('click', e => {
+  const btn = e.target.closest('button.kill'); if (!btn) return;
+  const tr = btn.closest('tr'); const pid = +tr.dataset.pid; const name = btn.dataset.name;
+  confirmPid = pid;
+  const wrap = btn.parentElement;
+  wrap.innerHTML = `<span class="confirm">Terminer « ${esc(name)} » ? <button class="danger y">Oui</button><button class="f danger" title="Terminer de force si le processus ne répond pas">Forcer</button><button class="n">Non</button></span>`;
+  const done = () => { confirmPid = null; loadProcs(); };
+  const kill = async force => {
+    try { const r = await api(`/processes/${pid}/kill`, { method: 'POST', body: { force } }); toast(`Processus « ${r.name} » terminé`, true); }
+    catch (er) { toast(er.message); }
+    done();
+  };
+  wrap.querySelector('.y').onclick = () => kill(false);
+  wrap.querySelector('.f').onclick = () => kill(true);
+  wrap.querySelector('.n').onclick = done;
+  setTimeout(() => { if (confirmPid === pid && document.body.contains(wrap)) done(); }, 8000);
+});
+document.querySelectorAll('th[data-k]').forEach(th => th.onclick = () => {
+  const k = th.dataset.k;
+  if (sortKey === k) sortDesc = !sortDesc; else { sortKey = k; sortDesc = k === 'cpu' || k === 'memory'; }
+  confirmPid = null; loadProcs();
+});
+let pqT; $('#pq').oninput = () => { clearTimeout(pqT); pqT = setTimeout(() => { confirmPid = null; loadProcs(); }, 250); };
+$('#plimit').onchange = () => { confirmPid = null; loadProcs(); };
+
+$('#pauseBtn').onclick = () => { paused = !paused; $('#pauseBtn').textContent = paused ? '▶ Reprendre' : '⏸ Pause'; if (!paused) { tick(); loadProcs(); } };
+
+tick(); setInterval(tick, 1000);
+setTimeout(loadProcs, 400); setInterval(loadProcs, 3000);
+</script>
+</body>
+</html>

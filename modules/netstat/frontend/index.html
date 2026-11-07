@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Connexions réseau</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; --cyan: #06b6d4; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 16px; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 5px 10px; }
+  button:hover { background: #2a2a30; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #5458e0; }
+  button.danger { color: #fca5a5; }
+  button.danger:hover { background: rgba(239,68,68,.15); border-color: var(--danger); }
+  button.sm { padding: 2px 8px; font-size: 12px; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; white-space: nowrap; }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .sp { flex: 1; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.admin { color: #bbf7d0; border-color: #166534; background: #14301f; }
+  .badge.std { color: #fde68a; border-color: #854d0e; background: #2b2110; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .stat .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 12px; color: var(--muted); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .filters input[type=search] { flex: 1; min-width: 200px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--card); z-index: 1; }
+  th.sorted { color: var(--text); }
+  td.mono { font-family: Consolas, 'Cascadia Mono', monospace; font-size: 12px; }
+  td.proc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  tr:hover td { background: #1c1c20; }
+  tr.new td { animation: flash 6s ease-out; }
+  @keyframes flash { 0%, 40% { background: rgba(99,102,241,.25); } 100% { background: transparent; } }
+  tr.grp td { background: #1b1b22; font-weight: 600; cursor: pointer; }
+  tr.grp td .cnt { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .tablewrap { max-height: calc(100vh - 290px); min-height: 240px; overflow: auto; }
+  .pn { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  .host { color: var(--cyan); font-size: 11px; display: block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  .st { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: #26262c; color: #c4c4cc; }
+  .st.ESTABLISHED { background: #14301f; color: #86efac; }
+  .st.LISTEN { background: #1e1b4b; color: #a5b4fc; }
+  .st.TIME_WAIT, .st.CLOSE_WAIT, .st.FIN_WAIT1, .st.FIN_WAIT2, .st.LAST_ACK, .st.CLOSING { background: #2b2110; color: #fcd34d; }
+  .st.SYN_SENT, .st.SYN_RECV { background: #0c2a33; color: #67e8f9; }
+  .denied { color: var(--warn); font-size: 12px; font-style: italic; }
+  .confirm { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: #fca5a5; }
+  .err { background: rgba(239,68,68,.1); border: 1px solid var(--danger); color: #fecaca; padding: 14px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .err b { display: block; margin-bottom: 4px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .empty { text-align: center; color: var(--muted); padding: 30px; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>🔌 Connexions réseau</h1>
+  <span class="badge" id="adminBadge">…</span>
+  <span class="muted" id="updated"></span>
+  <span class="sp"></span>
+  <label class="chk"><input type="checkbox" id="auto" checked /> Actualisation auto</label>
+  <select id="interval" title="Intervalle">
+    <option value="2000">2 s</option><option value="3000" selected>3 s</option><option value="5000">5 s</option><option value="10000">10 s</option>
+  </select>
+  <button id="refresh">⟳ Actualiser</button>
+  <button id="exportBtn">⭳ Exporter CSV</button>
+</div>
+<div class="err" id="err"></div>
+
+<div class="stats">
+  <div class="card stat"><div class="v" id="sTotal">–</div><div class="l">Connexions</div></div>
+  <div class="card stat"><div class="v" id="sEst">–</div><div class="l">TCP établies</div></div>
+  <div class="card stat"><div class="v" id="sListen">–</div><div class="l">Ports en écoute</div></div>
+  <div class="card stat"><div class="v" id="sProc">–</div><div class="l">Processus</div></div>
+  <div class="card stat"><div class="v" id="sShown">–</div><div class="l">Affichées (filtre)</div></div>
+</div>
+
+<div class="card">
+  <div class="filters">
+    <input type="search" id="q" placeholder="Rechercher : port, processus, PID, adresse IP, nom d'hôte…" />
+    <select id="proto"><option value="">TCP + UDP</option><option value="TCP">TCP</option><option value="UDP">UDP</option></select>
+    <select id="fam"><option value="">IPv4 + IPv6</option><option value="4">IPv4</option><option value="6">IPv6</option></select>
+    <select id="state"><option value="">Tous les états</option></select>
+    <label class="chk"><input type="checkbox" id="listenOnly" /> Écoute uniquement</label>
+    <label class="chk"><input type="checkbox" id="hideLocal" /> Masquer loopback</label>
+    <label class="chk"><input type="checkbox" id="group" /> Grouper par processus</label>
+    <label class="chk" title="Résolution DNS inverse des adresses distantes (asynchrone, en cache)"><input type="checkbox" id="rdns" /> DNS inverse</label>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th data-k="proto">Proto</th><th data-k="local">Adresse locale</th><th data-k="remote">Adresse distante</th>
+        <th data-k="status">État</th><th data-k="pid">PID</th><th data-k="pname">Processus</th><th></th>
+      </tr></thead>
+      <tbody id="tbody"><tr><td colspan="7" class="empty">Chargement…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="muted" style="margin-top:8px">Les connexions surlignées sont apparues depuis la dernière actualisation. « accès refusé » : processus d'un autre utilisateur ou protégé — relancez l'application en administrateur pour tout voir.</div>
+</div>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/netstat/api`;
+const $ = s => document.querySelector(s);
+const STATES = { ESTABLISHED: 'Établie', LISTEN: 'Écoute', TIME_WAIT: 'Attente fermeture', CLOSE_WAIT: 'Fermeture distante', SYN_SENT: 'SYN envoyé', SYN_RECV: 'SYN reçu', FIN_WAIT1: 'FIN attente 1', FIN_WAIT2: 'FIN attente 2', LAST_ACK: 'Dernier ACK', CLOSING: 'Fermeture', CLOSE: 'Fermée', DELETE_TCB: 'Suppression' };
+let data = [], prevKeys = null, newKeys = new Set(), sortKey = 'proto', sortDesc = false, timer = null, loading = false;
+let confirmKey = null, collapsed = new Set(), dns = {}, dnsInflight = false, selfPid = null;
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+let toastT;
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 4500); }
+async function api(path, opts = {}) {
+  const r = await fetch(BASE + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  let j = null; try { j = await r.json(); } catch (_) {}
+  if (!r.ok) { const e = new Error((j && j.error) || `Erreur HTTP ${r.status}`); e.code = j && j.code; e.status = r.status; throw e; }
+  return j;
+}
+function showErr(e) {
+  const box = $('#err');
+  if (!e) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = e.code === 'MISSING_DEP'
+    ? `<b>Dépendance manquante</b>${esc(e.message)} Installez les dépendances du module (psutil) depuis le gestionnaire de modules, puis rechargez.`
+    : `<b>Erreur</b>${esc(e.message)}`;
+}
+function fmtAddr(ip, port, fam) {
+  if (!ip && port == null) return '';
+  const a = fam === 6 && ip ? `[${ip}]` : (ip || '*');
+  return `${a}:${port ?? '*'}`;
+}
+const keyOf = c => `${c.proto}|${c.laddr}|${c.lport}|${c.raddr}|${c.rport}|${c.pid}`;
+const isLoop = ip => !ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('127.') || ip === '0.0.0.0' || ip === '::';
+
+async function load() {
+  if (loading) return; loading = true;
+  try {
+    const r = await api('/connections');
+    showErr(null);
+    selfPid = r.self_pid;
+    setBadge(r.admin);
+    data = r.connections;
+    const keys = new Set(data.map(keyOf));
+    newKeys = new Set();
+    if (prevKeys) keys.forEach(k => { if (!prevKeys.has(k)) newKeys.add(k); });
+    prevKeys = keys;
+    $('#sTotal').textContent = data.length;
+    $('#sEst').textContent = r.counts.established;
+    $('#sListen').textContent = r.counts.listening;
+    $('#sProc').textContent = new Set(data.map(c => c.pid)).size;
+    $('#updated').textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+    fillStates();
+    render();
+    if ($('#rdns').checked) resolveDns();
+  } catch (e) { showErr(e); if (e.code === 'MISSING_DEP') stopAuto(); }
+  finally { loading = false; }
+}
+function setBadge(admin) {
+  const b = $('#adminBadge');
+  b.textContent = admin ? 'Administrateur' : 'Mode standard';
+  b.className = 'badge ' + (admin ? 'admin' : 'std');
+}
+function fillStates() {
+  const sel = $('#state'), cur = sel.value;
+  const present = [...new Set(data.map(c => c.status).filter(Boolean))].sort();
+  const want = ['', ...present];
+  if (cur && !want.includes(cur)) want.push(cur);
+  const html = want.map(s => `<option value="${esc(s)}">${s ? esc(STATES[s] || s) + ' (' + s + ')' : 'Tous les états'}</option>`).join('');
+  if (sel.dataset.h !== html) { sel.innerHTML = html; sel.dataset.h = html; sel.value = cur; }
+}
+
+function filtered() {
+  const q = $('#q').value.trim().toLowerCase(), proto = $('#proto').value, fam = $('#fam').value, st = $('#state').value;
+  const lo = $('#listenOnly').checked, hideLocal = $('#hideLocal').checked;
+  return data.filter(c => {
+    if (proto && c.proto !== proto) return false;
+    if (fam && String(c.family) !== fam) return false;
+    if (st && c.status !== st) return false;
+    if (lo && !c.listening) return false;
+    if (hideLocal && !c.listening && isLoop(c.raddr) && (c.laddr.startsWith('127.') || c.laddr === '::1')) return false;
+    if (q) {
+      const host = dns[c.raddr] || '';
+      const hay = [c.laddr, c.lport, c.raddr, c.rport, c.pid, c.pname, c.ppath, c.lport_name, c.rport_name, host, c.status, STATES[c.status]].join(' ').toLowerCase();
+      if (/^\d+$/.test(q)) { if (String(c.lport) !== q && String(c.rport) !== q && String(c.pid) !== q && !hay.includes(q)) return false; }
+      else if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function sortRows(rows) {
+  const ipKey = (ip, port) => (ip || '').padStart(40) + String(port ?? 0).padStart(6, '0');
+  const f = {
+    proto: c => c.proto + c.family + String(c.lport).padStart(6, '0'),
+    local: c => ipKey(c.laddr, c.lport), remote: c => ipKey(c.raddr, c.rport),
+    status: c => c.status || 'zz', pid: c => c.pid ?? -1, pname: c => (c.pname || '~').toLowerCase(),
+  }[sortKey];
+  rows.sort((a, b) => { const x = f(a), y = f(b); const r = x < y ? -1 : x > y ? 1 : 0; return sortDesc ? -r : r; });
+  return rows;
+}
+function rowHtml(c) {
+  const k = keyOf(c);
+  const lname = c.lport_name ? `<span class="pn">${esc(c.lport_name)}</span>` : '';
+  const rname = c.rport_name ? `<span class="pn">${esc(c.rport_name)}</span>` : '';
+  const host = $('#rdns').checked && c.raddr && dns[c.raddr] ? `<span class="host" title="${esc(dns[c.raddr])}">${esc(dns[c.raddr])}</span>` : '';
+  const st = c.status ? `<span class="st ${esc(c.status)}" title="${esc(c.status)}">${esc(STATES[c.status] || c.status)}</span>` : (c.proto === 'UDP' ? '<span class="muted">—</span>' : '');
+  const pn = c.denied && !c.pname ? '<span class="denied">accès refusé</span>' : esc(c.pname);
+  const canKill = c.pid && c.pid > 4 && c.pid !== selfPid;
+  let act = '';
+  if (canKill) {
+    act = confirmKey === k
+      ? `<span class="confirm">Terminer ${esc(c.pname || 'PID ' + c.pid)} ? <button class="sm danger" data-act="kill" data-k="${esc(k)}">Oui</button><button class="sm" data-act="cancel">Non</button></span>`
+      : `<button class="sm danger" data-act="ask" data-k="${esc(k)}" title="Terminer le processus">✕</button>`;
+  }
+  return `<tr class="${newKeys.has(k) ? 'new' : ''}">
+    <td>${c.proto}${c.family === 6 ? '<span class="pn">v6</span>' : ''}</td>
+    <td class="mono">${esc(fmtAddr(c.laddr, c.lport, c.family))}${lname}</td>
+    <td class="mono">${esc(fmtAddr(c.raddr, c.rport, c.family))}${rname}${host}</td>
+    <td>${st}</td>
+    <td class="mono">${c.pid ?? '?'}</td>
+    <td class="proc" title="${esc(c.ppath || (c.path_denied ? 'Chemin : accès refusé' : ''))}">${pn}</td>
+    <td>${act}</td></tr>`;
+}
+function render() {
+  const rows = sortRows(filtered());
+  $('#sShown').textContent = rows.length;
+  document.querySelectorAll('th[data-k]').forEach(th => { th.classList.toggle('sorted', th.dataset.k === sortKey); th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (th.dataset.k === sortKey ? (sortDesc ? ' ▼' : ' ▲') : ''); });
+  if (!rows.length) { $('#tbody').innerHTML = `<tr><td colspan="7" class="empty">${data.length ? 'Aucune connexion ne correspond aux filtres.' : 'Aucune connexion.'}</td></tr>`; return; }
+  if (!$('#group').checked) { $('#tbody').innerHTML = rows.map(rowHtml).join(''); return; }
+  const groups = new Map();
+  rows.forEach(c => { const g = `${c.pid}`; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(c); });
+  const arr = [...groups.values()].sort((a, b) => b.length - a.length);
+  $('#tbody').innerHTML = arr.map(list => {
+    const c = list[0], g = String(c.pid), open = !collapsed.has(g);
+    const name = c.pname || (c.denied ? 'accès refusé' : '?');
+    const est = list.filter(x => x.status === 'ESTABLISHED').length, lis = list.filter(x => x.listening).length;
+    return `<tr class="grp" data-g="${esc(g)}"><td colspan="7">${open ? '▾' : '▸'} ${esc(name)} <span class="cnt">PID ${c.pid ?? '?'} · ${list.length} connexion(s) · ${est} établie(s) · ${lis} en écoute</span></td></tr>`
+      + (open ? list.map(rowHtml).join('') : '');
+  }).join('');
+}
+
+async function resolveDns() {
+  if (dnsInflight) return;
+  const ips = [...new Set(data.map(c => c.raddr).filter(ip => ip && !(ip in dns) && ip !== '0.0.0.0' && ip !== '::'))];
+  if (!ips.length) return;
+  dnsInflight = true;
+  try {
+    const r = await api('/resolve', { method: 'POST', body: JSON.stringify({ ips: ips.slice(0, 300), wait: 1.5 }) });
+    Object.entries(r.results).forEach(([ip, n]) => dns[ip] = n || '');
+    render();
+    if (r.pending.length) setTimeout(() => { dnsInflight = false; resolveDns(); }, 1500);
+    else dnsInflight = false;
+  } catch (e) { dnsInflight = false; toast(e.message); }
+}
+
+async function doKill(k, opts = {}) {
+  const c = data.find(x => keyOf(x) === k); if (!c) return;
+  confirmKey = null;
+  try {
+    const r = await api(`/kill/${c.pid}`, { method: 'POST', body: JSON.stringify({ name: c.pname || '', force: !!opts.force, elevate: !!opts.elevate }) });
+    toast(`« ${r.name || c.pname} » terminé.`, true);
+    load();
+  } catch (e) {
+    if (e.code === 'TIMEOUT') { askRetry(c, k, e.message, 'Forcer', { force: true }); return; }
+    if (e.code === 'NEED_ADMIN') { askRetry(c, k, e.message, 'Réessayer en administrateur (UAC)', { elevate: true }); return; }
+    toast(e.message); render();
+  }
+}
+function askRetry(c, k, msg, label, opts) {
+  render();
+  const btn = [...document.querySelectorAll('button[data-act="ask"]')].find(b => b.dataset.k === k);
+  const cell = btn ? btn.parentElement : null;
+  if (!cell) { toast(msg); return; }
+  cell.innerHTML = `<span class="confirm">${esc(msg)} <button class="sm danger">${esc(label)}</button><button class="sm">Annuler</button></span>`;
+  const [ok, no] = cell.querySelectorAll('button');
+  ok.onclick = () => doKill(k, opts);
+  no.onclick = () => render();
+}
+
+$('#tbody').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) {
+    const act = b.dataset.act;
+    if (act === 'ask') { confirmKey = b.dataset.k; render(); }
+    else if (act === 'cancel') { confirmKey = null; render(); }
+    else if (act === 'kill') doKill(b.dataset.k);
+    return;
+  }
+  const g = e.target.closest('tr.grp');
+  if (g) { const id = g.dataset.g; collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); render(); }
+});
+document.querySelectorAll('th[data-k]').forEach(th => th.addEventListener('click', () => {
+  const k = th.dataset.k; if (sortKey === k) sortDesc = !sortDesc; else { sortKey = k; sortDesc = false; } render();
+}));
+['#q'].forEach(s => $(s).addEventListener('input', render));
+['#proto', '#fam', '#state', '#listenOnly', '#hideLocal', '#group'].forEach(s => $(s).addEventListener('change', render));
+$('#rdns').addEventListener('change', () => { if ($('#rdns').checked) resolveDns(); render(); });
+$('#refresh').addEventListener('click', load);
+function stopAuto() { clearInterval(timer); timer = null; }
+function startAuto() { stopAuto(); if ($('#auto').checked) timer = setInterval(() => { if (!confirmKey && !document.hidden) load(); }, +$('#interval').value); }
+$('#auto').addEventListener('change', startAuto);
+$('#interval').addEventListener('change', startAuto);
+$('#exportBtn').addEventListener('click', async () => {
+  const rows = sortRows(filtered()).map(c => ({ ...c, rhost: dns[c.raddr] || '' }));
+  if (!rows.length) { toast('Aucune connexion à exporter.'); return; }
+  try {
+    const r = await api('/export', { method: 'POST', body: JSON.stringify({ rows }) });
+    const a = document.createElement('a'); a.href = `${BASE}/file/${encodeURIComponent(r.filename)}`; a.download = r.filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    toast(`${r.count} connexion(s) exportée(s).`, true);
+  } catch (e) { toast(e.message); }
+});
+
+load().then(startAuto);
+</script>
+</body>
+</html>

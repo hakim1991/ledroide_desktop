@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Convertisseur</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 14px; font-size: 14px; }
+  .layout { display: grid; grid-template-columns: 200px 1fr; gap: 12px; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } .cats { flex-direction: row !important; flex-wrap: wrap; } }
+  h1 { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
+  .cats { display: flex; flex-direction: column; gap: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px; align-self: start; }
+  .cat { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: .86rem; color: #a1a1aa; user-select: none; }
+  .cat:hover { background: #222227; color: var(--text); }
+  .cat.on { background: var(--accent); color: #fff; }
+  .cat .ic { width: 20px; text-align: center; }
+  .main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card-title { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 10px;
+                display: flex; align-items: center; gap: 8px; }
+  .card-title .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 11px;
+           font: inherit; font-size: .82rem; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover { border-color: #52525b; background: #26262b; }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 9px 10px;
+                  font: inherit; font-size: .92rem; outline: none; min-width: 0; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input.bad { border-color: var(--err); }
+  .conv { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: end; }
+  @media (max-width: 620px) { .conv { grid-template-columns: 1fr; } .swap { justify-self: center; transform: rotate(90deg); } }
+  .side { display: flex; flex-direction: column; gap: 6px; }
+  .side label { font-size: .75rem; color: var(--muted); }
+  .side .val { font-size: 1.4rem; font-weight: 600; font-family: var(--mono); padding: 10px 12px; }
+  .side .out { background: #141417; border: 1px solid var(--border); border-radius: 7px; min-height: 52px; display: flex; align-items: center;
+               font-size: 1.4rem; font-weight: 600; font-family: var(--mono); padding: 10px 12px; color: #a5b4fc; word-break: break-all; cursor: copy; }
+  .swap { width: 42px; height: 42px; border-radius: 50%; font-size: 1.1rem; padding: 0; margin-bottom: 6px; }
+  .formula { margin-top: 12px; color: var(--muted); font-size: .82rem; font-family: var(--mono); }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  td { padding: 7px 8px; border-bottom: 1px solid #202024; }
+  td.v { font-family: var(--mono); text-align: right; color: var(--text); word-break: break-all; }
+  td.u { color: #a1a1aa; width: 45%; }
+  tr { cursor: pointer; }
+  tr:hover td { background: #1d1d22; }
+  tr.cur td { color: #a5b4fc; }
+  .info { font-size: .8rem; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: .74rem; border: 1px solid var(--border); }
+  .badge.ok { color: #86efac; border-color: #14532d; }
+  .badge.warn { color: #fcd34d; border-color: #78350f; }
+  .alert { padding: 10px 12px; border-radius: 7px; font-size: .85rem; border: 1px solid #78350f; background: #1f170d; color: #fcd34d; }
+  .alert.err { border-color: #7f1d1d; background: #1f0d0d; color: #fca5a5; }
+  .opts { display: flex; gap: 10px; align-items: center; font-size: .8rem; color: var(--muted); }
+  .opts select { padding: 4px 6px; font-size: .8rem; }
+  .hidden { display: none !important; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(20px); background: #27272a; color: var(--text);
+           padding: 8px 16px; border-radius: 8px; font-size: .82rem; opacity: 0; transition: .2s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .tzres { display: grid; gap: 8px; }
+  .tzrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px; background: #141417; }
+  .tzrow .z { font-size: .85rem; }
+  .tzrow .z small { color: var(--muted); display: block; font-size: .75rem; }
+  .tzrow .t { font-family: var(--mono); font-size: 1.05rem; text-align: right; }
+  .tzrow .t small { color: var(--muted); display: block; font-size: .72rem; }
+  .tzrow button { padding: 2px 7px; font-size: .72rem; margin-left: 6px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div>
+    <h1>📏 Convertisseur</h1>
+    <div class="cats" id="cats"></div>
+  </div>
+  <div class="main" id="main">
+    <!-- Units / currencies -->
+    <div class="card" id="unitCard">
+      <div class="card-title"><span id="catTitle"></span>
+        <span class="r opts">Précision
+          <select id="prec"><option value="4">4</option><option value="6">6</option><option value="10" selected>10</option><option value="15">15</option></select>
+        </span>
+      </div>
+      <div id="currAlert" class="hidden"></div>
+      <div class="conv">
+        <div class="side">
+          <label for="inVal">Valeur</label>
+          <input id="inVal" class="val" type="text" inputmode="decimal" value="1" autocomplete="off">
+          <select id="fromU"></select>
+        </div>
+        <button class="swap" id="swap" title="Inverser">⇄</button>
+        <div class="side">
+          <label>Résultat <span style="opacity:.7">(clic pour copier)</span></label>
+          <div class="out" id="outVal">—</div>
+          <select id="toU"></select>
+        </div>
+      </div>
+      <div class="formula" id="formula"></div>
+      <div class="info hidden" id="currInfo"></div>
+    </div>
+    <div class="card" id="allCard">
+      <div class="card-title">Toutes les unités <span class="r muted">clic = choisir comme cible</span></div>
+      <table id="allTable"><tbody></tbody></table>
+    </div>
+
+    <!-- Time zones -->
+    <div class="card hidden" id="tzCard">
+      <div class="card-title">Fuseaux horaires <span class="r"><button id="tzNow">Maintenant</button></span></div>
+      <div id="tzAlert" class="hidden"></div>
+      <div class="conv">
+        <div class="side">
+          <label for="tzDate">Date et heure locales du fuseau source</label>
+          <input id="tzDate" type="datetime-local" step="60">
+          <input id="tzFrom" list="tzList" placeholder="Fuseau source (ex. Europe/Paris)" autocomplete="off">
+        </div>
+        <button class="swap" id="tzSwap" title="Inverser">⇄</button>
+        <div class="side">
+          <label>Heure dans le fuseau cible</label>
+          <div class="out" id="tzOut">—</div>
+          <input id="tzTo" list="tzList" placeholder="Fuseau cible (ex. America/New_York)" autocomplete="off">
+        </div>
+      </div>
+      <div class="formula" id="tzFormula"></div>
+      <datalist id="tzList"></datalist>
+    </div>
+    <div class="card hidden" id="tzWorld">
+      <div class="card-title">Ailleurs dans le monde <span class="r"><input id="tzAdd" list="tzList" placeholder="+ Ajouter un fuseau" style="padding:4px 8px;font-size:.8rem;width:200px"></span></div>
+      <div class="tzres" id="tzRes"></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/unit-converter/api`;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
+const store = { get(k, d) { try { const v = localStorage.getItem('uc:' + k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
+                set(k, v) { try { localStorage.setItem('uc:' + k, JSON.stringify(v)); } catch (_) {} } };
+
+// Units: [id, label, factor to base unit]
+const CATS = {
+  longueur: { ic: '📐', name: 'Longueur', def: ['m', 'ft'], units: [
+    ['nm', 'nanomètre (nm)', 1e-9], ['um', 'micromètre (µm)', 1e-6], ['mm', 'millimètre (mm)', 1e-3], ['cm', 'centimètre (cm)', 1e-2],
+    ['dm', 'décimètre (dm)', 0.1], ['m', 'mètre (m)', 1], ['km', 'kilomètre (km)', 1e3], ['in', 'pouce (in)', 0.0254], ['ft', 'pied (ft)', 0.3048],
+    ['yd', 'yard (yd)', 0.9144], ['mi', 'mile (mi)', 1609.344], ['nmi', 'mille marin (NM)', 1852], ['au', 'unité astronomique (ua)', 149597870700],
+    ['ly', 'année-lumière (al)', 9460730472580800]] },
+  masse: { ic: '⚖️', name: 'Masse', def: ['kg', 'lb'], units: [
+    ['ug', 'microgramme (µg)', 1e-9], ['mg', 'milligramme (mg)', 1e-6], ['g', 'gramme (g)', 1e-3], ['kg', 'kilogramme (kg)', 1], ['t', 'tonne (t)', 1e3],
+    ['ct', 'carat (ct)', 2e-4], ['oz', 'once (oz)', 0.028349523125], ['lb', 'livre (lb)', 0.45359237], ['st', 'stone (st)', 6.35029318],
+    ['ton_us', 'tonne courte US', 907.18474], ['ton_uk', 'tonne longue UK', 1016.0469088]] },
+  temperature: { ic: '🌡️', name: 'Température', def: ['C', 'F'], special: true, units: [
+    ['C', 'degré Celsius (°C)'], ['F', 'degré Fahrenheit (°F)'], ['K', 'kelvin (K)'], ['R', 'degré Rankine (°R)']] },
+  volume: { ic: '🧪', name: 'Volume', def: ['L', 'gal_us'], units: [
+    ['ml', 'millilitre (mL)', 1e-3], ['cl', 'centilitre (cL)', 1e-2], ['dl', 'décilitre (dL)', 0.1], ['L', 'litre (L)', 1], ['hl', 'hectolitre (hL)', 100],
+    ['cm3', 'centimètre cube (cm³)', 1e-3], ['m3', 'mètre cube (m³)', 1000], ['tsp', 'cuillère à café US', 0.00492892159375],
+    ['tbsp', 'cuillère à soupe US', 0.01478676478125], ['floz', 'once liquide US (fl oz)', 0.0295735295625], ['cup', 'tasse US', 0.2365882365],
+    ['pt_us', 'pinte US', 0.473176473], ['pt_uk', 'pinte UK', 0.56826125], ['gal_us', 'gallon US', 3.785411784], ['gal_uk', 'gallon UK', 4.54609],
+    ['bbl', 'baril de pétrole', 158.987294928], ['in3', 'pouce cube (in³)', 0.016387064], ['ft3', 'pied cube (ft³)', 28.316846592]] },
+  surface: { ic: '⬛', name: 'Surface', def: ['m2', 'ft2'], units: [
+    ['mm2', 'millimètre carré (mm²)', 1e-6], ['cm2', 'centimètre carré (cm²)', 1e-4], ['m2', 'mètre carré (m²)', 1], ['a', 'are (a)', 100],
+    ['ha', 'hectare (ha)', 1e4], ['km2', 'kilomètre carré (km²)', 1e6], ['in2', 'pouce carré (in²)', 0.00064516], ['ft2', 'pied carré (ft²)', 0.09290304],
+    ['yd2', 'yard carré (yd²)', 0.83612736], ['acre', 'acre', 4046.8564224], ['mi2', 'mile carré (mi²)', 2589988.110336]] },
+  vitesse: { ic: '🏎️', name: 'Vitesse', def: ['kmh', 'mph'], units: [
+    ['ms', 'mètre par seconde (m/s)', 1], ['kmh', 'kilomètre par heure (km/h)', 1 / 3.6], ['mph', 'mile par heure (mph)', 0.44704],
+    ['kn', 'nœud (kn)', 1852 / 3600], ['fts', 'pied par seconde (ft/s)', 0.3048], ['mach', 'Mach (au niveau de la mer, 15 °C)', 340.29],
+    ['c', 'vitesse de la lumière (c)', 299792458]] },
+  donnees: { ic: '💾', name: 'Données', def: ['MB', 'MiB'], units: [
+    ['bit', 'bit (b)', 1], ['B', 'octet (o)', 8], ['kbit', 'kilobit (kb)', 1e3], ['Mbit', 'mégabit (Mb)', 1e6], ['Gbit', 'gigabit (Gb)', 1e9],
+    ['kB', 'kilooctet (ko) — SI', 8e3], ['MB', 'mégaoctet (Mo) — SI', 8e6], ['GB', 'gigaoctet (Go) — SI', 8e9], ['TB', 'téraoctet (To) — SI', 8e12],
+    ['PB', 'pétaoctet (Po) — SI', 8e15], ['KiB', 'kibioctet (Kio) — binaire', 8 * 1024], ['MiB', 'mébioctet (Mio) — binaire', 8 * 1024 ** 2],
+    ['GiB', 'gibioctet (Gio) — binaire', 8 * 1024 ** 3], ['TiB', 'tébioctet (Tio) — binaire', 8 * 1024 ** 4], ['PiB', 'pébioctet (Pio) — binaire', 8 * 1024 ** 5],
+    ['Kibit', 'kibibit (Kib)', 1024], ['Mibit', 'mébibit (Mib)', 1024 ** 2], ['Gibit', 'gibibit (Gib)', 1024 ** 3]] },
+  temps: { ic: '⏱️', name: 'Temps', def: ['h', 'min'], units: [
+    ['ns', 'nanoseconde (ns)', 1e-9], ['us', 'microseconde (µs)', 1e-6], ['ms', 'milliseconde (ms)', 1e-3], ['s', 'seconde (s)', 1],
+    ['min', 'minute (min)', 60], ['h', 'heure (h)', 3600], ['j', 'jour (j)', 86400], ['sem', 'semaine', 604800],
+    ['mois', 'mois (moyen, 30,44 j)', 2629746], ['an', 'année (moyenne, 365,2425 j)', 31556952], ['siecle', 'siècle', 3155695200]] },
+  energie: { ic: '⚡', name: 'Énergie', def: ['kcal', 'kJ'], units: [
+    ['J', 'joule (J)', 1], ['kJ', 'kilojoule (kJ)', 1e3], ['MJ', 'mégajoule (MJ)', 1e6], ['cal', 'calorie (cal)', 4.184], ['kcal', 'kilocalorie (kcal)', 4184],
+    ['Wh', 'wattheure (Wh)', 3600], ['kWh', 'kilowattheure (kWh)', 3.6e6], ['eV', 'électronvolt (eV)', 1.602176634e-19],
+    ['BTU', 'BTU (IT)', 1055.05585262], ['ftlb', 'pied-livre force (ft·lbf)', 1.3558179483314], ['tep', 'tonne équivalent pétrole (tep)', 4.1868e10]] },
+  pression: { ic: '🎈', name: 'Pression', def: ['bar', 'psi'], units: [
+    ['Pa', 'pascal (Pa)', 1], ['hPa', 'hectopascal (hPa)', 100], ['kPa', 'kilopascal (kPa)', 1e3], ['MPa', 'mégapascal (MPa)', 1e6],
+    ['mbar', 'millibar (mbar)', 100], ['bar', 'bar', 1e5], ['atm', 'atmosphère (atm)', 101325], ['mmHg', 'millimètre de mercure (mmHg, Torr)', 133.322387415],
+    ['inHg', 'pouce de mercure (inHg)', 3386.389], ['psi', 'livre par pouce carré (psi)', 6894.757293168]] },
+  devises: { ic: '💱', name: 'Devises', def: ['EUR', 'USD'], currency: true, units: [] },
+  fuseaux: { ic: '🌍', name: 'Fuseaux horaires', tz: true },
+};
+const CUR_NAMES = { EUR: 'Euro', USD: 'Dollar américain', GBP: 'Livre sterling', CHF: 'Franc suisse', JPY: 'Yen japonais', CAD: 'Dollar canadien',
+  AUD: 'Dollar australien', CNY: 'Yuan chinois', MAD: 'Dirham marocain', DZD: 'Dinar algérien', TND: 'Dinar tunisien', XOF: 'Franc CFA (BCEAO)',
+  XAF: 'Franc CFA (BEAC)', SEK: 'Couronne suédoise', NOK: 'Couronne norvégienne', DKK: 'Couronne danoise', PLN: 'Złoty polonais', CZK: 'Couronne tchèque',
+  HUF: 'Forint hongrois', RON: 'Leu roumain', TRY: 'Livre turque', RUB: 'Rouble russe', INR: 'Roupie indienne', BRL: 'Réal brésilien', MXN: 'Peso mexicain',
+  KRW: 'Won sud-coréen', SGD: 'Dollar de Singapour', HKD: 'Dollar de Hong Kong', NZD: 'Dollar néo-zélandais', ZAR: 'Rand sud-africain',
+  AED: 'Dirham des Émirats', SAR: 'Riyal saoudien', EGP: 'Livre égyptienne', ILS: 'Shekel israélien', THB: 'Baht thaïlandais', UAH: 'Hryvnia ukrainienne' };
+const POPULAR = ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'CNY', 'MAD', 'DZD', 'TND', 'XOF'];
+
+let cat = store.get('cat', 'longueur'), rates = null;
+const sel = store.get('sel', {});
+
+// ── Number helpers ───────────────────────────────────────────────────────
+function parseNum(s) {
+  s = String(s).trim().replace(/[\s\u00a0\u202f']/g, '');
+  if (!s) return NaN;
+  if (/^[-+]?\d+,\d+$/.test(s) || (/,/.test(s) && !/\./.test(s))) s = s.replace(',', '.');
+  else s = s.replace(/,/g, '');
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return NaN;
+  return parseFloat(s);
+}
+function fmt(x) {
+  if (!isFinite(x)) return '—';
+  const p = +$('prec').value;
+  if (x === 0) return '0';
+  const ax = Math.abs(x);
+  if (ax >= 1e15 || ax < 1e-6) return x.toExponential(Math.min(p - 1, 14)).replace(/\.?0+e/, 'e').replace('.', ',').replace('e', ' × 10^').replace('^+', '^');
+  return x.toLocaleString('fr-FR', { maximumSignificantDigits: p });
+}
+function fmtPlain(x) { // copy-friendly
+  if (!isFinite(x)) return '';
+  return String(+x.toPrecision(+$('prec').value));
+}
+
+function convertTemp(v, from, to) {
+  let c;
+  switch (from) { case 'C': c = v; break; case 'F': c = (v - 32) * 5 / 9; break; case 'K': c = v - 273.15; break; case 'R': c = (v - 491.67) * 5 / 9; break; }
+  switch (to) { case 'C': return c; case 'F': return c * 9 / 5 + 32; case 'K': return c + 273.15; case 'R': return (c + 273.15) * 9 / 5; }
+}
+function factorOf(id) {
+  const C = CATS[cat];
+  if (C.currency) return rates && rates.rates[id] ? 1 / rates.rates[id] : NaN;   // value in EUR of 1 unit
+  const u = C.units.find(x => x[0] === id); return u ? u[2] : NaN;
+}
+function convert(v, from, to) {
+  if (CATS[cat].special) return convertTemp(v, from, to);
+  return v * factorOf(from) / factorOf(to);
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────
+function unitsOf() {
+  const C = CATS[cat];
+  if (!C.currency) return C.units.map(u => [u[0], u[1]]);
+  if (!rates) return [];
+  const codes = Object.keys(rates.rates);
+  const pop = POPULAR.filter(c => codes.includes(c));
+  const rest = codes.filter(c => !pop.includes(c)).sort();
+  return [...pop, ...rest].map(c => [c, `${c} — ${CUR_NAMES[c] || c}`]);
+}
+function fillSelects() {
+  const us = unitsOf();
+  const opts = us.map(([id, l]) => `<option value="${esc(id)}">${esc(l)}</option>`).join('');
+  $('fromU').innerHTML = opts; $('toU').innerHTML = opts;
+  const s = sel[cat] || CATS[cat].def;
+  const has = id => us.some(u => u[0] === id);
+  $('fromU').value = has(s[0]) ? s[0] : (us[0] || [''])[0];
+  $('toU').value = has(s[1]) ? s[1] : (us[1] || us[0] || [''])[0];
+}
+function update() {
+  const C = CATS[cat];
+  if (C.tz) return;
+  const v = parseNum($('inVal').value);
+  const from = $('fromU').value, to = $('toU').value;
+  $('inVal').classList.toggle('bad', isNaN(v) && $('inVal').value.trim() !== '');
+  sel[cat] = [from, to]; store.set('sel', sel);
+  if (isNaN(v) || !from || !to) { $('outVal').textContent = '—'; $('formula').textContent = ''; renderAll(NaN); return; }
+  const r = convert(v, from, to);
+  $('outVal').textContent = fmt(r);
+  $('outVal').dataset.copy = fmtPlain(r);
+  const one = convert(1, from, to);
+  if (C.special) {
+    const f = { 'C>F': '°F = °C × 9/5 + 32', 'F>C': '°C = (°F − 32) × 5/9', 'C>K': 'K = °C + 273,15', 'K>C': '°C = K − 273,15',
+                'F>K': 'K = (°F − 32) × 5/9 + 273,15', 'K>F': '°F = (K − 273,15) × 9/5 + 32' }[from + '>' + to];
+    $('formula').textContent = f || '';
+  } else $('formula').textContent = `1 ${from} = ${fmt(one)} ${to}   ·   1 ${to} = ${fmt(1 / one)} ${from}`;
+  renderAll(v);
+}
+function renderAll(v) {
+  const from = $('fromU').value, to = $('toU').value;
+  let us = unitsOf();
+  if (CATS[cat].currency) us = us.filter(u => POPULAR.includes(u[0]) || u[0] === from || u[0] === to);
+  $('allTable').querySelector('tbody').innerHTML = us.map(([id, l]) =>
+    `<tr data-id="${esc(id)}" class="${id === to ? 'cur' : ''}"><td class="u">${esc(l)}</td><td class="v">${isNaN(v) ? '—' : fmt(convert(v, from, id))}</td></tr>`).join('');
+}
+$('allTable').addEventListener('click', e => { const tr = e.target.closest('tr'); if (tr) { $('toU').value = tr.dataset.id; update(); } });
+
+function renderCats() {
+  $('cats').innerHTML = Object.entries(CATS).map(([k, c]) => `<div class="cat ${k === cat ? 'on' : ''}" data-k="${k}"><span class="ic">${c.ic}</span>${c.name}</div>`).join('');
+}
+$('cats').addEventListener('click', e => { const el = e.target.closest('.cat'); if (el) selectCat(el.dataset.k); });
+
+async function selectCat(k) {
+  cat = k; store.set('cat', k); renderCats();
+  const C = CATS[k];
+  $('unitCard').classList.toggle('hidden', !!C.tz); $('allCard').classList.toggle('hidden', !!C.tz);
+  $('tzCard').classList.toggle('hidden', !C.tz); $('tzWorld').classList.toggle('hidden', !C.tz);
+  $('currInfo').classList.toggle('hidden', !C.currency);
+  $('currAlert').classList.add('hidden');
+  $('catTitle').textContent = C.ic + ' ' + C.name;
+  if (C.tz) return initTz();
+  if (C.currency && !rates) { $('fromU').innerHTML = $('toU').innerHTML = '<option>Chargement…</option>'; await loadRates(false); }
+  fillSelects(); update();
+}
+
+$('inVal').addEventListener('input', update);
+$('fromU').onchange = update; $('toU').onchange = update; $('prec').onchange = () => { store.set('prec', $('prec').value); update(); };
+$('swap').onclick = () => {
+  const a = $('fromU').value; $('fromU').value = $('toU').value; $('toU').value = a;
+  const out = $('outVal').dataset.copy; if (out && !isNaN(parseNum($('inVal').value))) $('inVal').value = out.replace('.', ',');
+  update();
+};
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (_) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); return ok;
+  }
+}
+$('outVal').onclick = async () => { const t = $('outVal').dataset.copy; if (t) toast(await copyText(t) ? 'Copié : ' + t : 'Copie impossible'); };
+
+// ── Currency ─────────────────────────────────────────────────────────────
+async function loadRates(force) {
+  const info = $('currInfo'), al = $('currAlert');
+  info.innerHTML = '<span class="muted">Chargement des taux…</span>';
+  try {
+    const res = await fetch(`${BASE}/rates${force ? '?force=true' : ''}`);
+    const d = await res.json();
+    if (!res.ok) throw d;
+    rates = d;
+    const upd = d.updated ? new Date(d.updated * 1000).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }) : 'inconnue';
+    const fet = new Date(d.fetched_at * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+    info.innerHTML = `<span>Taux du <b>${esc(upd)}</b> (base EUR, open.er-api.com)</span>
+      <span class="badge ${d.offline ? 'warn' : 'ok'}">${d.offline ? 'hors ligne — cache' : d.source === 'network' ? 'à jour' : 'cache (< 6 h)'}</span>
+      <span>récupéré le ${esc(fet)}</span><button id="refreshRates">↻ Actualiser</button>`;
+    $('refreshRates').onclick = async () => { await loadRates(true); fillSelects(); update(); };
+    if (d.offline) { al.className = 'alert'; al.textContent = '⚠️ Service de taux injoignable : les derniers taux en cache sont utilisés.'; al.classList.remove('hidden'); }
+    else al.classList.add('hidden');
+  } catch (e) {
+    info.innerHTML = '<button id="refreshRates">↻ Réessayer</button>';
+    $('refreshRates').onclick = async () => { await loadRates(true); fillSelects(); update(); };
+    al.className = 'alert err'; al.textContent = '✖ ' + (e.error || 'Backend injoignable'); al.classList.remove('hidden');
+  }
+}
+
+// ── Time zones ───────────────────────────────────────────────────────────
+let tzZones = null, tzSeq = 0;
+const localTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (_) { return 'UTC'; } })();
+const tzState = store.get('tz', { from: localTz, to: 'America/New_York', world: ['UTC', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo', 'Australia/Sydney'] });
+const DAYS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
+function pad(n) { return String(n).padStart(2, '0'); }
+function nowLocalInput() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+
+async function initTz() {
+  $('tzFrom').value = tzState.from; $('tzTo').value = tzState.to;
+  if (!$('tzDate').value) $('tzDate').value = nowLocalInput();
+  if (!tzZones) {
+    try {
+      const res = await fetch(BASE + '/tz/zones'); const d = await res.json();
+      if (!res.ok) throw d;
+      tzZones = d.zones;
+      $('tzList').innerHTML = tzZones.map(z => `<option value="${esc(z)}">`).join('');
+      $('tzAlert').classList.add('hidden');
+    } catch (e) {
+      const a = $('tzAlert'); a.className = 'alert' + (e.code === 'MISSING_DEP' ? '' : ' err');
+      a.innerHTML = e.code === 'MISSING_DEP' ? '⚠️ La base des fuseaux horaires (<b>tzdata</b>) est absente. <b>Installez les dépendances du module</b> (bouton « deps »).' : '✖ ' + esc(e.error || 'Backend injoignable');
+      a.classList.remove('hidden'); return;
+    }
+  }
+  tzUpdate();
+}
+function validTz(z) { return tzZones && tzZones.includes(z); }
+async function tzUpdate() {
+  const from = $('tzFrom').value.trim(), to = $('tzTo').value.trim();
+  $('tzFrom').classList.toggle('bad', !!from && !validTz(from));
+  $('tzTo').classList.toggle('bad', !!to && !validTz(to));
+  if (!validTz(from)) { $('tzOut').textContent = '—'; return; }
+  tzState.from = from; if (validTz(to)) tzState.to = to; store.set('tz', tzState);
+  const targets = [...new Set([validTz(to) ? to : null, ...tzState.world].filter(Boolean))];
+  const s = ++tzSeq;
+  try {
+    const res = await fetch(BASE + '/tz/convert', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ datetime: $('tzDate').value || null, from_tz: from, to_tz: targets }) });
+    const d = await res.json();
+    if (s !== tzSeq) return;
+    if (!res.ok) throw d;
+    const main = validTz(to) ? d.results.find(r => r.tz === to) : null;
+    const dayDiff = r => Math.round((Date.parse(r.date) - Date.parse(d.source.date)) / 86400000);
+    const dd = r => { const n = dayDiff(r); return n ? ` (${n > 0 ? '+' : ''}${n} j)` : ''; };
+    if (main) {
+      $('tzOut').textContent = `${main.time.slice(0, 5)}  ${DAYS[main.weekday]} ${main.date.split('-').reverse().join('/')}${dd(main)}`;
+      const diff = (main.offset_minutes - d.source.offset_minutes) / 60;
+      $('tzFormula').innerHTML = `${esc(from)} : ${esc(d.source.offset)} ${esc(d.source.abbr || '')}${d.source.dst ? ' (heure d\'été)' : ''} → ${esc(to)} : ${esc(main.offset)} ${esc(main.abbr || '')}${main.dst ? ' (heure d\'été)' : ''} · écart ${diff >= 0 ? '+' : ''}${String(diff).replace('.', ',')} h · UTC ${esc(d.utc.replace('T', ' ').slice(0, 16))}`
+        + (d.nonexistent ? '<br><span style="color:#fcd34d">⚠️ Cette heure n\'existe pas dans le fuseau source (passage à l\'heure d\'été).</span>' : '')
+        + (d.ambiguous ? '<br><span style="color:#fcd34d">⚠️ Heure ambiguë (retour à l\'heure d\'hiver) : la première occurrence est utilisée.</span>' : '');
+    } else { $('tzOut').textContent = '—'; $('tzFormula').textContent = ''; }
+    $('tzRes').innerHTML = tzState.world.map(z => {
+      const r = d.results.find(x => x.tz === z); if (!r) return '';
+      return `<div class="tzrow"><div class="z">${esc(z.replace(/_/g, ' '))}<small>${esc(r.offset)} ${esc(r.abbr || '')}${r.dst ? ' · été' : ''}</small></div>
+        <div class="t">${r.time.slice(0, 5)}<button data-rm="${esc(z)}" title="Retirer">✕</button><small>${DAYS[r.weekday]} ${r.date.split('-').reverse().join('/')}${dd(r)}</small></div></div>`;
+    }).join('');
+  } catch (e) {
+    if (s !== tzSeq) return;
+    $('tzOut').textContent = '—'; $('tzFormula').textContent = '✖ ' + (e.error || 'Backend injoignable');
+  }
+}
+['tzFrom', 'tzTo'].forEach(id => $(id).addEventListener('input', tzUpdate));
+$('tzDate').addEventListener('input', tzUpdate);
+$('tzNow').onclick = () => { $('tzDate').value = nowLocalInput(); $('tzFrom').value = localTz; tzUpdate(); };
+$('tzSwap').onclick = () => {
+  const a = $('tzFrom').value; $('tzFrom').value = $('tzTo').value; $('tzTo').value = a;
+  const out = $('tzOut').textContent.match(/^(\d\d:\d\d)\s+\S+\s+(\d\d)\/(\d\d)\/(\d{4})/);
+  if (out) $('tzDate').value = `${out[4]}-${out[3]}-${out[2]}T${out[1]}`;
+  tzUpdate();
+};
+$('tzAdd').addEventListener('change', () => {
+  const z = $('tzAdd').value.trim();
+  if (validTz(z) && !tzState.world.includes(z)) { tzState.world.push(z); store.set('tz', tzState); tzUpdate(); }
+  else if (!validTz(z)) toast('Fuseau inconnu');
+  $('tzAdd').value = '';
+});
+$('tzRes').addEventListener('click', e => {
+  const b = e.target.closest('button[data-rm]'); if (!b) return;
+  tzState.world = tzState.world.filter(z => z !== b.dataset.rm); store.set('tz', tzState); tzUpdate();
+});
+
+$('prec').value = store.get('prec', '10');
+if (!CATS[cat]) cat = 'longueur';
+selectCat(cat);
+</script>
+</body>
+</html>

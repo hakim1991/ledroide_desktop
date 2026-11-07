@@ -1,0 +1,30 @@
+{
+  "id": "dns-lookup",
+  "name": "DNS / nslookup",
+  "version": "1.0.0",
+  "description": "Requêtes DNS tous types (A, MX, TXT, SOA, CAA…), choix du résolveur, propagation mondiale et diagnostic e-mail SPF/DKIM/DMARC.",
+  "category": "Réseau",
+  "tags": [
+    "dns",
+    "diagnostic"
+  ],
+  "icon": "🔎",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "dnspython"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

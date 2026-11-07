@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Couleurs</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  body { font-family: system-ui, sans-serif; background: #0f0f12; color: #e2e2e8; min-height: 100vh; padding: 1.5rem; font-size: 14px; }
+  h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; margin-bottom: 1.25rem; }
+  h2 { font-size: .95rem; font-weight: 600; color: #f4f4f5; margin-bottom: .85rem; display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+  .muted { color: #71717a; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: .5rem 1rem; font-size: .85rem; font-weight: 500; font-family: inherit; transition: opacity .15s, background .15s; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  .btn-ghost { background: #27272a; color: #e2e2e8; }
+  .btn-ghost:hover:not(:disabled) { background: #3f3f46; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-sm { padding: .3rem .6rem; font-size: .78rem; }
+  input, select { background: #09090b; border: 1px solid #27272a; color: #e2e2e8; border-radius: 6px; padding: .4rem .5rem; font: inherit; font-size: .85rem; min-width: 0; }
+  input:focus, select:focus { outline: none; border-color: #6366f1; }
+  input[type=number] { -moz-appearance: textfield; }
+  input[type=number]::-webkit-inner-spin-button { opacity: .4; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .picker-top { display: flex; gap: 1rem; align-items: stretch; flex-wrap: wrap; }
+  .big-swatch { position: relative; width: 140px; min-height: 140px; border-radius: 8px; border: 1px solid #3f3f46; cursor: pointer; overflow: hidden; flex-shrink: 0; }
+  .big-swatch input[type=color] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0; }
+  .picker-side { flex: 1; display: flex; flex-direction: column; gap: .5rem; min-width: 200px; }
+  .picker-side .hex-big { font-size: 1.6rem; font-weight: 700; letter-spacing: .02em; }
+  .picker-side .btns { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: auto; }
+
+  .formats { margin-top: 1.1rem; display: flex; flex-direction: column; gap: .5rem; }
+  .fmt { display: grid; grid-template-columns: 52px 1fr auto; gap: .5rem; align-items: center; }
+  .fmt .lbl { font-size: .75rem; font-weight: 600; color: #a1a1aa; }
+  .fmt .ins { display: flex; gap: .35rem; }
+  .fmt .ins input { flex: 1; width: 0; text-align: center; }
+  .fmt .ins input.wide { text-align: left; }
+  .fmt .copy { white-space: nowrap; }
+
+  .seg { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .9rem; }
+  .seg button { background: #09090b; border: 1px solid #27272a; color: #a1a1aa; padding: .35rem .7rem; font-size: .78rem; }
+  .seg button.active { border-color: #6366f1; color: #e2e2e8; background: rgba(99,102,241,.12); }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: .5rem; }
+  .sw { border-radius: 6px; overflow: hidden; border: 1px solid #27272a; background: #09090b; cursor: pointer; transition: transform .1s; }
+  .sw:hover { transform: translateY(-2px); border-color: #3f3f46; }
+  .sw .c { height: 56px; }
+  .sw .t { font-size: .72rem; padding: .3rem .4rem; text-align: center; font-family: ui-monospace, monospace; }
+  .sw .use { display: block; width: 100%; border-radius: 0; padding: .2rem; font-size: .7rem; background: #18181b; color: #a1a1aa; }
+  .sw .use:hover { color: #e2e2e8; background: #27272a; }
+
+  .contrast-in { display: grid; grid-template-columns: 1fr auto 1fr; gap: .6rem; align-items: end; }
+  .cfield { display: flex; flex-direction: column; gap: .3rem; font-size: .78rem; color: #a1a1aa; }
+  .cfield .w { display: flex; gap: .35rem; }
+  .cfield .w input[type=text] { flex: 1; width: 0; }
+  .cfield input[type=color] { width: 40px; height: 32px; padding: 2px; cursor: pointer; }
+  .sample { margin-top: .9rem; border-radius: 8px; padding: 1rem; border: 1px solid #27272a; }
+  .sample .lg { font-size: 1.5rem; font-weight: 700; }
+  .sample .sm { font-size: .9rem; margin-top: .35rem; }
+  .ratio { display: flex; align-items: baseline; gap: .6rem; margin-top: .9rem; }
+  .ratio b { font-size: 1.8rem; }
+  .checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .4rem; margin-top: .6rem; }
+  .chk { display: flex; justify-content: space-between; align-items: center; gap: .4rem; background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: .4rem .55rem; font-size: .78rem; }
+  .pass { color: #4ade80; font-weight: 700; }
+  .fail { color: #f87171; font-weight: 700; }
+
+  .saved { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: .6rem; }
+  .saved .item { border: 1px solid #27272a; border-radius: 6px; background: #09090b; overflow: hidden; position: relative; }
+  .saved .item .c { height: 64px; cursor: pointer; }
+  .saved .item .meta { padding: .35rem .45rem; display: flex; flex-direction: column; gap: .2rem; }
+  .saved .item input { border: none; background: transparent; padding: .1rem 0; font-size: .78rem; width: 100%; }
+  .saved .item input:focus { border-bottom: 1px solid #6366f1; border-radius: 0; }
+  .saved .item .hx { font-family: ui-monospace, monospace; font-size: .72rem; color: #a1a1aa; }
+  .saved .item .row { display: flex; justify-content: space-between; align-items: center; }
+  .saved .item .del, .saved .item .use { background: none; color: #71717a; padding: 0 .2rem; font-size: .85rem; }
+  .saved .item .del:hover { color: #f87171; }
+  .saved .item .use:hover { color: #a5b4fc; }
+  .confirm { display: inline-flex; gap: .35rem; align-items: center; font-size: .8rem; color: #fca5a5; }
+
+  .msg { padding: .7rem 1rem; border-radius: 6px; font-size: .85rem; margin-bottom: 1rem; display: none; white-space: pre-wrap; }
+  .msg.show { display: block; }
+  .msg.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
+  .toast { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%) translateY(20px); background: #27272a; color: #e2e2e8; padding: .5rem 1rem; border-radius: 6px; font-size: .82rem; opacity: 0; transition: .2s; pointer-events: none; z-index: 100; display: flex; align-items: center; gap: .5rem; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 1px solid #52525b; }
+
+  /* Pipette de secours */
+  .overlay { position: fixed; inset: 0; background: rgba(9,9,11,.96); z-index: 50; display: none; flex-direction: column; }
+  .overlay.show { display: flex; }
+  .ov-bar { display: flex; gap: .6rem; align-items: center; padding: .75rem 1rem; border-bottom: 1px solid #27272a; flex-wrap: wrap; }
+  .ov-bar .grow { flex: 1; }
+  .ov-body { flex: 1; overflow: auto; position: relative; display: flex; align-items: flex-start; justify-content: center; padding: 1rem; }
+  .ov-body img { cursor: crosshair; display: block; image-rendering: pixelated; user-select: none; -webkit-user-drag: none; }
+  .ov-body img.fit { max-width: 100%; }
+  .ov-empty { color: #a1a1aa; text-align: center; margin-top: 3rem; line-height: 1.6; }
+  .ov-empty .count { font-size: 3rem; font-weight: 800; color: #a5b4fc; }
+  .loupe { position: fixed; pointer-events: none; z-index: 60; display: none; border-radius: 50%; overflow: hidden; border: 3px solid #e2e2e8; box-shadow: 0 6px 24px rgba(0,0,0,.6); width: 154px; height: 154px; }
+  .loupe canvas { display: block; }
+  .loupe-label { position: fixed; pointer-events: none; z-index: 61; display: none; background: #18181b; border: 1px solid #3f3f46; border-radius: 6px; padding: .2rem .5rem; font-family: ui-monospace, monospace; font-size: .78rem; align-items: center; gap: .4rem; }
+  .loupe-label i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid #52525b; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<h1>🎨 Couleurs</h1>
+<div class="msg err" id="errorMsg"></div>
+
+<div class="grid">
+  <div>
+    <div class="card">
+      <div class="picker-top">
+        <label class="big-swatch" id="bigSwatch" title="Cliquer pour choisir une couleur">
+          <input type="color" id="colorInput" value="#6366f1" />
+        </label>
+        <div class="picker-side">
+          <div class="hex-big mono" id="hexBig">#6366F1</div>
+          <div class="muted" id="colorName" style="font-size:.8rem"></div>
+          <div class="btns">
+            <button class="btn-primary" id="eyeBtn">🎯 Pipette écran</button>
+            <button class="btn-ghost" id="shotBtn" title="Choisir un pixel dans une capture d'écran">📸 Depuis une capture</button>
+            <button class="btn-ghost" id="saveBtn">＋ Enregistrer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="formats">
+        <div class="fmt"><span class="lbl">HEX</span>
+          <div class="ins"><input id="fHex" class="mono wide" maxlength="9" /></div>
+          <button class="btn-ghost btn-sm copy" data-copy="hex">Copier</button></div>
+        <div class="fmt"><span class="lbl">RGB</span>
+          <div class="ins"><input type="number" id="fR" min="0" max="255" /><input type="number" id="fG" min="0" max="255" /><input type="number" id="fB" min="0" max="255" /></div>
+          <button class="btn-ghost btn-sm copy" data-copy="rgb">Copier</button></div>
+        <div class="fmt"><span class="lbl">HSL</span>
+          <div class="ins"><input type="number" id="fHh" min="0" max="360" title="Teinte °" /><input type="number" id="fHs" min="0" max="100" title="Saturation %" /><input type="number" id="fHl" min="0" max="100" title="Luminosité %" /></div>
+          <button class="btn-ghost btn-sm copy" data-copy="hsl">Copier</button></div>
+        <div class="fmt"><span class="lbl">HSV</span>
+          <div class="ins"><input type="number" id="fVh" min="0" max="360" title="Teinte °" /><input type="number" id="fVs" min="0" max="100" title="Saturation %" /><input type="number" id="fVv" min="0" max="100" title="Valeur %" /></div>
+          <button class="btn-ghost btn-sm copy" data-copy="hsv">Copier</button></div>
+        <div class="fmt"><span class="lbl">CMYK</span>
+          <div class="ins"><input type="number" id="fC" min="0" max="100" title="Cyan %" /><input type="number" id="fM" min="0" max="100" title="Magenta %" /><input type="number" id="fY" min="0" max="100" title="Jaune %" /><input type="number" id="fK" min="0" max="100" title="Noir %" /></div>
+          <button class="btn-ghost btn-sm copy" data-copy="cmyk">Copier</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Contraste WCAG <button class="btn-ghost btn-sm" id="swapBtn">⇄ Inverser</button></h2>
+      <div class="contrast-in">
+        <div class="cfield">Texte
+          <span class="w"><input type="color" id="cFgPick" /><input type="text" id="cFg" class="mono" maxlength="7" /></span>
+          <button class="btn-ghost btn-sm" data-cur="fg">↳ Couleur actuelle</button>
+        </div>
+        <span></span>
+        <div class="cfield">Fond
+          <span class="w"><input type="color" id="cBgPick" /><input type="text" id="cBg" class="mono" maxlength="7" /></span>
+          <button class="btn-ghost btn-sm" data-cur="bg">↳ Couleur actuelle</button>
+        </div>
+      </div>
+      <div class="sample" id="sample">
+        <div class="lg">Grand texte 24 px</div>
+        <div class="sm">Texte normal : portez ce vieux whisky au juge blond qui fume.</div>
+      </div>
+      <div class="ratio"><b id="ratio">—</b><span class="muted" id="ratioTxt"></span></div>
+      <div class="checks" id="checks"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Harmonies</h2>
+      <div class="seg" id="harmSeg">
+        <button class="active" data-h="complementary">Complémentaire</button>
+        <button data-h="analogous">Analogues</button>
+        <button data-h="triadic">Triadique</button>
+        <button data-h="split">Compl. adjacentes</button>
+        <button data-h="tetradic">Tétradique</button>
+        <button data-h="shades">Nuances</button>
+        <button data-h="tints">Teintes</button>
+      </div>
+      <div class="swatches" id="harmony"></div>
+      <p class="muted" style="font-size:.75rem;margin-top:.6rem">Cliquez sur une couleur pour copier son code, ou sur « Utiliser » pour la sélectionner.</p>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span>Ma palette <span class="muted" id="savedCount" style="font-weight:400"></span></span>
+        <span style="display:flex;gap:.35rem;flex-wrap:wrap;align-items:center">
+          <select id="exportFmt" class="btn-sm"><option value="css">CSS</option><option value="json">JSON</option><option value="gpl">GIMP (.gpl)</option></select>
+          <button class="btn-ghost btn-sm" id="exportBtn">⬇ Exporter</button>
+          <span id="clearWrap"><button class="btn-ghost btn-sm" id="clearBtn">Tout effacer</button></span>
+        </span>
+      </h2>
+      <div class="saved" id="saved"></div>
+      <p class="muted hidden" id="savedEmpty" style="font-size:.85rem">Aucune couleur enregistrée. Cliquez sur « ＋ Enregistrer » pour ajouter la couleur actuelle.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Pipette de secours : capture d'écran -->
+<div class="overlay" id="overlay">
+  <div class="ov-bar">
+    <b>📸 Pipette sur capture d'écran</b>
+    <span class="muted" style="font-size:.8rem">Cliquez sur un pixel · Échap pour fermer</span>
+    <span class="grow"></span>
+    <label class="muted" style="font-size:.8rem">Délai
+      <select id="shotDelay"><option value="0">Aucun</option><option value="3" selected>3 s</option><option value="5">5 s</option><option value="10">10 s</option></select>
+    </label>
+    <button class="btn-primary btn-sm" id="captureBtn">Capturer</button>
+    <button class="btn-ghost btn-sm" id="fitBtn">Taille réelle</button>
+    <button class="btn-ghost btn-sm" id="closeOv">Fermer</button>
+  </div>
+  <div class="ov-body" id="ovBody">
+    <div class="ov-empty" id="ovEmpty">
+      Choisissez un délai puis cliquez sur « Capturer ».<br>
+      Pendant le compte à rebours, affichez la fenêtre contenant la couleur à prélever.
+    </div>
+    <img id="shotImg" class="fit hidden" alt="Capture d'écran" draggable="false" />
+  </div>
+</div>
+<div class="loupe" id="loupe"><canvas id="loupeCanvas" width="154" height="154"></canvas></div>
+<div class="loupe-label" id="loupeLabel"><i id="loupeSw"></i><span id="loupeHex"></span></div>
+
+<div class="toast" id="toast"><i id="toastSw"></i><span id="toastTxt"></span></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/color-picker/api`
+const $ = id => document.getElementById(id)
+
+// ═════ Conversions ═════
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
+const hex2 = n => Math.round(clamp(n, 0, 255)).toString(16).padStart(2, '0')
+const rgbToHex = ({ r, g, b }) => '#' + hex2(r) + hex2(g) + hex2(b)
+function parseHex(s) {
+  s = String(s || '').trim().replace(/^#/, '')
+  if (/^[0-9a-f]{3}$/i.test(s)) s = s.split('').map(c => c + c).join('')
+  if (/^[0-9a-f]{8}$/i.test(s)) s = s.slice(0, 6)
+  if (!/^[0-9a-f]{6}$/i.test(s)) return null
+  return { r: parseInt(s.slice(0, 2), 16), g: parseInt(s.slice(2, 4), 16), b: parseInt(s.slice(4, 6), 16) }
+}
+function rgbToHsl({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+  let h = 0, s = 0; const l = (max + min) / 2
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1))
+    h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    h *= 60; if (h < 0) h += 360
+  }
+  return { h, s: s * 100, l: l * 100 }
+}
+function hslToRgb({ h, s, l }) {
+  h = ((h % 360) + 360) % 360; s = clamp(s, 0, 100) / 100; l = clamp(l, 0, 100) / 100
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) }
+}
+function rgbToHsv({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+  let h = 0
+  if (d) { h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360 }
+  return { h, s: max ? d / max * 100 : 0, v: max * 100 }
+}
+function hsvToRgb({ h, s, v }) {
+  s = clamp(s, 0, 100) / 100; v = clamp(v, 0, 100) / 100
+  const l = v * (1 - s / 2)
+  const sl = (l === 0 || l === 1) ? 0 : (v - l) / Math.min(l, 1 - l)
+  return hslToRgb({ h, s: sl * 100, l: l * 100 })
+}
+function rgbToCmyk({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255
+  const k = 1 - Math.max(r, g, b)
+  if (k >= 1) return { c: 0, m: 0, y: 0, k: 100 }
+  return { c: (1 - r - k) / (1 - k) * 100, m: (1 - g - k) / (1 - k) * 100, y: (1 - b - k) / (1 - k) * 100, k: k * 100 }
+}
+function cmykToRgb({ c, m, y, k }) {
+  ;[c, m, y, k] = [c, m, y, k].map(v => clamp(v, 0, 100) / 100)
+  return { r: Math.round(255 * (1 - c) * (1 - k)), g: Math.round(255 * (1 - m) * (1 - k)), b: Math.round(255 * (1 - y) * (1 - k)) }
+}
+function relLum({ r, g, b }) {
+  const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+}
+function contrast(a, b) { const la = relLum(a), lb = relLum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05) }
+const R = Math.round
+
+// Nom approximatif de la teinte (en français)
+function hueName(rgb) {
+  const { h, s, l } = rgbToHsl(rgb)
+  if (l < 8) return 'Noir'
+  if (l > 95) return 'Blanc'
+  if (s < 10) return l < 35 ? 'Gris foncé' : l > 70 ? 'Gris clair' : 'Gris'
+  const names = [[15, 'Rouge'], [40, 'Orange'], [65, 'Jaune'], [90, 'Jaune-vert'], [150, 'Vert'], [185, 'Turquoise'], [210, 'Cyan'], [250, 'Bleu'], [280, 'Violet'], [320, 'Magenta'], [345, 'Rose'], [361, 'Rouge']]
+  let n = names.find(([lim]) => h < lim)[1]
+  if (l < 30) n += ' foncé'; else if (l > 75) n += ' clair'
+  return n
+}
+
+// ═════ État ═════
+let rgb = parseHex('#6366f1')
+
+function cssStrings(c = rgb) {
+  const hsl = rgbToHsl(c), hsv = rgbToHsv(c), k = rgbToCmyk(c)
+  return {
+    hex: rgbToHex(c).toUpperCase(),
+    rgb: `rgb(${c.r}, ${c.g}, ${c.b})`,
+    hsl: `hsl(${R(hsl.h)}, ${R(hsl.s)}%, ${R(hsl.l)}%)`,
+    hsv: `hsv(${R(hsv.h)}, ${R(hsv.s)}%, ${R(hsv.v)}%)`,
+    cmyk: `cmyk(${R(k.c)}%, ${R(k.m)}%, ${R(k.y)}%, ${R(k.k)}%)`,
+  }
+}
+
+function setColor(c, source) {
+  rgb = { r: R(clamp(c.r, 0, 255)), g: R(clamp(c.g, 0, 255)), b: R(clamp(c.b, 0, 255)) }
+  const hex = rgbToHex(rgb)
+  $('bigSwatch').style.background = hex
+  $('colorInput').value = hex
+  $('hexBig').textContent = hex.toUpperCase()
+  $('colorName').textContent = hueName(rgb)
+  const put = (id, v) => { $(id).value = v }
+  if (source !== 'hex') put('fHex', hex.toUpperCase())
+  if (source !== 'rgb') { put('fR', rgb.r); put('fG', rgb.g); put('fB', rgb.b) }
+  if (source !== 'hsl') { const h = rgbToHsl(rgb); put('fHh', R(h.h)); put('fHs', R(h.s)); put('fHl', R(h.l)) }
+  if (source !== 'hsv') { const h = rgbToHsv(rgb); put('fVh', R(h.h)); put('fVs', R(h.s)); put('fVv', R(h.v)) }
+  if (source !== 'cmyk') { const k = rgbToCmyk(rgb); put('fC', R(k.c)); put('fM', R(k.m)); put('fY', R(k.y)); put('fK', R(k.k)) }
+  renderHarmony()
+  try { localStorage.setItem('cp.last', hex) } catch {}
+}
+
+$('colorInput').addEventListener('input', () => setColor(parseHex($('colorInput').value), 'input'))
+$('fHex').addEventListener('input', () => { const c = parseHex($('fHex').value); if (c) setColor(c, 'hex') })
+$('fHex').addEventListener('blur', () => { $('fHex').value = rgbToHex(rgb).toUpperCase() })
+const num = id => { const v = parseFloat($(id).value); return isNaN(v) ? null : v }
+function bindGroup(ids, source, conv) {
+  ids.forEach(id => {
+    $(id).addEventListener('input', () => {
+      const vals = ids.map(num); if (vals.some(v => v === null)) return
+      setColor(conv(vals), source)
+    })
+    $(id).addEventListener('blur', () => setColor(rgb, 'blur'))
+  })
+}
+bindGroup(['fR', 'fG', 'fB'], 'rgb', ([r, g, b]) => ({ r, g, b }))
+bindGroup(['fHh', 'fHs', 'fHl'], 'hsl', ([h, s, l]) => hslToRgb({ h, s, l }))
+bindGroup(['fVh', 'fVs', 'fVv'], 'hsv', ([h, s, v]) => hsvToRgb({ h, s, v }))
+bindGroup(['fC', 'fM', 'fY', 'fK'], 'cmyk', ([c, m, y, k]) => cmykToRgb({ c, m, y, k }))
+document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => copyText(cssStrings()[b.dataset.copy], rgbToHex(rgb))))
+
+// ═════ Utilitaires UI ═════
+function showError(msg, code) {
+  const e = $('errorMsg')
+  if (!msg) { e.classList.remove('show'); return }
+  e.textContent = '⚠️ ' + msg + (code === 'MISSING_DEP' ? '\n→ Installez les dépendances du module, puis rechargez.' : '')
+  e.classList.add('show')
+}
+function toast(t, sw) {
+  $('toastTxt').textContent = t
+  $('toastSw').style.display = sw ? 'inline-block' : 'none'
+  if (sw) $('toastSw').style.background = sw
+  const el = $('toast'); el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1500)
+}
+async function copyText(t, sw) {
+  try { await navigator.clipboard.writeText(t); toast('Copié : ' + t, sw); return } catch {}
+  const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'
+  document.body.appendChild(ta); ta.select()
+  let ok = false
+  try { ok = document.execCommand('copy') } catch {}
+  ta.remove()
+  toast(ok ? 'Copié : ' + t : 'Copie impossible', sw)
+}
+async function api(path, opts = {}) {
+  let r
+  try { r = await fetch(BASE + path, opts) } catch { throw { error: 'Erreur de connexion au backend.' } }
+  let d = {}
+  try { d = await r.json() } catch {}
+  if (!r.ok || d.error) throw { error: d.error || ('Erreur HTTP ' + r.status), code: d.code }
+  return d
+}
+const jsonOpts = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+// ═════ Harmonies ═════
+let harm = 'complementary'
+$('harmSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return
+  harm = b.dataset.h
+  $('harmSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b))
+  renderHarmony()
+})
+function harmonyColors() {
+  const hsl = rgbToHsl(rgb)
+  const rot = d => hslToRgb({ ...hsl, h: hsl.h + d })
+  switch (harm) {
+    case 'complementary': return [rgb, rot(180)]
+    case 'analogous': return [rot(-60), rot(-30), rgb, rot(30), rot(60)]
+    case 'triadic': return [rgb, rot(120), rot(240)]
+    case 'split': return [rgb, rot(150), rot(210)]
+    case 'tetradic': return [rgb, rot(90), rot(180), rot(270)]
+    case 'shades': return Array.from({ length: 8 }, (_, i) => ({ r: rgb.r * (1 - i / 8), g: rgb.g * (1 - i / 8), b: rgb.b * (1 - i / 8) }))
+    case 'tints': return Array.from({ length: 8 }, (_, i) => ({ r: rgb.r + (255 - rgb.r) * i / 8, g: rgb.g + (255 - rgb.g) * i / 8, b: rgb.b + (255 - rgb.b) * i / 8 }))
+  }
+  return [rgb]
+}
+function renderHarmony() {
+  const box = $('harmony'); box.innerHTML = ''
+  for (const c0 of harmonyColors()) {
+    const c = { r: R(c0.r), g: R(c0.g), b: R(c0.b) }
+    const hex = rgbToHex(c).toUpperCase()
+    const el = document.createElement('div'); el.className = 'sw'; el.title = 'Copier ' + hex
+    el.innerHTML = `<div class="c" style="background:${hex}"></div><div class="t">${hex}</div><button class="use">Utiliser</button>`
+    el.addEventListener('click', e => {
+      if (e.target.classList.contains('use')) { setColor(c, 'pick'); return }
+      copyText(hex, hex)
+    })
+    box.appendChild(el)
+  }
+}
+
+// ═════ Contraste ═════
+let cFg = parseHex('#ffffff'), cBg = parseHex('#6366f1')
+function bindCField(pick, text, set) {
+  $(pick).addEventListener('input', () => { set(parseHex($(pick).value)); $(text).value = $(pick).value.toUpperCase(); renderContrast() })
+  $(text).addEventListener('input', () => { const c = parseHex($(text).value); if (c) { set(c); $(pick).value = rgbToHex(c); renderContrast() } })
+}
+bindCField('cFgPick', 'cFg', c => cFg = c)
+bindCField('cBgPick', 'cBg', c => cBg = c)
+function syncCFields() {
+  $('cFgPick').value = rgbToHex(cFg); $('cFg').value = rgbToHex(cFg).toUpperCase()
+  $('cBgPick').value = rgbToHex(cBg); $('cBg').value = rgbToHex(cBg).toUpperCase()
+}
+document.querySelectorAll('[data-cur]').forEach(b => b.addEventListener('click', e => {
+  e.preventDefault()
+  if (b.dataset.cur === 'fg') cFg = { ...rgb }; else cBg = { ...rgb }
+  syncCFields(); renderContrast()
+}))
+$('swapBtn').addEventListener('click', () => { [cFg, cBg] = [cBg, cFg]; syncCFields(); renderContrast() })
+function renderContrast() {
+  const r = contrast(cFg, cBg)
+  $('sample').style.color = rgbToHex(cFg); $('sample').style.background = rgbToHex(cBg)
+  $('ratio').textContent = (Math.floor(r * 100) / 100).toFixed(2) + ' : 1'
+  $('ratioTxt').textContent = r >= 7 ? 'Excellent' : r >= 4.5 ? 'Bon' : r >= 3 ? 'Suffisant pour le grand texte' : 'Insuffisant'
+  const checks = [['AA texte normal', 4.5], ['AA grand texte', 3], ['AAA texte normal', 7], ['AAA grand texte', 4.5], ['AA composants UI', 3]]
+  $('checks').innerHTML = checks.map(([n, t]) => `<div class="chk"><span>${n} <span class="muted">(${t}:1)</span></span><span class="${r >= t ? 'pass' : 'fail'}">${r >= t ? '✓ OK' : '✗ Échec'}</span></div>`).join('')
+}
+
+// ═════ Palette enregistrée ═════
+let saved = []
+async function loadSaved() {
+  try { saved = (await api('/palette')).colors; renderSaved() } catch (e) { showError(e.error, e.code) }
+}
+function renderSaved() {
+  const box = $('saved'); box.innerHTML = ''
+  $('savedEmpty').classList.toggle('hidden', saved.length > 0)
+  $('savedCount').textContent = saved.length ? `(${saved.length})` : ''
+  for (const s of saved) {
+    const el = document.createElement('div'); el.className = 'item'
+    el.innerHTML = `<div class="c" title="Copier"></div><div class="meta"><input placeholder="Sans nom" maxlength="60" /><div class="row"><span class="hx"></span><span><button class="use" title="Utiliser">↺</button><button class="del" title="Supprimer">✕</button></span></div></div>`
+    el.querySelector('.c').style.background = s.hex
+    el.querySelector('.hx').textContent = s.hex.toUpperCase()
+    const inp = el.querySelector('input'); inp.value = s.name
+    el.querySelector('.c').addEventListener('click', () => copyText(s.hex.toUpperCase(), s.hex))
+    el.querySelector('.use').addEventListener('click', () => setColor(parseHex(s.hex), 'pick'))
+    el.querySelector('.del').addEventListener('click', async () => {
+      try { await api('/palette/' + s.id, { method: 'DELETE' }); saved = saved.filter(x => x.id !== s.id); renderSaved() } catch (e) { showError(e.error) }
+    })
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur() })
+    inp.addEventListener('change', async () => {
+      try { const d = await api('/palette/' + s.id, jsonOpts('PATCH', { name: inp.value })); s.name = d.name } catch (e) { showError(e.error) }
+    })
+    box.appendChild(el)
+  }
+}
+$('saveBtn').addEventListener('click', async () => {
+  const hex = rgbToHex(rgb)
+  if (saved.some(s => s.hex === hex)) { toast('Déjà dans la palette', hex); return }
+  try { const d = await api('/palette', jsonOpts('POST', { hex, name: hueName(rgb) })); saved.push(d); renderSaved(); toast('Ajouté à la palette', hex) } catch (e) { showError(e.error, e.code) }
+})
+function resetClear() { $('clearWrap').innerHTML = '<button class="btn-ghost btn-sm" id="clearBtn">Tout effacer</button>'; $('clearBtn').addEventListener('click', askClear) }
+function askClear() {
+  if (!saved.length) return
+  $('clearWrap').innerHTML = '<span class="confirm">Effacer toute la palette ? <button class="btn-danger btn-sm" id="clearYes">Oui</button><button class="btn-ghost btn-sm" id="clearNo">Non</button></span>'
+  $('clearYes').addEventListener('click', async () => {
+    try { await api('/palette', { method: 'DELETE' }); saved = []; renderSaved() } catch (e) { showError(e.error) }
+    resetClear()
+  })
+  $('clearNo').addEventListener('click', resetClear)
+}
+$('clearBtn').addEventListener('click', askClear)
+$('exportBtn').addEventListener('click', async () => {
+  if (!saved.length) { toast('La palette est vide'); return }
+  try {
+    const d = await api('/export/' + $('exportFmt').value, { method: 'POST' })
+    const a = document.createElement('a'); a.href = `${BASE}/file/${encodeURIComponent(d.filename)}`; a.download = d.filename
+    document.body.appendChild(a); a.click(); a.remove()
+  } catch (e) { showError(e.error) }
+})
+
+// ═════ Pipette ═════
+$('eyeBtn').addEventListener('click', async () => {
+  showError(null)
+  if ('EyeDropper' in window) {
+    try {
+      const res = await new EyeDropper().open()
+      const c = parseHex(res.sRGBHex) || parseRgbString(res.sRGBHex)
+      if (c) { setColor(c, 'pick'); copyText(rgbToHex(c).toUpperCase(), rgbToHex(c)) }
+      return
+    } catch (e) {
+      if (e && e.name === 'AbortError') return   // annulé par l'utilisateur
+    }
+  }
+  openOverlay(true)
+})
+function parseRgbString(s) {
+  const m = /rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/i.exec(s || ''); return m ? { r: +m[1], g: +m[2], b: +m[3] } : null
+}
+$('shotBtn').addEventListener('click', () => openOverlay(false))
+
+let shotName = null, shotCanvas = null, shotCtx = null, fit = true, countdownT = null
+function openOverlay(auto) {
+  $('overlay').classList.add('show')
+  if (auto && !shotName) $('ovEmpty').innerHTML = 'La pipette native n\'est pas disponible ici.<br>Choisissez un délai puis cliquez sur « Capturer » ; pendant le compte à rebours, affichez la fenêtre contenant la couleur.'
+}
+function closeOverlay() {
+  $('overlay').classList.remove('show'); hideLoupe(); clearInterval(countdownT); countdownT = null
+  $('captureBtn').disabled = false
+}
+$('closeOv').addEventListener('click', closeOverlay)
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('overlay').classList.contains('show')) closeOverlay() })
+$('fitBtn').addEventListener('click', () => {
+  fit = !fit; $('shotImg').classList.toggle('fit', fit); $('fitBtn').textContent = fit ? 'Taille réelle' : 'Ajuster'
+})
+$('captureBtn').addEventListener('click', () => {
+  let n = +$('shotDelay').value
+  $('captureBtn').disabled = true
+  const run = () => { clearInterval(countdownT); countdownT = null; doCapture() }
+  if (!n) return run()
+  $('shotImg').classList.add('hidden'); $('ovEmpty').classList.remove('hidden')
+  const tick = () => { $('ovEmpty').innerHTML = `<div class="count">${n}</div>Affichez la fenêtre à capturer…` }
+  tick()
+  countdownT = setInterval(() => { n--; if (n <= 0) run(); else tick() }, 1000)
+})
+async function doCapture() {
+  $('ovEmpty').innerHTML = '<span class="muted">Capture en cours…</span>'
+  try {
+    const d = await api('/screenshot', { method: 'POST' })
+    if (shotName) fetch(`${BASE}/screen/${shotName}`, { method: 'DELETE' }).catch(() => {})
+    shotName = d.filename
+    const img = $('shotImg')
+    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej({ error: 'Impossible d\'afficher la capture.' }); img.src = `${BASE}/screen/${d.filename}` })
+    shotCanvas = document.createElement('canvas'); shotCanvas.width = img.naturalWidth; shotCanvas.height = img.naturalHeight
+    shotCtx = shotCanvas.getContext('2d', { willReadFrequently: true }); shotCtx.drawImage(img, 0, 0)
+    img.classList.remove('hidden'); $('ovEmpty').classList.add('hidden')
+  } catch (e) {
+    $('ovEmpty').innerHTML = '⚠️ ' + (e.error || 'Capture impossible') + (e.code === 'MISSING_DEP' ? '<br>Installez les dépendances du module.' : '')
+    $('ovEmpty').classList.remove('hidden')
+  } finally { $('captureBtn').disabled = false }
+}
+function imgCoords(e) {
+  const img = $('shotImg'), r = img.getBoundingClientRect()
+  const x = Math.floor((e.clientX - r.left) / r.width * img.naturalWidth)
+  const y = Math.floor((e.clientY - r.top) / r.height * img.naturalHeight)
+  return { x: clamp(x, 0, img.naturalWidth - 1), y: clamp(y, 0, img.naturalHeight - 1) }
+}
+function pixelAt(x, y) { const d = shotCtx.getImageData(x, y, 1, 1).data; return { r: d[0], g: d[1], b: d[2] } }
+const lc = $('loupeCanvas').getContext('2d')
+function hideLoupe() { $('loupe').style.display = 'none'; $('loupeLabel').style.display = 'none' }
+$('shotImg').addEventListener('mouseleave', hideLoupe)
+$('shotImg').addEventListener('mousemove', e => {
+  if (!shotCtx) return
+  const { x, y } = imgCoords(e), N = 11, Z = 14, size = N * Z
+  lc.imageSmoothingEnabled = false
+  lc.fillStyle = '#000'; lc.fillRect(0, 0, size, size)
+  lc.drawImage(shotCanvas, x - (N >> 1), y - (N >> 1), N, N, 0, 0, size, size)
+  lc.strokeStyle = 'rgba(255,255,255,.15)'; lc.lineWidth = 1
+  for (let i = 1; i < N; i++) { lc.beginPath(); lc.moveTo(i * Z + .5, 0); lc.lineTo(i * Z + .5, size); lc.moveTo(0, i * Z + .5); lc.lineTo(size, i * Z + .5); lc.stroke() }
+  const c = (N >> 1) * Z
+  lc.strokeStyle = '#000'; lc.lineWidth = 3; lc.strokeRect(c, c, Z, Z)
+  lc.strokeStyle = '#fff'; lc.lineWidth = 1.5; lc.strokeRect(c, c, Z, Z)
+  const px = pixelAt(x, y), hex = rgbToHex(px).toUpperCase()
+  const L = $('loupe'), LL = $('loupeLabel')
+  let lx = e.clientX + 24, ly = e.clientY + 24
+  if (lx + 160 > innerWidth) lx = e.clientX - 178
+  if (ly + 190 > innerHeight) ly = e.clientY - 200
+  L.style.left = lx + 'px'; L.style.top = ly + 'px'; L.style.display = 'block'
+  LL.style.left = (lx + 30) + 'px'; LL.style.top = (ly + 160) + 'px'; LL.style.display = 'flex'
+  $('loupeSw').style.background = hex; $('loupeHex').textContent = `${hex}  ${x},${y}`
+})
+$('shotImg').addEventListener('click', e => {
+  if (!shotCtx) return
+  const { x, y } = imgCoords(e), c = pixelAt(x, y)
+  setColor(c, 'pick'); closeOverlay()
+  copyText(rgbToHex(c).toUpperCase(), rgbToHex(c))
+})
+
+// ═════ Init ═════
+let last = null
+try { last = localStorage.getItem('cp.last') } catch {}
+setColor(parseHex(last) || rgb, 'init')
+syncCFields(); renderContrast()
+loadSaved()
+</script>
+</body>
+</html>

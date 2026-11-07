@@ -1,0 +1,29 @@
+{
+  "id": "duplicate-finder",
+  "name": "Doublons",
+  "version": "1.0.0",
+  "description": "Trouve les fichiers en double (SHA-256) et les envoie à la corbeille",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "fichier",
+    "nettoyage",
+    "hash"
+  ],
+  "icon": "🧬",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "send2trash"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

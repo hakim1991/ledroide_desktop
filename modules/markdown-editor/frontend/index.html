@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Éditeur Markdown</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  html, body { height: 100%; }
+  body { font-family: system-ui, sans-serif; background: #0f0f12; color: #e2e2e8; font-size: 14px; display: flex; flex-direction: column; padding: 1rem 1.25rem; gap: .75rem; }
+  h1 { font-size: 1.1rem; font-weight: 700; color: #f4f4f5; }
+  .muted { color: #71717a; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: .45rem .9rem; font-size: .83rem; font-weight: 500; font-family: inherit; transition: opacity .15s, background .15s; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  .btn-ghost { background: #27272a; color: #e2e2e8; }
+  .btn-ghost:hover:not(:disabled) { background: #3f3f46; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-sm { padding: .28rem .55rem; font-size: .76rem; }
+  input { background: #09090b; border: 1px solid #27272a; color: #e2e2e8; border-radius: 6px; padding: .4rem .55rem; font: inherit; font-size: .85rem; }
+  input:focus { outline: none; border-color: #6366f1; }
+
+  .app { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: .75rem; }
+  .app.no-side { grid-template-columns: minmax(0, 1fr); }
+  .app.no-side .side { display: none; }
+  @media (max-width: 760px) { .app { grid-template-columns: 1fr; } .side { max-height: 200px; } }
+
+  .side { background: #18181b; border: 1px solid #27272a; border-radius: 8px; display: flex; flex-direction: column; min-height: 0; }
+  .side-head { padding: .7rem; display: flex; flex-direction: column; gap: .5rem; border-bottom: 1px solid #27272a; }
+  .side-head .btns { display: flex; gap: .4rem; }
+  .side-head .btns button { flex: 1; }
+  .doc-list { list-style: none; overflow: auto; flex: 1; padding: .35rem; }
+  .doc { border-radius: 6px; padding: .5rem .55rem; cursor: pointer; display: flex; flex-direction: column; gap: .15rem; position: relative; border: 1px solid transparent; }
+  .doc:hover { background: #1f1f23; }
+  .doc.active { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.35); }
+  .doc .t { font-weight: 600; font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 3.2rem; }
+  .doc .d { font-size: .72rem; color: #71717a; }
+  .doc .acts { position: absolute; right: .35rem; top: .4rem; display: none; gap: .15rem; }
+  .doc:hover .acts, .doc.confirming .acts { display: flex; }
+  .doc .acts button { background: none; padding: .1rem .25rem; color: #71717a; font-size: .85rem; }
+  .doc .acts button:hover { color: #e2e2e8; }
+  .doc .acts .del:hover { color: #f87171; }
+  .doc .confirm { display: flex; gap: .35rem; align-items: center; font-size: .75rem; color: #fca5a5; margin-top: .3rem; flex-wrap: wrap; }
+  .doc input.rename { width: 100%; padding: .2rem .35rem; font-size: .85rem; }
+  .empty-list { padding: 1rem; font-size: .82rem; color: #71717a; text-align: center; }
+
+  .main { display: flex; flex-direction: column; min-height: 0; gap: .6rem; }
+  .topbar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  .topbar .title { flex: 1 1 220px; font-size: 1rem; font-weight: 600; background: transparent; border-color: transparent; }
+  .topbar .title:hover { border-color: #27272a; }
+  .topbar .title:focus { border-color: #6366f1; background: #09090b; }
+  .status { font-size: .75rem; color: #71717a; white-space: nowrap; }
+  .status.dirty { color: #fbbf24; }
+  .status.err { color: #f87171; }
+  .seg { display: inline-flex; border: 1px solid #27272a; border-radius: 6px; overflow: hidden; }
+  .seg button { border-radius: 0; background: #09090b; color: #a1a1aa; padding: .35rem .65rem; font-size: .76rem; }
+  .seg button.active { background: rgba(99,102,241,.18); color: #e2e2e8; }
+
+  .toolbar { display: flex; gap: .25rem; flex-wrap: wrap; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: .35rem; }
+  .toolbar button { background: transparent; color: #d4d4d8; padding: .3rem .55rem; min-width: 30px; font-size: .82rem; }
+  .toolbar button:hover { background: #27272a; }
+  .toolbar .sep { width: 1px; background: #27272a; margin: .15rem .25rem; }
+
+  .panes { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  .panes.mode-edit { grid-template-columns: 1fr; } .panes.mode-edit .preview-wrap { display: none; }
+  .panes.mode-preview { grid-template-columns: 1fr; } .panes.mode-preview .editor-wrap { display: none; }
+  @media (max-width: 760px) { .panes { grid-template-columns: 1fr; grid-auto-rows: minmax(300px, 1fr); } }
+  .editor-wrap, .preview-wrap { background: #18181b; border: 1px solid #27272a; border-radius: 8px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  .editor-wrap.over { border-color: #6366f1; }
+  textarea#editor { flex: 1; resize: none; border: none; background: transparent; color: #e2e2e8; padding: 1rem 1.1rem; font: 13.5px/1.6 ui-monospace, "Cascadia Code", Consolas, monospace; outline: none; tab-size: 2; }
+  .pane-foot { font-size: .72rem; color: #71717a; padding: .3rem .8rem; border-top: 1px solid #27272a; display: flex; justify-content: space-between; }
+  .preview { flex: 1; overflow: auto; padding: 1.1rem 1.4rem 2rem; line-height: 1.65; font-size: .95rem; }
+  .preview > :first-child { margin-top: 0; }
+  .preview h1, .preview h2, .preview h3, .preview h4, .preview h5, .preview h6 { color: #f4f4f5; margin: 1.4em 0 .55em; line-height: 1.3; }
+  .preview h1 { font-size: 1.75em; border-bottom: 1px solid #27272a; padding-bottom: .25em; }
+  .preview h2 { font-size: 1.4em; border-bottom: 1px solid #27272a; padding-bottom: .25em; }
+  .preview h3 { font-size: 1.18em; }
+  .preview p, .preview ul, .preview ol, .preview blockquote, .preview pre, .preview table, .preview dl { margin-bottom: .9em; }
+  .preview ul, .preview ol { padding-left: 1.6em; }
+  .preview li.task { list-style: none; margin-left: -1.3em; }
+  .preview li.task input { margin-right: .45em; accent-color: #6366f1; }
+  .preview a { color: #818cf8; }
+  .preview code { font-family: ui-monospace, Consolas, monospace; font-size: .86em; background: #27272a; padding: .12em .35em; border-radius: 4px; }
+  .preview pre { background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: .8rem 1rem; overflow: auto; }
+  .preview pre code { background: none; padding: 0; }
+  .preview blockquote { border-left: 3px solid #6366f1; padding: .1em 1em; color: #a1a1aa; background: rgba(99,102,241,.05); }
+  .preview table { border-collapse: collapse; display: block; overflow: auto; }
+  .preview th, .preview td { border: 1px solid #3f3f46; padding: .35rem .7rem; }
+  .preview th { background: #27272a; }
+  .preview hr { border: none; border-top: 1px solid #3f3f46; margin: 1.5em 0; }
+  .preview img { max-width: 100%; }
+  .preview del { color: #71717a; }
+
+  .msg { padding: .6rem .9rem; border-radius: 6px; font-size: .83rem; display: none; white-space: pre-wrap; }
+  .msg.show { display: block; }
+  .msg.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
+  .placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #71717a; flex-direction: column; gap: .75rem; }
+  .hidden { display: none !important; }
+  .table-pop { position: absolute; z-index: 20; background: #18181b; border: 1px solid #3f3f46; border-radius: 8px; padding: .7rem; display: flex; gap: .5rem; align-items: flex-end; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .table-pop label { display: flex; flex-direction: column; font-size: .72rem; color: #a1a1aa; gap: .2rem; }
+  .table-pop input { width: 60px; }
+</style>
+</head>
+<body>
+<div style="display:flex;align-items:center;gap:.75rem">
+  <button class="btn-ghost btn-sm" id="toggleSide" title="Afficher / masquer la liste">☰</button>
+  <h1>📝 Éditeur Markdown</h1>
+</div>
+<div class="msg err" id="errorMsg"></div>
+
+<div class="app" id="app">
+  <aside class="side">
+    <div class="side-head">
+      <div class="btns">
+        <button class="btn-primary btn-sm" id="newBtn">＋ Nouveau</button>
+        <button class="btn-ghost btn-sm" id="importBtn" title="Importer un fichier .md">📥 Importer</button>
+      </div>
+      <input id="search" placeholder="Rechercher…" />
+      <input type="file" id="importInput" accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain" style="display:none" multiple />
+    </div>
+    <ul class="doc-list" id="docList"></ul>
+  </aside>
+
+  <section class="main">
+    <div class="topbar">
+      <input class="title" id="title" placeholder="Titre du document" maxlength="200" />
+      <span class="status" id="status"></span>
+      <div class="seg" id="modeSeg">
+        <button data-mode="edit" title="Éditeur seul">✏️</button>
+        <button data-mode="split" class="active" title="Éditeur et aperçu">◫ Divisé</button>
+        <button data-mode="preview" title="Aperçu seul">👁</button>
+      </div>
+      <button class="btn-ghost btn-sm" id="expMd">⬇ .md</button>
+      <button class="btn-ghost btn-sm" id="expHtml">⬇ .html</button>
+    </div>
+
+    <div class="toolbar" id="toolbar">
+      <button data-act="bold" title="Gras (Ctrl+B)"><b>B</b></button>
+      <button data-act="italic" title="Italique (Ctrl+I)"><i>I</i></button>
+      <button data-act="strike" title="Barré"><s>S</s></button>
+      <span class="sep"></span>
+      <button data-act="h1" title="Titre 1">H1</button>
+      <button data-act="h2" title="Titre 2">H2</button>
+      <button data-act="h3" title="Titre 3">H3</button>
+      <span class="sep"></span>
+      <button data-act="ul" title="Liste à puces">• Liste</button>
+      <button data-act="ol" title="Liste numérotée">1. Liste</button>
+      <button data-act="task" title="Liste de tâches">☑ Tâches</button>
+      <button data-act="quote" title="Citation">❝</button>
+      <span class="sep"></span>
+      <button data-act="link" title="Lien (Ctrl+K)">🔗 Lien</button>
+      <button data-act="image" title="Image">🖼</button>
+      <button data-act="code" title="Code (Ctrl+E)">&lt;/&gt;</button>
+      <button data-act="table" title="Tableau">▦ Tableau</button>
+      <button data-act="hr" title="Séparateur">―</button>
+    </div>
+
+    <div class="panes" id="panes">
+      <div class="editor-wrap" id="editorWrap">
+        <textarea id="editor" spellcheck="false" placeholder="Écrivez en Markdown… (glissez un fichier .md ici pour l'importer)"></textarea>
+        <div class="pane-foot"><span id="cursorPos">Ligne 1, col 1</span><span id="counts"></span></div>
+      </div>
+      <div class="preview-wrap">
+        <div class="preview" id="preview"></div>
+        <div class="pane-foot"><span>Aperçu</span><span id="renderState"></span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/markdown-editor/api`
+const $ = id => document.getElementById(id)
+const ed = $('editor')
+
+let docs = []
+let current = null          // {id, title, content}
+let dirty = false
+let saveT = null, renderT = null, renderSeq = 0
+let saving = null
+let confirmId = null, renameId = null
+
+const WELCOME = `# Bienvenue dans l'éditeur Markdown
+
+Écrivez à **gauche**, l'aperçu se met à jour à *droite*. Les documents sont **enregistrés automatiquement**.
+
+## Mise en forme
+
+- **Gras**, *italique*, ~~barré~~ et \`code\`
+- [Liens](https://exemple.fr)
+- Listes à puces et numérotées
+
+1. Premier
+2. Deuxième
+
+- [x] Tâche terminée
+- [ ] Tâche à faire
+
+> Une citation.
+
+## Code
+
+\`\`\`python
+def bonjour(nom):
+    return f"Bonjour {nom} !"
+\`\`\`
+
+## Tableau
+
+| Raccourci | Action |
+|-----------|--------|
+| Ctrl+B    | Gras   |
+| Ctrl+I    | Italique |
+| Ctrl+K    | Lien   |
+| Ctrl+S    | Enregistrer |
+`
+
+// ── utilitaires ──
+function showError(msg, code) {
+  const e = $('errorMsg')
+  if (!msg) { e.classList.remove('show'); return }
+  e.textContent = '⚠️ ' + msg + (code === 'MISSING_DEP' ? '\n→ Installez les dépendances du module (bouton « Installer les dépendances »), puis rechargez.' : '')
+  e.classList.add('show')
+}
+async function api(path, opts = {}) {
+  let r
+  try { r = await fetch(BASE + path, opts) } catch { throw { error: 'Erreur de connexion au backend.' } }
+  let d = {}
+  try { d = await r.json() } catch {}
+  if (!r.ok || d.error) throw { error: d.error || ('Erreur HTTP ' + r.status), code: d.code }
+  return d
+}
+const jsonOpts = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+function fmtDate(iso) {
+  const d = new Date(iso), now = new Date()
+  if (d.toDateString() === now.toDateString()) return 'Aujourd\'hui ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
+function setStatus(t, cls = '') { $('status').textContent = t; $('status').className = 'status ' + cls }
+
+// ── liste des documents ──
+async function loadDocs() {
+  try { docs = (await api('/docs')).docs } catch (e) { showError(e.error); return }
+  renderList()
+}
+function renderList() {
+  const q = $('search').value.trim().toLowerCase()
+  const list = $('docList'); list.innerHTML = ''
+  const shown = docs.filter(d => !q || d.title.toLowerCase().includes(q) || (d.excerpt || '').toLowerCase().includes(q))
+  if (!shown.length) { list.innerHTML = `<li class="empty-list">${docs.length ? 'Aucun résultat.' : 'Aucun document.'}</li>`; return }
+  for (const d of shown) {
+    const li = document.createElement('li')
+    li.className = 'doc' + (current && current.id === d.id ? ' active' : '') + (confirmId === d.id ? ' confirming' : '')
+    if (renameId === d.id) {
+      const inp = document.createElement('input'); inp.className = 'rename'; inp.value = d.title; inp.maxLength = 200
+      li.appendChild(inp)
+      setTimeout(() => { inp.focus(); inp.select() })
+      const done = async ok => {
+        if (renameId !== d.id) return
+        renameId = null
+        if (ok && inp.value.trim() && inp.value.trim() !== d.title) await renameDoc(d.id, inp.value.trim())
+        renderList()
+      }
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false) })
+      inp.addEventListener('blur', () => done(true))
+    } else {
+      const t = document.createElement('span'); t.className = 't'; t.textContent = d.title; t.title = d.title
+      const dt = document.createElement('span'); dt.className = 'd'; dt.textContent = fmtDate(d.updated_at)
+      const acts = document.createElement('span'); acts.className = 'acts'
+      acts.innerHTML = '<button class="ren" title="Renommer">✎</button><button class="del" title="Supprimer">🗑</button>'
+      li.append(t, dt, acts)
+      acts.querySelector('.ren').addEventListener('click', e => { e.stopPropagation(); renameId = d.id; confirmId = null; renderList() })
+      acts.querySelector('.del').addEventListener('click', e => { e.stopPropagation(); confirmId = d.id; renderList() })
+      if (confirmId === d.id) {
+        const c = document.createElement('div'); c.className = 'confirm'
+        c.innerHTML = 'Supprimer ce document ? <button class="btn-danger btn-sm yes">Supprimer</button><button class="btn-ghost btn-sm no">Annuler</button>'
+        c.querySelector('.yes').addEventListener('click', e => { e.stopPropagation(); deleteDoc(d.id) })
+        c.querySelector('.no').addEventListener('click', e => { e.stopPropagation(); confirmId = null; renderList() })
+        li.appendChild(c)
+      }
+      li.addEventListener('click', () => { if (!current || current.id !== d.id) openDoc(d.id) })
+    }
+    list.appendChild(li)
+  }
+}
+$('search').addEventListener('input', renderList)
+
+async function openDoc(id) {
+  await flushSave()
+  try {
+    const d = await api('/docs/' + id)
+    current = d; dirty = false
+    ed.value = d.content; $('title').value = d.title
+    ed.scrollTop = 0; $('preview').scrollTop = 0
+    setStatus('Enregistré'); showError(null)
+    setEditing(true)
+    renderList(); renderNow()
+    try { localStorage.setItem('mde.last', id) } catch {}
+  } catch (e) { showError(e.error); loadDocs() }
+}
+function setEditing(on) {
+  ed.disabled = !on; $('title').disabled = !on
+  document.querySelectorAll('#toolbar button, #expMd, #expHtml').forEach(b => b.disabled = !on)
+  if (!on) { ed.value = ''; $('title').value = ''; $('preview').innerHTML = '<p class="muted">Aucun document ouvert.</p>'; setStatus('') }
+}
+async function newDoc(title = 'Sans titre', content = '') {
+  await flushSave()
+  try {
+    const d = await api('/docs', jsonOpts('POST', { title, content }))
+    docs.unshift({ ...d, size: d.content.length, excerpt: d.content.slice(0, 160) })
+    await openDoc(d.id)
+    if (!content) { $('title').focus(); $('title').select() }
+  } catch (e) { showError(e.error) }
+}
+$('newBtn').addEventListener('click', () => newDoc())
+async function renameDoc(id, title) {
+  try {
+    const d = await api('/docs/' + id, jsonOpts('PUT', { title }))
+    const item = docs.find(x => x.id === id); if (item) { item.title = d.title; item.updated_at = d.updated_at }
+    if (current && current.id === id) { current.title = d.title; $('title').value = d.title }
+  } catch (e) { showError(e.error) }
+}
+async function deleteDoc(id) {
+  try {
+    await api('/docs/' + id, { method: 'DELETE' })
+    docs = docs.filter(d => d.id !== id); confirmId = null
+    if (current && current.id === id) {
+      current = null; dirty = false; clearTimeout(saveT)
+      if (docs.length) await openDoc(docs[0].id); else setEditing(false)
+    }
+    renderList()
+  } catch (e) { showError(e.error) }
+}
+
+// ── sauvegarde automatique ──
+function markDirty() {
+  if (!current) return
+  dirty = true; setStatus('Modifications non enregistrées…', 'dirty')
+  clearTimeout(saveT); saveT = setTimeout(save, 900)
+}
+async function save() {
+  clearTimeout(saveT)
+  if (!current || !dirty) return
+  const id = current.id, content = ed.value, title = $('title').value.trim() || 'Sans titre'
+  dirty = false; setStatus('Enregistrement…')
+  saving = (async () => {
+    try {
+      const d = await api('/docs/' + id, jsonOpts('PUT', { title, content }))
+      const item = docs.find(x => x.id === id)
+      if (item) { item.title = d.title; item.updated_at = d.updated_at; item.size = d.size; item.excerpt = content.slice(0, 160) }
+      if (current && current.id === id) { current.title = d.title; current.content = content }
+      docs.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      if (!dirty) setStatus('Enregistré ✓')
+      if (renameId === null) renderList()
+    } catch (e) {
+      dirty = true; setStatus('Échec de l\'enregistrement', 'err'); showError(e.error)
+    }
+  })()
+  await saving; saving = null
+}
+async function flushSave() { if (saving) await saving; if (dirty) await save() }
+window.addEventListener('beforeunload', () => {
+  if (dirty && current) {
+    try { fetch(BASE + '/docs/' + current.id, { ...jsonOpts('PUT', { title: $('title').value, content: ed.value }), keepalive: true }) } catch {}
+  }
+})
+$('title').addEventListener('input', markDirty)
+$('title').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ed.focus() } })
+
+// ── aperçu ──
+function sanitize(html) {
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html')
+  doc.querySelectorAll('script,iframe,object,embed,link,meta,style,base,form').forEach(n => n.remove())
+  doc.querySelectorAll('*').forEach(n => {
+    for (const a of [...n.attributes]) {
+      const name = a.name.toLowerCase(), val = a.value.trim().toLowerCase()
+      if (name.startsWith('on') || ((name === 'href' || name === 'src' || name === 'xlink:href') && (val.startsWith('javascript:') || val.startsWith('vbscript:')))) n.removeAttribute(a.name)
+    }
+  })
+  return doc.body.firstChild.innerHTML
+}
+function scheduleRender() { clearTimeout(renderT); renderT = setTimeout(renderNow, 250); $('renderState').textContent = '…' }
+async function renderNow() {
+  clearTimeout(renderT)
+  const seq = ++renderSeq, text = ed.value
+  try {
+    const d = await api('/render', jsonOpts('POST', { text }))
+    if (seq !== renderSeq) return
+    const pv = $('preview'), st = pv.scrollTop
+    pv.innerHTML = sanitize(d.html) || '<p class="muted">Document vide.</p>'
+    pv.scrollTop = st
+    $('counts').textContent = `${d.words} mot${d.words > 1 ? 's' : ''} · ${d.chars} caractère${d.chars > 1 ? 's' : ''}`
+    $('renderState').textContent = ''
+    if ($('errorMsg').dataset.render) { showError(null); delete $('errorMsg').dataset.render }
+  } catch (e) {
+    if (seq !== renderSeq) return
+    $('renderState').textContent = 'erreur'
+    showError(e.error, e.code); $('errorMsg').dataset.render = '1'
+  }
+}
+// liens de l'aperçu : pas de navigation dans l'iframe
+$('preview').addEventListener('click', e => {
+  const a = e.target.closest('a'); if (!a) return
+  e.preventDefault()
+  const href = a.getAttribute('href') || ''
+  if (href.startsWith('#')) { const t = $('preview').querySelector(`[id="${CSS.escape(decodeURIComponent(href.slice(1)))}"]`); if (t) t.scrollIntoView({ behavior: 'smooth' }) }
+  else copyLink(href)
+})
+function copyLink(href) {
+  const ta = document.createElement('textarea'); ta.value = href; ta.style.position = 'fixed'; ta.style.opacity = '0'
+  document.body.appendChild(ta); ta.select()
+  try { document.execCommand('copy'); setStatus('Lien copié : ' + href) } catch {}
+  ta.remove()
+}
+// défilement synchronisé (proportionnel)
+let syncing = false
+ed.addEventListener('scroll', () => {
+  if (syncing) { syncing = false; return }
+  const pv = $('preview'), r = ed.scrollTop / Math.max(1, ed.scrollHeight - ed.clientHeight)
+  syncing = true; pv.scrollTop = r * (pv.scrollHeight - pv.clientHeight)
+})
+$('preview').addEventListener('scroll', () => {
+  if (syncing) { syncing = false; return }
+  const pv = $('preview'), r = pv.scrollTop / Math.max(1, pv.scrollHeight - pv.clientHeight)
+  syncing = true; ed.scrollTop = r * (ed.scrollHeight - ed.clientHeight)
+})
+
+ed.addEventListener('input', () => { markDirty(); scheduleRender() })
+function updateCursor() {
+  const before = ed.value.slice(0, ed.selectionStart), line = before.split('\n').length
+  $('cursorPos').textContent = `Ligne ${line}, col ${before.length - before.lastIndexOf('\n')}`
+}
+ed.addEventListener('keyup', updateCursor); ed.addEventListener('click', updateCursor)
+
+// ── édition ──
+function replaceRange(start, end, text, selStart, selEnd) {
+  ed.focus(); ed.setSelectionRange(start, end)
+  let ok = false
+  try { ok = document.execCommand('insertText', false, text) } catch {}
+  if (!ok) { ed.setRangeText(text, start, end, 'end'); ed.dispatchEvent(new Event('input')) }
+  if (selStart != null) ed.setSelectionRange(selStart, selEnd ?? selStart)
+}
+function wrap(before, after = before, placeholder = 'texte') {
+  const s = ed.selectionStart, e = ed.selectionEnd, sel = ed.value.slice(s, e)
+  if (sel && ed.value.slice(s - before.length, s) === before && ed.value.slice(e, e + after.length) === after) {
+    replaceRange(s - before.length, e + after.length, sel, s - before.length, e - before.length); return   // bascule
+  }
+  const inner = sel || placeholder
+  replaceRange(s, e, before + inner + after, s + before.length, s + before.length + inner.length)
+}
+function lineRange() {
+  const v = ed.value, s = ed.selectionStart, e = ed.selectionEnd
+  const ls = v.lastIndexOf('\n', s - 1) + 1
+  let le = v.indexOf('\n', e > s && v[e - 1] === '\n' ? e - 1 : e); if (le < 0) le = v.length
+  return [ls, le]
+}
+function prefixLines(kind) {
+  const [ls, le] = lineRange(), lines = ed.value.slice(ls, le).split('\n')
+  const strip = l => l.replace(/^(\s*)(#{1,6}\s+|[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/, '$1')
+  const has = {
+    h1: l => /^#\s/.test(l), h2: l => /^##\s/.test(l), h3: l => /^###\s/.test(l),
+    ul: l => /^\s*[-*+]\s(?!\[[ xX]\])/.test(l), ol: l => /^\s*\d+[.)]\s/.test(l), task: l => /^\s*[-*+]\s\[[ xX]\]\s/.test(l), quote: l => /^\s*>/.test(l),
+  }[kind]
+  const all = lines.filter(l => l.trim()).every(has)
+  let n = 0
+  const out = lines.map(l => {
+    if (!l.trim() && lines.length > 1) return l
+    if (all) return strip(l)
+    const base = strip(l)
+    const ind = base.match(/^\s*/)[0], body = base.slice(ind.length)
+    switch (kind) {
+      case 'h1': return '# ' + body
+      case 'h2': return '## ' + body
+      case 'h3': return '### ' + body
+      case 'ul': return ind + '- ' + body
+      case 'ol': return ind + (++n) + '. ' + body
+      case 'task': return ind + '- [ ] ' + body
+      case 'quote': return '> ' + base
+    }
+  }).join('\n')
+  replaceRange(ls, le, out, ls, ls + out.length)
+}
+function insertBlock(text, selOffsetStart, selOffsetEnd) {
+  const s = ed.selectionStart, e = ed.selectionEnd, v = ed.value
+  const pre = s === 0 || v.slice(0, s).endsWith('\n\n') ? '' : v.slice(0, s).endsWith('\n') ? '\n' : '\n\n'
+  const post = v.slice(e).startsWith('\n') ? '' : '\n'
+  const full = pre + text + post
+  replaceRange(s, e, full, s + pre.length + (selOffsetStart ?? text.length), s + pre.length + (selOffsetEnd ?? selOffsetStart ?? text.length))
+}
+const actions = {
+  bold: () => wrap('**'), italic: () => wrap('*'), strike: () => wrap('~~'),
+  h1: () => prefixLines('h1'), h2: () => prefixLines('h2'), h3: () => prefixLines('h3'),
+  ul: () => prefixLines('ul'), ol: () => prefixLines('ol'), task: () => prefixLines('task'), quote: () => prefixLines('quote'),
+  link: () => {
+    const s = ed.selectionStart, e = ed.selectionEnd, sel = ed.value.slice(s, e)
+    if (/^https?:\/\/\S+$/.test(sel)) { replaceRange(s, e, `[texte](${sel})`, s + 1, s + 6); return }
+    const t = sel || 'texte du lien'
+    replaceRange(s, e, `[${t}](https://)`, s + t.length + 3, s + t.length + 11)
+  },
+  image: () => { const s = ed.selectionStart, e = ed.selectionEnd, alt = ed.value.slice(s, e) || 'description'; replaceRange(s, e, `![${alt}](https://)`, s + alt.length + 4, s + alt.length + 12) },
+  code: () => {
+    const s = ed.selectionStart, e = ed.selectionEnd, sel = ed.value.slice(s, e)
+    if (sel.includes('\n') || (!sel && lineRange()[0] === s && lineRange()[1] === s)) {
+      const body = sel || 'code'
+      insertBlock('```\n' + body + '\n```', 4, 4 + body.length)
+    } else wrap('`', '`', 'code')
+  },
+  table: () => showTablePop(),
+  hr: () => insertBlock('---'),
+}
+$('toolbar').addEventListener('click', e => { const b = e.target.closest('button[data-act]'); if (b && current) actions[b.dataset.act]() })
+
+ed.addEventListener('keydown', e => {
+  const mod = e.ctrlKey || e.metaKey
+  if (mod && !e.shiftKey && !e.altKey) {
+    const k = e.key.toLowerCase()
+    const map = { b: 'bold', i: 'italic', k: 'link', e: 'code' }
+    if (map[k]) { e.preventDefault(); actions[map[k]](); return }
+  }
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    const s = ed.selectionStart, en = ed.selectionEnd
+    if (s === en && !e.shiftKey) { replaceRange(s, en, '  '); return }
+    const [ls, le] = lineRange(), lines = ed.value.slice(ls, le).split('\n')
+    const out = lines.map(l => e.shiftKey ? l.replace(/^ {1,2}|^\t/, '') : '  ' + l).join('\n')
+    replaceRange(ls, le, out, ls, ls + out.length)
+    return
+  }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    // continuation automatique des listes
+    const s = ed.selectionStart; if (s !== ed.selectionEnd) return
+    const ls = ed.value.lastIndexOf('\n', s - 1) + 1, line = ed.value.slice(ls, s)
+    const m = line.match(/^(\s*)([-*+]\s\[[ xX]\]\s|[-*+]\s|(\d+)([.)])\s|>\s?)(.*)$/)
+    if (!m) return
+    e.preventDefault()
+    if (!m[5].trim()) { replaceRange(ls, s, ''); return }   // ligne vide : on sort de la liste
+    let marker = m[2]
+    if (m[3]) marker = (parseInt(m[3]) + 1) + m[4] + ' '
+    else if (/\[[ xX]\]/.test(marker)) marker = marker[0] + ' [ ] '
+    replaceRange(s, s, '\n' + m[1] + marker)
+  }
+})
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (dirty) save(); else setStatus('Enregistré ✓') }
+})
+
+// tableau
+function showTablePop() {
+  document.querySelector('.table-pop')?.remove()
+  const btn = document.querySelector('[data-act=table]'), r = btn.getBoundingClientRect()
+  const pop = document.createElement('div'); pop.className = 'table-pop'
+  pop.style.left = Math.min(r.left, innerWidth - 260) + 'px'; pop.style.top = (r.bottom + 6) + 'px'
+  pop.innerHTML = '<label>Colonnes<input type="number" min="1" max="12" value="3" class="c"></label><label>Lignes<input type="number" min="1" max="50" value="3" class="r"></label><button class="btn-primary btn-sm ok">Insérer</button><button class="btn-ghost btn-sm no">✕</button>'
+  document.body.appendChild(pop)
+  const go = () => {
+    const c = Math.max(1, Math.min(12, +pop.querySelector('.c').value || 3)), rows = Math.max(1, Math.min(50, +pop.querySelector('.r').value || 3))
+    const head = '| ' + Array.from({ length: c }, (_, i) => 'Colonne ' + (i + 1)).join(' | ') + ' |'
+    const sep = '| ' + Array.from({ length: c }, () => '---').join(' | ') + ' |'
+    const body = Array.from({ length: rows }, () => '| ' + Array.from({ length: c }, () => '   ').join(' | ') + ' |')
+    pop.remove()
+    insertBlock([head, sep, ...body].join('\n'), 2, 11)
+  }
+  pop.querySelector('.ok').addEventListener('click', go)
+  pop.querySelector('.no').addEventListener('click', () => pop.remove())
+  pop.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); if (e.key === 'Escape') pop.remove() }))
+  pop.querySelector('.c').focus()
+}
+document.addEventListener('mousedown', e => { const p = document.querySelector('.table-pop'); if (p && !p.contains(e.target) && !e.target.closest('[data-act=table]')) p.remove() })
+
+// ── modes d'affichage ──
+function setMode(m) {
+  $('panes').className = 'panes mode-' + m
+  $('modeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.mode === m))
+  try { localStorage.setItem('mde.mode', m) } catch {}
+}
+$('modeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode) })
+$('toggleSide').addEventListener('click', () => $('app').classList.toggle('no-side'))
+
+// ── export ──
+async function exportDoc(fmt) {
+  if (!current) return
+  await flushSave()
+  try {
+    const d = await api('/export', jsonOpts('POST', { title: $('title').value || 'document', content: ed.value, fmt }))
+    const a = document.createElement('a'); a.href = `${BASE}/file/${encodeURIComponent(d.filename)}`; a.download = d.filename.split('__').pop()
+    document.body.appendChild(a); a.click(); a.remove()
+  } catch (e) { showError(e.error, e.code) }
+}
+$('expMd').addEventListener('click', () => exportDoc('md'))
+$('expHtml').addEventListener('click', () => exportDoc('html'))
+
+// ── import ──
+async function importFiles(files) {
+  await flushSave()
+  let last = null
+  for (const f of files) {
+    const fd = new FormData(); fd.append('file', f, f.name)
+    try { last = await api('/import', { method: 'POST', body: fd }) } catch (e) { showError(`${f.name} : ${e.error}`) }
+  }
+  if (last) { await loadDocs(); await openDoc(last.id) }
+}
+$('importBtn').addEventListener('click', () => $('importInput').click())
+$('importInput').addEventListener('change', () => { const fs = [...$('importInput').files]; $('importInput').value = ''; if (fs.length) importFiles(fs) })
+const ew = $('editorWrap')
+ew.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); ew.classList.add('over') } })
+ew.addEventListener('dragleave', () => ew.classList.remove('over'))
+ew.addEventListener('drop', e => {
+  if (!e.dataTransfer.files.length) return
+  e.preventDefault(); ew.classList.remove('over'); importFiles([...e.dataTransfer.files])
+})
+
+// ── init ──
+;(async () => {
+  try { const m = localStorage.getItem('mde.mode'); if (m) setMode(m) } catch {}
+  setEditing(false)
+  await loadDocs()
+  if (!docs.length) {
+    if (!$('errorMsg').classList.contains('show')) await newDoc('Bienvenue', WELCOME)
+    return
+  }
+  let last = null
+  try { last = +localStorage.getItem('mde.last') } catch {}
+  await openDoc(docs.some(d => d.id === last) ? last : docs[0].id)
+})()
+</script>
+</body>
+</html>

@@ -1,97 +1,76 @@
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+for _p in (BACKEND_DIR, os.path.join(BACKEND_DIR, "sdk")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel
 from starlette.requests import Request
-import uvicorn
+from typing import Optional
 
-_BRIDGE_JS = r"""
-(function () {
-  var pending   = new Map();
-  var listeners = new Map();
+from core import settings
+from core.env import EnvPayload, EnvStore
+from core.errors import install_handlers
+from core.ipc import Connection, parse_call
+from core.log import setup_logging
+from core.registry import SYSTEM_CHANNEL, ModuleRegistry, validate_module_id
+from core.security import SecurityMiddleware
 
-  window.addEventListener('message', function (e) {
-    var d = e.data;
-    if (d.type === 'ledroide:response' && pending.has(d.requestId)) {
-      var p = pending.get(d.requestId);
-      clearTimeout(p.timer);
-      pending.delete(d.requestId);
-      if (d.payload && d.payload.error) p.reject(new Error(d.payload.error));
-      else p.resolve(d.payload);
-    }
-    if (d.type === 'ledroide:event') {
-      var key = d.moduleId + ':' + d.action;
-      var cbs = listeners.get(key);
-      if (cbs) cbs.forEach(function (cb) { cb(d.payload); });
-    }
-  });
+setup_logging()
+log = logging.getLogger("ledroide")
 
-  window.ledroide = {
-    backendPort: parseInt(window.location.port) || 8765,
+BRIDGE_JS = (Path(BACKEND_DIR) / "core" / "bridge.js").read_text(encoding="utf-8")
 
-    call: function (moduleId, action, payload) {
-      payload = payload || {};
-      return new Promise(function (resolve, reject) {
-        var rid   = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-        var timer = setTimeout(function () {
-          pending.delete(rid);
-          reject(new Error('RPC timeout'));
-        }, 10000);
-        pending.set(rid, { resolve: resolve, reject: reject, timer: timer });
-        window.parent.postMessage(
-          { type: 'ledroide:call', moduleId: moduleId, action: action, payload: payload, requestId: rid },
-          '*'
-        );
-      });
-    },
 
-    on: function (moduleId, event, callback) {
-      var key = moduleId + ':' + event;
-      if (!listeners.has(key)) listeners.set(key, new Set());
-      listeners.get(key).add(callback);
-      window.parent.postMessage({ type: 'ledroide:subscribe', moduleId: moduleId, event: event }, '*');
-    },
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await registry.load_all()
+    log.info("backend ready on 127.0.0.1:%s (data: %s)", settings.PORT, settings.DATA_DIR)
+    if not settings.TOKEN:
+        log.warning("LEDROIDE_TOKEN absent: management endpoints are unauthenticated (dev only)")
+    yield
+    await registry.shutdown()
 
-    off: function (moduleId, event, callback) {
-      var key = moduleId + ':' + event;
-      var cbs = listeners.get(key);
-      if (cbs) cbs.delete(callback);
-    },
-  };
-})();
-"""
 
-from core.registry import ModuleRegistry
+app = FastAPI(title="LedroideDesktop", version="0.1.0", lifespan=lifespan)
+install_handlers(app)
 
-PORT = int(os.environ.get("LEDROIDE_BACKEND_PORT", 8765))
-
-app = FastAPI(title="LedroideDesktop", version="0.1.0")
-
+# Registered first so CORS (outermost) answers preflights before the security check.
+app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=sorted(settings.SELF_ORIGINS) + settings.RENDERER_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class NoCacheModuleFrontend(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        if "/frontend/" in request.url.path:
-            response.headers["Cache-Control"] = "no-store"
-        return response
 
-app.add_middleware(NoCacheModuleFrontend)
+@app.middleware("http")
+async def no_cache_module_frontend(request: Request, call_next):
+    response = await call_next(request)
+    if "/frontend/" in request.url.path:
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
+
+env_store = EnvStore()
 registry = ModuleRegistry(app)
 
 
-@app.on_event("startup")
-async def startup():
-    await registry.load_all()
+class ModuleMeta(BaseModel):
+    category: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 # ── Module management ────────────────────────────────────────────────────────
@@ -123,10 +102,9 @@ async def uninstall_module(module_id: str):
 
 @app.get("/modules/{module_id}/icon")
 async def module_icon(module_id: str):
-    from fastapi.responses import FileResponse
-    from pathlib import Path
-    icon_path = Path(__file__).parent.parent / "modules" / module_id / "icon.png"
-    if not icon_path.exists():
+    validate_module_id(module_id)
+    icon_path = settings.MODULES_DIR / module_id / "icon.png"
+    if not icon_path.is_file():
         return Response(status_code=404)
     return FileResponse(str(icon_path), media_type="image/png")
 
@@ -134,6 +112,11 @@ async def module_icon(module_id: str):
 @app.post("/modules/{module_id}/deps")
 async def install_deps(module_id: str):
     return await registry.install_deps(module_id)
+
+
+@app.put("/modules/{module_id}/meta")
+async def set_module_meta(module_id: str, meta: ModuleMeta):
+    return registry.set_meta(module_id, meta.category, meta.tags)
 
 
 @app.get("/modules/{module_id}/config")
@@ -151,33 +134,59 @@ async def set_config(module_id: str, config: dict):
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    registry.add_connection(websocket)
+    conn = Connection(websocket)
+    registry.add_connection(conn)
     try:
         while True:
-            data = await websocket.receive_json()
-            await registry.handle_message(websocket, data)
+            call = parse_call(await websocket.receive_json())
+            if call is not None:
+                conn.spawn(registry.handle_call(conn, call))
     except WebSocketDisconnect:
-        registry.remove_connection(websocket)
-    except Exception as exc:
-        registry.remove_connection(websocket)
-        print(f"[WS] error: {exc}")
+        pass
+    except Exception:
+        log.exception("WS error")
+    finally:
+        registry.remove_connection(conn)
 
-
-# ── Bridge SDK ──────────────────────────────────────────────────────────────
 
 @app.get("/ledroide-bridge.js")
 async def ledroide_bridge():
-    return Response(content=_BRIDGE_JS, media_type="application/javascript")
+    return Response(content=BRIDGE_JS, media_type="application/javascript")
 
 
 # ── System ───────────────────────────────────────────────────────────────────
 
+@app.get("/system/health")
+async def system_health():
+    return {"ok": True}
+
+
 @app.post("/system/reload")
 async def system_reload():
-    """Hot-reload: pick up new modules without restarting the process."""
-    result = await registry.hot_reload()
-    return {"ok": True, **result}
+    return {"ok": True, **await registry.hot_reload()}
+
+
+@app.get("/system/env")
+async def get_env():
+    return {"vars": env_store.all()}
+
+
+@app.put("/system/env")
+async def set_env(payload: EnvPayload):
+    variables, changed = env_store.replace(payload)
+    await registry.broadcast(SYSTEM_CHANNEL, "env:changed", {"keys": changed})
+    return {"vars": variables, "changed": changed}
+
+
+@app.post("/system/shutdown")
+async def system_shutdown():
+    server = getattr(app.state, "server", None)
+    if server is not None:
+        asyncio.get_running_loop().call_later(0.1, setattr, server, "should_exit", True)
+    return {"ok": True}
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=PORT, reload=False)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=settings.PORT, log_config=None))
+    app.state.server = server
+    server.run()

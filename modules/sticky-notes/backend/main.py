@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter
+from ledroide_sdk.http import APIRouter
 from pydantic import BaseModel
-from ledroide_sdk import Module, events
+from ledroide_sdk import Module, events, data_path
 
 router = APIRouter()
 module = Module(__file__)
 
-DB_PATH = Path(__file__).parent / "notes.db"
+DB_PATH = data_path(__file__, "notes.db")
 
 
 @contextmanager
@@ -190,7 +190,7 @@ async def get_note(note_id: str):
 
     note = await asyncio.to_thread(_q)
     if note is None:
-        from fastapi import HTTPException
+        from ledroide_sdk.http import HTTPException
         raise HTTPException(404, detail={"error": "Note introuvable", "code": "NOT_FOUND"})
     return note
 

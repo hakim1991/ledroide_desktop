@@ -3,6 +3,12 @@
   "name": "Suivi des tâches",
   "version": "1.0.0",
   "description": "Enregistrement de tâches avec chrono intégré et export Excel (pip install openpyxl)",
+  "category": "Productivité",
+  "tags": [
+    "temps",
+    "chrono",
+    "excel"
+  ],
   "icon": "⏱",
   "entry": {
     "backend": "backend/main.py",
@@ -10,7 +16,9 @@
   },
   "permissions": [],
   "dependencies": {
-    "python": ["openpyxl"]
+    "python": [
+      "openpyxl>=3.1,<4"
+    ]
   },
   "database": {
     "type": "sqlite"

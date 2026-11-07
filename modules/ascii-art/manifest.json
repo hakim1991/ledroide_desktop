@@ -3,9 +3,26 @@
   "name": "ASCII Art",
   "version": "1.0.0",
   "description": "Transforme une image en ASCII Art",
+  "category": "Images & médias",
+  "tags": [
+    "image",
+    "texte",
+    "fun"
+  ],
   "icon": "🎨",
-  "entry": {"backend": "backend/main.py", "frontend": "frontend/index.html"},
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
   "permissions": [],
-  "database": {"type": "none"},
-  "dependencies": {"python": ["Pillow", "numpy"], "modules": []}
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "Pillow>=11,<12",
+      "numpy>=2,<3"
+    ],
+    "modules": []
+  }
 }

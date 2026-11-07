@@ -9,14 +9,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from ledroide_sdk.http import APIRouter, Query
 from pydantic import BaseModel
-from ledroide_sdk import Module, config
+from ledroide_sdk import Module, config, data_path
 
 router = APIRouter()
 module = Module(__file__)
 
-DB_PATH  = Path(__file__).parent / "pwgen.db"
+DB_PATH  = data_path(__file__, "pwgen.db")
 SYMBOLS  = "!@#$%^&*()_+-=[]{}|;:,.<>?"
 
 ACTION_ICONS = {

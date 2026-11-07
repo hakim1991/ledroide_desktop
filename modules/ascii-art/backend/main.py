@@ -2,8 +2,8 @@ import asyncio
 import io
 
 import numpy as np
-from fastapi import UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from ledroide_sdk.http import UploadFile, File, Form
+from ledroide_sdk.http import JSONResponse
 from PIL import Image
 from ledroide_sdk import Module
 

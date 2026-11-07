@@ -3,8 +3,8 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import UploadFile, File, HTTPException
-from fastapi.responses import FileResponse
+from ledroide_sdk.http import UploadFile, File, HTTPException
+from ledroide_sdk.http import FileResponse
 
 from ledroide_sdk import Module
 

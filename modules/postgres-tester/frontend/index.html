@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>PostgreSQL</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+  :root { --bg:#0f0f12; --card:#18181b; --line:#27272a; --line2:#3f3f46; --text:#e2e2e8; --muted:#71717a; --accent:#6366f1; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444 }
+  html, body { height: 100% }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; display: flex; flex-direction: column }
+  button, input, select, textarea { font: inherit; color: inherit }
+  button { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .4rem .75rem; cursor: pointer; white-space: nowrap }
+  button:hover:not(:disabled) { background: #222226; border-color: var(--line2) }
+  button:disabled { opacity: .45; cursor: default }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff }
+  button.primary:hover:not(:disabled) { background: #5558e8 }
+  button.danger { color: #fca5a5 }
+  button.danger-solid { background: var(--bad); border-color: var(--bad); color: #fff }
+  button.small { padding: .22rem .5rem; font-size: 12px }
+  input[type=text], input[type=password], input[type=number], input[type=date], input[type=search], select, textarea {
+    background: #111114; border: 1px solid var(--line); border-radius: 6px; padding: .42rem .55rem; outline: none; min-width: 0 }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent) }
+  label.chk { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; user-select: none }
+  label.chk input { accent-color: var(--accent) }
+  code, .mono { font-family: ui-monospace, Consolas, monospace }
+
+  header { display: flex; align-items: center; gap: .75rem; padding: .6rem 1rem; border-bottom: 1px solid var(--line); background: var(--card); flex-wrap: wrap }
+  header h1 { font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: .45rem }
+  .tabs { display: flex; gap: .25rem; margin-left: .5rem }
+  .tab { border: none; background: none; color: var(--muted); padding: .45rem .8rem; border-radius: 6px }
+  .tab.on { background: #1e1b4b; color: #c7d2fe }
+  .tab:hover:not(.on):not(:disabled) { color: var(--text); background: #1f1f23 }
+  #connBadge { margin-left: auto; display: flex; align-items: center; gap: .45rem; font-size: 12.5px; color: var(--muted) }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #52525b; flex: none }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 8px #22c55e88 } .dot.bad { background: var(--bad) }
+
+  main { flex: 1; overflow: auto; padding: 1rem }
+  .view { display: none } .view.on { display: block }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin-bottom: 1rem }
+  .card h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: .8rem; font-weight: 600; display: flex; align-items: center; gap: .5rem }
+  .card h2 .right { margin-left: auto; text-transform: none; letter-spacing: 0 }
+  .grid { display: grid; gap: 1rem } .g2 { grid-template-columns: 300px 1fr } .g-auto { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) }
+  @media (max-width: 900px) { .g2 { grid-template-columns: 1fr } }
+  .form { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem .8rem }
+  .form .full { grid-column: 1 / -1 }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: .28rem }
+  .field input, .field select { width: 100% }
+  .pw { display: flex; gap: .3rem } .pw input { flex: 1 }
+  .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.5 }
+  .msg { padding: .55rem .75rem; border-radius: 6px; margin-top: .7rem; font-size: 13px; line-height: 1.45 }
+  .msg.ok { background: #14532d55; border: 1px solid #166534; color: #bbf7d0 }
+  .msg.bad { background: #7f1d1d55; border: 1px solid #991b1b; color: #fecaca }
+  .msg.warn { background: #78350f55; border: 1px solid #92400e; color: #fde68a }
+  .msg details { margin-top: .3rem; color: #fca5a5aa; font-size: 12px } .msg summary { cursor: pointer }
+
+  .profiles { display: flex; flex-direction: column; gap: .4rem }
+  .profile { display: flex; align-items: center; gap: .5rem; padding: .55rem .65rem; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; background: #141417 }
+  .profile:hover { border-color: var(--line2) } .profile.on { border-color: var(--accent); background: #1e1b4b55 }
+  .profile .t { font-weight: 600 } .profile .s { font-size: 11.5px; color: var(--muted) }
+  .svc { display: flex; align-items: center; gap: .5rem; padding: .45rem 0; border-top: 1px solid var(--line); font-size: 12.5px }
+  .svc:first-child { border-top: none }
+
+  .steps { display: flex; flex-direction: column; gap: .35rem }
+  .step { display: grid; grid-template-columns: 26px 170px 1fr auto; gap: .5rem; align-items: start; padding: .5rem .6rem; border-radius: 6px; background: #141417; border: 1px solid var(--line) }
+  .step .ic { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700 }
+  .step.ok .ic { background: #14532d; color: #86efac } .step.bad .ic { background: #7f1d1d; color: #fca5a5 } .step.run .ic { background: #27272a; color: var(--muted) }
+  .step .lb { font-weight: 600; padding-top: 2px } .step .tx { padding-top: 2px; line-height: 1.45 } .step .ms { color: var(--muted); font-size: 11.5px; padding-top: 3px }
+  .step .tx small { display: block; color: var(--muted); font-size: 11.5px; word-break: break-word }
+  .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .5rem; margin-top: .9rem }
+  .kv div { background: #141417; border: 1px solid var(--line); border-radius: 6px; padding: .45rem .6rem }
+  .kv b { display: block; font-size: 11px; color: var(--muted); font-weight: 500; margin-bottom: .15rem }
+  .ver { font-size: 11.5px; color: var(--muted); margin-top: .6rem; word-break: break-word }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px }
+  th, td { text-align: left; padding: .42rem .55rem; border-bottom: 1px solid var(--line); vertical-align: top }
+  th { color: var(--muted); font-weight: 600; font-size: 11.5px; position: sticky; top: 0; background: var(--card); z-index: 1 }
+  tbody tr:hover { background: #1c1c20 }
+  .badge { display: inline-block; font-size: 10.5px; padding: .05rem .4rem; border-radius: 9px; background: #27272a; color: #a1a1aa; margin: 0 .2rem .15rem 0 }
+  .badge.su { background: #7f1d1d; color: #fecaca } .badge.ok { background: #14532d; color: #bbf7d0 } .badge.ac { background: #312e81; color: #c7d2fe } .badge.warn { background: #78350f; color: #fde68a }
+  .tablewrap { overflow: auto; max-height: 60vh; border: 1px solid var(--line); border-radius: 6px }
+  .num { text-align: right; font-variant-numeric: tabular-nums }
+
+  /* console */
+  #sql { width: 100%; min-height: 170px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.5; tab-size: 2 }
+  .toolbar { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: .6rem }
+  .toolbar .sp { flex: 1 }
+  .res { margin-top: .9rem }
+  .res-h { display: flex; align-items: center; gap: .6rem; margin-bottom: .4rem; font-size: 12.5px; color: var(--muted) }
+  .res-h .st { color: var(--text); font-family: ui-monospace, Consolas, monospace }
+  td.null { color: #52525b; font-style: italic }
+  td .cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: pre; display: block }
+  .confirm { display: none; margin-top: .6rem } .confirm.on { display: block }
+  .hist { max-height: 320px; overflow: auto }
+  .hist-item { padding: .45rem .55rem; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12px }
+  .hist-item:hover { background: #1c1c20 }
+  .hist-item pre { white-space: pre-wrap; word-break: break-word; max-height: 3.2em; overflow: hidden; font-family: ui-monospace, Consolas, monospace; color: #c4c4cc }
+  .hist-item .meta { color: var(--muted); font-size: 11px; margin-top: .15rem }
+
+  /* overlay */
+  .overlay { position: fixed; inset: 0; background: #000a; display: none; align-items: center; justify-content: center; z-index: 30; padding: 1rem }
+  .overlay.on { display: flex }
+  .dialog { background: var(--card); border: 1px solid var(--line2); border-radius: 10px; padding: 1.2rem; width: min(520px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 20px 50px #000a }
+  .dialog h3 { font-size: 1rem; margin-bottom: .9rem }
+  .meter { height: 6px; background: #27272a; border-radius: 3px; overflow: hidden; margin-top: .35rem }
+  .meter i { display: block; height: 100%; width: 0; transition: width .2s, background .2s }
+  .radio { display: flex; flex-direction: column; gap: .35rem }
+  .empty { color: var(--muted); padding: 1.2rem; text-align: center }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid #ffffff44; border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px }
+  @keyframes sp { to { transform: rotate(360deg) } }
+  #banner { display: none }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐘 PostgreSQL</h1>
+  <nav class="tabs">
+    <button class="tab on" data-view="conn">Connexion</button>
+    <button class="tab" data-view="dbs" disabled>Bases de données</button>
+    <button class="tab" data-view="console" disabled>Console SQL</button>
+    <button class="tab" data-view="roles" disabled>Utilisateurs</button>
+  </nav>
+  <div id="connBadge"><span class="dot" id="connDot"></span><span id="connText">Non connecté</span></div>
+</header>
+
+<main>
+  <div id="banner" class="msg bad"></div>
+
+  <!-- ─────────────── CONNEXION ─────────────── -->
+  <section class="view on" id="v-conn">
+    <div class="grid g2">
+      <div>
+        <div class="card">
+          <h2>Profils <span class="right"><button class="small" id="btnNewProfile">＋ Nouveau</button></span></h2>
+          <div class="profiles" id="profiles"></div>
+        </div>
+        <div class="card">
+          <h2>Services sur ce PC <span class="right"><button class="small" id="btnSvc" title="Actualiser">↻</button></span></h2>
+          <div id="services"><div class="hint">Recherche…</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Paramètres de connexion</h2>
+          <div class="form">
+            <div class="field full"><label>Nom du profil</label><input type="text" id="fLabel" placeholder="ex : Serveur local, Prod…" /></div>
+            <div class="field"><label>Hôte</label><input type="text" id="fHost" value="localhost" /></div>
+            <div class="field"><label>Port</label><input type="number" id="fPort" value="5432" min="1" max="65535" /></div>
+            <div class="field"><label>Utilisateur</label><input type="text" id="fUser" value="postgres" autocomplete="off" /></div>
+            <div class="field"><label>Mot de passe</label>
+              <div class="pw"><input type="password" id="fPass" autocomplete="new-password" placeholder="" /><button class="small" data-eye="fPass" title="Afficher">👁</button></div></div>
+            <div class="field"><label>Base de connexion</label><input type="text" id="fDb" value="postgres" /></div>
+            <div class="field"><label>SSL</label><select id="fSsl">
+              <option value="prefer">prefer (par défaut)</option><option value="disable">disable</option><option value="allow">allow</option>
+              <option value="require">require</option><option value="verify-ca">verify-ca</option><option value="verify-full">verify-full</option></select></div>
+            <div class="field full"><label>Vérifier qu'une base existe (optionnel)</label><input type="text" id="fCheckDb" placeholder="nom de la base à rechercher" /></div>
+            <div class="full row">
+              <label class="chk"><input type="checkbox" id="fRemember" /> Mémoriser le mot de passe (chiffré par Windows)</label>
+            </div>
+          </div>
+          <div class="row" style="margin-top:1rem">
+            <button class="primary" id="btnTest">▶ Tester la connexion</button>
+            <button id="btnSaveProfile">💾 Enregistrer le profil</button>
+            <button class="danger" id="btnDelProfile" style="display:none">🗑 Supprimer</button>
+            <span class="hint" id="profileMsg"></span>
+          </div>
+        </div>
+        <div class="card" id="testCard" style="display:none">
+          <h2>Diagnostic <span class="right hint" id="testWhen"></span></h2>
+          <div class="steps" id="steps"></div>
+          <div id="serverInfo"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────── BASES ─────────────── -->
+  <section class="view" id="v-dbs">
+    <div class="grid" style="grid-template-columns: 1fr 1fr">
+      <div class="card">
+        <h2>Cette base existe-t-elle ?</h2>
+        <div class="row"><input type="text" id="existName" placeholder="nom de la base" style="flex:1" /><button class="primary" id="btnExists">Vérifier</button></div>
+        <div id="existMsg"></div>
+      </div>
+      <div class="card">
+        <h2>Créer une base</h2>
+        <div class="row">
+          <input type="text" id="newDbName" placeholder="nom" style="flex:1" />
+          <input type="text" id="newDbOwner" placeholder="propriétaire (optionnel)" style="flex:1" />
+          <button id="btnCreateDb">Créer</button>
+        </div>
+        <div id="createDbMsg"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Bases de données <span class="right row"><input type="search" id="dbFilter" placeholder="Filtrer…" style="width:180px" /><button class="small" id="btnDbs">↻ Actualiser</button></span></h2>
+      <div class="tablewrap"><table><thead><tr><th>Nom</th><th>Propriétaire</th><th>Encodage</th><th>Collation</th><th class="num">Taille</th><th class="num">Connexions</th><th></th></tr></thead><tbody id="dbRows"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ─────────────── CONSOLE ─────────────── -->
+  <section class="view" id="v-console">
+    <div class="card">
+      <div class="toolbar">
+        <label class="hint">Base</label><select id="cDb" style="min-width:140px"></select>
+        <select id="snippets" title="Requêtes utiles"><option value="">📚 Requêtes utiles…</option></select>
+        <span class="sp"></span>
+        <label class="chk" title="Interdit toute modification (SELECT uniquement)"><input type="checkbox" id="cRO" /> Lecture seule</label>
+        <label class="chk" title="Exécute dans une transaction annulée à la fin : rien n'est modifié"><input type="checkbox" id="cDry" /> Mode essai (ROLLBACK)</label>
+        <label class="hint">Lignes max</label><select id="cMax"><option>100</option><option selected>500</option><option>2000</option><option>10000</option></select>
+        <label class="hint">Délai</label><select id="cTimeout"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="120">2 min</option><option value="600">10 min</option></select>
+      </div>
+      <textarea id="sql" spellcheck="false" placeholder="SELECT version();&#10;&#10;Ctrl+Entrée pour exécuter (ou seulement la sélection)"></textarea>
+      <div class="row" style="margin-top:.6rem">
+        <button class="primary" id="btnRun">▶ Exécuter <span class="hint" style="color:#c7d2fe">Ctrl+Entrée</span></button>
+        <button id="btnHist">🕘 Historique</button>
+        <button id="btnClearSql">Effacer</button>
+        <span class="hint" id="runInfo"></span>
+      </div>
+      <div class="confirm msg warn" id="dangerBox">
+        ⚠️ Cette requête peut <b>modifier ou supprimer des données</b> : <span id="dangerWhy"></span>.
+        <div class="row" style="margin-top:.5rem"><button class="danger-solid small" id="btnDangerGo">Exécuter quand même</button>
+          <button class="small" id="btnDangerDry">Essayer en mode essai</button><button class="small" id="btnDangerNo">Annuler</button></div>
+      </div>
+      <div id="histBox" style="display:none" class="card" ></div>
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <!-- ─────────────── UTILISATEURS ─────────────── -->
+  <section class="view" id="v-roles">
+    <div class="card">
+      <h2>Utilisateurs et rôles <span class="right row"><button class="small" id="btnNewRole">＋ Créer un utilisateur</button><button class="small" id="btnRoles">↻ Actualiser</button></span></h2>
+      <div class="hint" id="meInfo" style="margin-bottom:.6rem"></div>
+      <div class="tablewrap"><table><thead><tr><th>Rôle</th><th>Attributs</th><th>Membre de</th><th>Expiration</th><th class="num">Sessions</th><th></th></tr></thead><tbody id="roleRows"></tbody></table></div>
+    </div>
+  </section>
+</main>
+
+<!-- change password dialog -->
+<div class="overlay" id="pwDlg">
+  <div class="dialog">
+    <h3>🔑 Changer le mot de passe de « <span id="pwRole"></span> »</h3>
+    <div class="field"><label>Nouveau mot de passe</label>
+      <div class="pw"><input type="password" id="pw1" autocomplete="new-password" /><button class="small" data-eye="pw1" title="Afficher">👁</button><button class="small" id="btnGen" title="Générer un mot de passe fort">🎲 Générer</button></div>
+      <div class="meter"><i id="pwMeter"></i></div><div class="hint" id="pwStrength" style="margin-top:.2rem"></div></div>
+    <div class="field" style="margin-top:.6rem"><label>Confirmer</label><input type="password" id="pw2" autocomplete="new-password" style="width:100%" /></div>
+    <div class="field" style="margin-top:.8rem"><label>Méthode</label>
+      <div class="radio">
+        <label class="chk"><input type="radio" name="pwm" value="scram" checked /> SCRAM-SHA-256 calculé ici <span class="badge ok">recommandé</span></label>
+        <div class="hint" style="margin-left:1.5rem">Le mot de passe en clair n'est jamais envoyé au serveur (ni écrit dans ses journaux).</div>
+        <label class="chk"><input type="radio" name="pwm" value="plain" /> Envoyer en clair (le serveur le chiffre selon <code>password_encryption</code>)</label>
+      </div></div>
+    <div class="field" style="margin-top:.8rem"><label>Expiration du mot de passe</label>
+      <div class="row"><select id="pwValid"><option value="">Ne pas modifier</option><option value="infinity">Jamais</option><option value="date">À une date…</option></select>
+        <input type="date" id="pwDate" style="display:none" /></div></div>
+    <div style="margin-top:.8rem;display:flex;flex-direction:column;gap:.35rem">
+      <label class="chk"><input type="checkbox" id="pwTest" checked /> Tester la connexion avec le nouveau mot de passe</label>
+      <label class="chk" id="pwSelfWrap" style="display:none"><input type="checkbox" id="pwSelf" checked /> Mettre à jour le mot de passe de la connexion en cours (et du profil mémorisé)</label>
+    </div>
+    <div id="pwMsg"></div>
+    <div class="row" style="margin-top:1rem;justify-content:flex-end">
+      <button id="btnPwCancel">Fermer</button><button class="primary" id="btnPwGo">Changer le mot de passe</button>
+    </div>
+  </div>
+</div>
+
+<!-- create role dialog -->
+<div class="overlay" id="roleDlg">
+  <div class="dialog">
+    <h3>＋ Créer un utilisateur</h3>
+    <div class="form">
+      <div class="field full"><label>Nom</label><input type="text" id="rName" autocomplete="off" /></div>
+      <div class="field full"><label>Mot de passe (optionnel)</label><div class="pw"><input type="password" id="rPass" autocomplete="new-password" /><button class="small" data-eye="rPass">👁</button><button class="small" id="btnGen2">🎲</button></div></div>
+      <label class="chk"><input type="checkbox" id="rLogin" checked /> Peut se connecter (LOGIN)</label>
+      <label class="chk"><input type="checkbox" id="rCreatedb" /> Peut créer des bases</label>
+      <label class="chk"><input type="checkbox" id="rCreaterole" /> Peut créer des rôles</label>
+      <label class="chk"><input type="checkbox" id="rSuper" /> Superutilisateur</label>
+    </div>
+    <div id="roleMsg"></div>
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button id="btnRoleCancel">Fermer</button><button class="primary" id="btnRoleGo">Créer</button></div>
+  </div>
+</div>
+
+<script>
+'use strict'
+const PORT = parseInt(location.port) || 8765
+const BASE = `http://127.0.0.1:${PORT}/modules/postgres-tester/api`
+const $ = (s) => document.querySelector(s)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+async function api(path, body, method) {
+  const opt = { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json' } }
+  if (body) opt.body = JSON.stringify(body)
+  let r
+  try { r = await fetch(BASE + path, opt) } catch { throw Object.assign(new Error('Backend injoignable — le module est-il activé ?'), { code: 'NET' }) }
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok) {
+    if (d.code === 'MISSING_DEP') showBanner(d.error)
+    const msg = Array.isArray(d.detail) ? d.detail.map((x) => x.msg).join(', ') : d.error || 'Erreur'
+    throw Object.assign(new Error(msg), { code: d.code, detail: typeof d.detail === 'string' ? d.detail : '', data: d })
+  }
+  return d
+}
+function showBanner(t) { const b = $('#banner'); b.textContent = '⚠️ ' + t; b.style.display = 'block' }
+function msgBox(el, kind, html, detail) {
+  el.innerHTML = `<div class="msg ${kind}">${html}${detail ? `<details><summary>Détail technique</summary><code>${esc(detail)}</code></details>` : ''}</div>`
+}
+const fmtSize = (b) => b == null ? '—' : b < 1024 ? b + ' o' : b < 1048576 ? (b / 1024).toFixed(1) + ' Ko' : b < 1073741824 ? (b / 1048576).toFixed(1) + ' Mo' : (b / 1073741824).toFixed(2) + ' Go'
+
+// ───────── tabs ─────────
+let connected = false
+document.querySelectorAll('.tab').forEach((t) => t.onclick = () => showView(t.dataset.view))
+function showView(v) {
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.view === v))
+  document.querySelectorAll('.view').forEach((s) => s.classList.toggle('on', s.id === 'v-' + v))
+  if (v === 'dbs') loadDbs()
+  if (v === 'roles') loadRoles()
+  if (v === 'console') { fillDbSelect(); $('#sql').focus() }
+}
+document.querySelectorAll('[data-eye]').forEach((b) => b.onclick = () => { const i = $('#' + b.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password' })
+
+// ───────── connection state ─────────
+let profiles = [], profileId = null, current = null, serverInfo = null, dbList = []
+function formConn() {
+  return { host: $('#fHost').value.trim(), port: +$('#fPort').value || 5432, user: $('#fUser').value.trim(), dbname: $('#fDb').value.trim() || 'postgres',
+           sslmode: $('#fSsl').value, password: $('#fPass').value || null, profile_id: profileId }
+}
+const conn = (over = {}) => ({ ...current, ...over })
+function setConnected(ok, c) {
+  connected = ok
+  current = ok ? c : current
+  document.querySelectorAll('.tab').forEach((t) => { if (t.dataset.view !== 'conn') t.disabled = !ok })
+  $('#connDot').className = 'dot ' + (ok ? 'ok' : c ? 'bad' : '')
+  $('#connText').textContent = ok ? `${c.user}@${c.host}:${c.port}/${c.dbname}` : c ? 'Échec de connexion' : 'Non connecté'
+}
+
+// ───────── profiles ─────────
+async function loadProfiles() {
+  try { profiles = await api('/profiles') } catch (e) { showBanner(e.message); return }
+  renderProfiles()
+}
+function renderProfiles() {
+  $('#profiles').innerHTML = profiles.length ? profiles.map((p) => `<div class="profile ${p.id === profileId ? 'on' : ''}" data-id="${p.id}">
+      <div style="flex:1;min-width:0"><div class="t">${esc(p.label)}</div><div class="s">${esc(p.user)}@${esc(p.host)}:${p.port}/${esc(p.dbname)}</div></div>
+      ${p.has_password ? '<span title="Mot de passe mémorisé">🔒</span>' : ''}</div>`).join('')
+    : '<div class="hint">Aucun profil enregistré. Remplissez le formulaire puis « Enregistrer le profil ».</div>'
+  document.querySelectorAll('.profile').forEach((el) => el.onclick = () => pickProfile(+el.dataset.id))
+}
+function pickProfile(id) {
+  const p = profiles.find((x) => x.id === id)
+  if (!p) return
+  profileId = id
+  $('#fLabel').value = p.label; $('#fHost').value = p.host; $('#fPort').value = p.port; $('#fUser').value = p.user
+  $('#fDb').value = p.dbname; $('#fSsl').value = p.sslmode; $('#fPass').value = ''
+  $('#fPass').placeholder = p.has_password ? '•••••• (mémorisé)' : ''
+  $('#fRemember').checked = p.has_password
+  $('#btnDelProfile').style.display = ''
+  $('#profileMsg').textContent = ''
+  renderProfiles()
+}
+$('#btnNewProfile').onclick = () => {
+  profileId = null
+  for (const [id, v] of [['fLabel', ''], ['fHost', 'localhost'], ['fPort', '5432'], ['fUser', 'postgres'], ['fPass', ''], ['fDb', 'postgres'], ['fCheckDb', '']]) $('#' + id).value = v
+  $('#fSsl').value = 'prefer'; $('#fPass').placeholder = ''; $('#fRemember').checked = false
+  $('#btnDelProfile').style.display = 'none'; renderProfiles(); $('#fLabel').focus()
+}
+$('#btnSaveProfile').onclick = async () => {
+  const c = formConn(), label = $('#fLabel').value.trim() || `${c.user}@${c.host}`
+  try {
+    const p = await api('/profiles' + (profileId ? `?profile_id=${profileId}` : ''), { label, host: c.host, port: c.port, user: c.user, dbname: c.dbname, sslmode: c.sslmode, password: c.password, remember: $('#fRemember').checked })
+    profileId = p.id; await loadProfiles(); pickProfile(p.id)
+    $('#profileMsg').textContent = '✓ Profil enregistré'
+  } catch (e) { $('#profileMsg').textContent = '✗ ' + e.message }
+}
+let delArmed = null
+$('#btnDelProfile').onclick = async () => {
+  const b = $('#btnDelProfile')
+  if (!delArmed) { b.textContent = 'Confirmer la suppression ?'; b.className = 'danger-solid'; delArmed = setTimeout(() => { delArmed = null; b.textContent = '🗑 Supprimer'; b.className = 'danger' }, 3500); return }
+  clearTimeout(delArmed); delArmed = null; b.textContent = '🗑 Supprimer'; b.className = 'danger'
+  await api(`/profiles/${profileId}`, null, 'DELETE').catch((e) => alertMsg(e.message))
+  $('#btnNewProfile').click(); loadProfiles()
+}
+function alertMsg(t) { $('#profileMsg').textContent = t }
+
+// ───────── local services ─────────
+async function loadServices() {
+  $('#services').innerHTML = '<div class="hint"><span class="spin"></span> Recherche des services PostgreSQL…</div>'
+  try {
+    const { services } = await api('/services')
+    $('#services').innerHTML = services.length ? services.map((s) => {
+      const run = s.state === 'Running'
+      return `<div class="svc"><span class="dot ${run ? 'ok' : 'bad'}"></span><div style="flex:1;min-width:0"><div><b>${esc(s.name)}</b> ${s.version ? `<span class="badge ac">v${esc(s.version)}</span>` : ''}</div>
+        <div class="hint">${run ? 'En cours d\'exécution' : esc(s.state)} · démarrage ${esc(s.start === 'Auto' ? 'automatique' : s.start === 'Manual' ? 'manuel' : s.start)}${s.pid ? ' · PID ' + s.pid : ''}</div>
+        ${s.data_dir ? `<div class="hint mono" style="font-size:11px;word-break:break-all">${esc(s.data_dir)}</div>` : ''}</div>
+        ${run ? '<button class="small" data-local="1" title="Remplir localhost:5432">Utiliser</button>' : ''}</div>`
+    }).join('') + '<div class="hint" style="margin-top:.5rem">Démarrer / arrêter : module « Services Windows ».</div>'
+      : '<div class="hint">Aucun service PostgreSQL installé sur ce PC.</div>'
+    document.querySelectorAll('[data-local]').forEach((b) => b.onclick = () => { $('#fHost').value = 'localhost'; $('#fPort').value = 5432; $('#fPass').focus() })
+  } catch (e) { $('#services').innerHTML = `<div class="hint">${esc(e.message)}</div>` }
+}
+$('#btnSvc').onclick = loadServices
+
+// ───────── connection test ─────────
+$('#btnTest').onclick = runTest
+async function runTest() {
+  const c = formConn(), btn = $('#btnTest')
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Test en cours…'
+  $('#testCard').style.display = ''
+  $('#steps').innerHTML = '<div class="step run"><span class="ic">…</span><span class="lb">Diagnostic</span><span class="tx">Connexion à ' + esc(c.host) + ':' + c.port + '…</span><span></span></div>'
+  $('#serverInfo').innerHTML = ''
+  try {
+    const r = await api('/test', { conn: c, check_db: $('#fCheckDb').value.trim() || null })
+    $('#steps').innerHTML = r.steps.map((s) => `<div class="step ${s.ok ? 'ok' : 'bad'}"><span class="ic">${s.ok ? '✓' : '✗'}</span><span class="lb">${esc(s.label)}</span>
+      <span class="tx">${esc(s.message)}${s.detail && !s.ok ? `<small>${esc(s.detail)}</small>` : ''}</span><span class="ms">${s.ms != null ? s.ms + ' ms' : ''}</span></div>`).join('')
+    $('#testWhen').textContent = new Date().toLocaleTimeString('fr-FR')
+    const authOk = r.steps.some((s) => s.key === 'auth' && s.ok)
+    if (r.info) {
+      const i = r.info; serverInfo = i
+      const kv = [['Version', 'PostgreSQL ' + i.server_version], ['En marche depuis', i.uptime], ['Utilisateur', i.user + (i.superuser ? ' (superutilisateur)' : '')],
+        ['Connexions', `${i.connections} / ${i.max_connections}`], ['Encodage', i.encoding], ['SSL', i.ssl ? 'Oui 🔒' : 'Non'],
+        ['Adresse serveur', i.server_addr || 'socket local'], ['Chiffrement des mots de passe', i.password_encryption], ['Rôle', i.replica ? 'Réplica (lecture seule)' : 'Primaire'],
+        ['Droits', [i.createdb && 'CREATEDB', i.createrole && 'CREATEROLE'].filter(Boolean).join(', ') || '—']]
+      $('#serverInfo').innerHTML = `<div class="kv">${kv.map(([k, v]) => `<div><b>${k}</b>${esc(v)}</div>`).join('')}</div><div class="ver mono">${esc(i.version)}</div>`
+    }
+    if (authOk) setConnected(true, c); else setConnected(false, c)
+  } catch (e) {
+    $('#steps').innerHTML = ''; msgBox($('#serverInfo'), 'bad', esc(e.message)); setConnected(false, c)
+  } finally { btn.disabled = false; btn.innerHTML = '▶ Tester la connexion' }
+}
+document.querySelectorAll('#v-conn input').forEach((i) => i.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') runTest() }))
+
+// ───────── databases ─────────
+async function loadDbs() {
+  $('#dbRows').innerHTML = '<tr><td colspan="7" class="empty"><span class="spin"></span></td></tr>'
+  try {
+    dbList = (await api('/databases', { conn: conn() })).databases
+    renderDbs()
+  } catch (e) { $('#dbRows').innerHTML = `<tr><td colspan="7"><div class="msg bad">${esc(e.message)}</div></td></tr>` }
+}
+function renderDbs() {
+  const q = $('#dbFilter').value.trim().toLowerCase()
+  const list = dbList.filter((d) => !q || d.name.toLowerCase().includes(q) || (d.owner || '').toLowerCase().includes(q))
+  $('#dbRows').innerHTML = list.length ? list.map((d) => `<tr><td><b>${esc(d.name)}</b> ${d.template ? '<span class="badge">modèle</span>' : ''}${!d.allow_conn ? '<span class="badge warn">connexions interdites</span>' : ''}${d.name === current.dbname ? '<span class="badge ok">connectée</span>' : ''}</td>
+    <td>${esc(d.owner)}</td><td>${esc(d.encoding)}</td><td>${esc(d.collate)}</td><td class="num">${fmtSize(d.size)}</td><td class="num">${d.connections}</td>
+    <td>${d.allow_conn ? `<button class="small" data-open="${esc(d.name)}">Console ›</button>` : ''}</td></tr>`).join('')
+    : '<tr><td colspan="7" class="empty">Aucune base</td></tr>'
+  document.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => { consoleDb = b.dataset.open; showView('console') })
+}
+$('#dbFilter').oninput = renderDbs
+$('#btnDbs').onclick = loadDbs
+$('#btnExists').onclick = async () => {
+  const name = $('#existName').value.trim()
+  if (!name) return
+  try {
+    const r = await api('/test', { conn: conn(), check_db: name })
+    const st = r.steps.find((s) => s.key === 'db')
+    if (!st) { msgBox($('#existMsg'), 'bad', esc(r.steps.find((s) => !s.ok)?.message || 'Échec')); return }
+    msgBox($('#existMsg'), st.ok ? 'ok' : 'bad', (st.ok ? '✓ ' : '✗ ') + `<b>${esc(name)}</b> — ` + esc(st.message))
+  } catch (e) { msgBox($('#existMsg'), 'bad', esc(e.message)) }
+}
+$('#existName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnExists').click() })
+let createArmed = false
+$('#btnCreateDb').onclick = async () => {
+  const name = $('#newDbName').value.trim(), owner = $('#newDbOwner').value.trim() || null, b = $('#btnCreateDb')
+  if (!name) return
+  if (!createArmed) { createArmed = true; b.textContent = `Créer « ${name} » ?`; b.className = 'primary'; setTimeout(() => { createArmed = false; b.textContent = 'Créer'; b.className = '' }, 3500); return }
+  createArmed = false; b.textContent = 'Créer'; b.className = ''
+  try { await api('/databases/create', { conn: conn(), name, owner }); msgBox($('#createDbMsg'), 'ok', `✓ Base <b>${esc(name)}</b> créée`); $('#newDbName').value = ''; loadDbs() }
+  catch (e) { msgBox($('#createDbMsg'), 'bad', esc(e.message), e.detail) }
+}
+
+// ───────── console ─────────
+let consoleDb = null
+const SNIPPETS = [
+  ['Version du serveur', 'SELECT version();'],
+  ['Taille des bases', "SELECT datname AS base, pg_size_pretty(pg_database_size(datname)) AS taille\nFROM pg_database ORDER BY pg_database_size(datname) DESC;"],
+  ['Tables les plus volumineuses', "SELECT schemaname, relname AS table, pg_size_pretty(pg_total_relation_size(relid)) AS taille_totale, n_live_tup AS lignes\nFROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 20;"],
+  ['Connexions actives', "SELECT pid, usename, datname, client_addr, state, now() - query_start AS duree, left(query, 120) AS requete\nFROM pg_stat_activity WHERE pid <> pg_backend_pid() ORDER BY query_start;"],
+  ['Requêtes longues (> 1 min)', "SELECT pid, usename, now() - query_start AS duree, left(query, 200) AS requete\nFROM pg_stat_activity WHERE state = 'active' AND now() - query_start > interval '1 minute';"],
+  ['Verrous en attente', "SELECT l.pid, a.usename, l.locktype, l.mode, l.relation::regclass, left(a.query, 120) AS requete\nFROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE NOT l.granted;"],
+  ['Liste des tables', "SELECT table_schema, table_name, table_type FROM information_schema.tables\nWHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY 1, 2;"],
+  ['Extensions installées', 'SELECT extname, extversion FROM pg_extension ORDER BY 1;'],
+  ['Paramètres importants', "SELECT name, setting, unit, source FROM pg_settings\nWHERE name IN ('max_connections','shared_buffers','work_mem','listen_addresses','port','data_directory','password_encryption','ssl','timezone') ORDER BY name;"],
+  ['Règles pg_hba.conf', 'SELECT line_number, type, database, user_name, address, netmask, auth_method, error FROM pg_hba_file_rules;'],
+]
+$('#snippets').innerHTML += SNIPPETS.map(([l], i) => `<option value="${i}">${esc(l)}</option>`).join('')
+$('#snippets').onchange = (ev) => { const s = SNIPPETS[+ev.target.value]; if (s) { $('#sql').value = s[1]; $('#sql').focus() } ev.target.value = '' }
+function fillDbSelect() {
+  const names = dbList.length ? dbList.filter((d) => d.allow_conn).map((d) => d.name) : [current.dbname]
+  if (!names.includes(current.dbname)) names.unshift(current.dbname)
+  const sel = consoleDb || $('#cDb').value || current.dbname
+  $('#cDb').innerHTML = names.map((n) => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')
+  if (!dbList.length) api('/databases', { conn: conn() }).then((r) => { dbList = r.databases; if (dbList.length) fillDbSelect() }).catch(() => {})
+}
+$('#cDb').onchange = () => { consoleDb = $('#cDb').value }
+
+const DANGER = [
+  [/\bdrop\s+(table|database|schema|role|user|index|view|function|extension|owned)\b/i, 'suppression d\'objet (DROP)'],
+  [/\btruncate\b/i, 'vidage de table (TRUNCATE)'],
+  [/\bdelete\s+from\b(?![\s\S]*\bwhere\b)/i, 'DELETE sans WHERE'],
+  [/\bupdate\s+\S+\s+set\b(?![\s\S]*\bwhere\b)/i, 'UPDATE sans WHERE'],
+  [/\balter\s+(table|database|role|user|system)\b/i, 'modification de structure ou de droits (ALTER)'],
+  [/\b(revoke|grant)\b/i, 'changement de droits (GRANT/REVOKE)'],
+  [/\b(delete|update|insert)\b/i, 'modification de données'],
+]
+let pendingSql = null
+function selectedSql() {
+  const ta = $('#sql'), s = ta.value.slice(ta.selectionStart, ta.selectionEnd)
+  return (s.trim() ? s : ta.value).trim()
+}
+function runConsole(force = false, dry = null) {
+  const sql = selectedSql()
+  if (!sql) return
+  const ro = $('#cRO').checked, isDry = dry ?? $('#cDry').checked
+  const danger = !ro && !isDry && DANGER.find(([re]) => re.test(sql.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")))
+  if (danger && !force) { pendingSql = sql; $('#dangerWhy').textContent = danger[1]; $('#dangerBox').classList.add('on'); return }
+  $('#dangerBox').classList.remove('on')
+  execSql(sql, ro, isDry)
+}
+async function execSql(sql, ro, dry) {
+  const btn = $('#btnRun'); btn.disabled = true; $('#runInfo').innerHTML = '<span class="spin"></span> Exécution…'
+  try {
+    const r = await api('/query', { conn: conn({ dbname: $('#cDb').value || current.dbname }), sql, read_only: ro, dry_run: dry, max_rows: +$('#cMax').value, timeout_s: +$('#cTimeout').value })
+    renderResults(r)
+    $('#runInfo').textContent = `✓ ${r.results.length} instruction(s) en ${r.duration_ms} ms${r.dry_run ? ' — mode essai : tout a été annulé (ROLLBACK)' : ''}`
+  } catch (e) {
+    const d = e.data || {}
+    $('#results').innerHTML = ''
+    if (d.results?.length) renderResults(d)
+    $('#results').insertAdjacentHTML('afterbegin', `<div class="msg bad">✗ ${esc(e.message)}${e.detail && e.detail !== e.message ? `<details open><summary>Message du serveur</summary><code style="white-space:pre-wrap">${esc(e.detail)}</code></details>` : ''}${d.dry_run || dry ? '<div class="hint" style="margin-top:.3rem">Mode essai : rien n\'a été modifié.</div>' : ''}</div>`)
+    $('#runInfo').textContent = d.duration_ms ? `✗ échec après ${d.duration_ms} ms` : '✗ échec'
+  } finally { btn.disabled = false; if (!$('#histBox').style.display) loadHistory() }
+}
+let lastResults = []
+function renderResults(r) {
+  lastResults = r.results
+  let h = ''
+  if (r.notices?.length) h += `<div class="msg warn">${r.notices.map(esc).join('<br>')}</div>`
+  r.results.forEach((res, i) => {
+    h += `<div class="card res"><div class="res-h"><span class="st">${esc(res.status || '')}</span>`
+    if (res.columns) h += `<span>${res.rows.length} ligne(s)${res.truncated ? ' — <b style="color:#fde68a">résultat tronqué</b>' : ''}</span><span style="flex:1"></span><button class="small" data-csv="${i}">⇩ CSV</button><button class="small" data-copy="${i}">Copier</button>`
+    else if (res.rowcount >= 0) h += `<span>${res.rowcount} ligne(s) affectée(s)</span>`
+    h += '</div>'
+    if (res.columns) {
+      h += `<div class="tablewrap"><table><thead><tr>${res.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>` +
+        (res.rows.length ? res.rows.map((row) => `<tr>${row.map((v) => v === null ? '<td class="null">NULL</td>' : `<td><span class="cell" title="${esc(typeof v === 'object' ? JSON.stringify(v) : v)}">${esc(typeof v === 'object' ? JSON.stringify(v) : v)}</span></td>`).join('')}</tr>`).join('')
+          : `<tr><td colspan="${res.columns.length}" class="empty">Aucune ligne</td></tr>`) + '</tbody></table></div>'
+    }
+    h += '</div>'
+  })
+  $('#results').innerHTML = h
+  document.querySelectorAll('[data-csv]').forEach((b) => b.onclick = () => downloadCsv(lastResults[+b.dataset.csv]))
+  document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { copyText(toCsv(lastResults[+b.dataset.copy], '\t')); b.textContent = '✓ Copié'; setTimeout(() => b.textContent = 'Copier', 1200) })
+}
+function toCsv(res, sep = ';') {
+  const cell = (v) => { if (v === null) return ''; let s = typeof v === 'object' ? JSON.stringify(v) : String(v); if (sep === ';' && /^[=+\-@]/.test(s)) s = "'" + s; return /[";\n\t]/.test(s) || s.includes(sep) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  return [res.columns.map(cell).join(sep), ...res.rows.map((r) => r.map(cell).join(sep))].join('\r\n')
+}
+function downloadCsv(res) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob(['﻿' + toCsv(res)], { type: 'text/csv;charset=utf-8' }))
+  a.download = `resultat_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000)
+}
+function copyText(t) {
+  const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'
+  document.body.appendChild(ta); ta.select(); try { document.execCommand('copy') } catch {} ta.remove()
+}
+$('#btnRun').onclick = () => runConsole()
+$('#btnDangerGo').onclick = () => { $('#dangerBox').classList.remove('on'); if (pendingSql) execSql(pendingSql, false, false) }
+$('#btnDangerDry').onclick = () => { $('#dangerBox').classList.remove('on'); if (pendingSql) execSql(pendingSql, false, true) }
+$('#btnDangerNo').onclick = () => $('#dangerBox').classList.remove('on')
+$('#btnClearSql').onclick = () => { $('#sql').value = ''; $('#sql').focus() }
+$('#sql').addEventListener('keydown', (ev) => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); runConsole() }
+  if (ev.key === 'Tab') { ev.preventDefault(); const ta = ev.target, s = ta.selectionStart; ta.setRangeText('  ', s, ta.selectionEnd, 'end') }
+})
+async function loadHistory() {
+  try {
+    const h = await api('/history')
+    $('#histBox').innerHTML = `<h2>Historique <span class="right"><button class="small danger" id="btnHistClear">Vider</button></span></h2><div class="hist">${h.length ? h.map((x) => `<div class="hist-item" data-sql="${esc(x.sql)}"><pre>${esc(x.sql)}</pre><div class="meta">${x.ok ? '✓' : '✗'} ${esc(x.at.replace('T', ' '))} · ${esc(x.target)} · ${x.duration_ms} ms</div></div>`).join('') : '<div class="empty">Vide</div>'}</div>`
+    document.querySelectorAll('.hist-item').forEach((el) => el.onclick = () => { $('#sql').value = el.dataset.sql; $('#sql').focus() })
+    $('#btnHistClear').onclick = async () => { await api('/history', null, 'DELETE'); loadHistory() }
+  } catch {}
+}
+$('#btnHist').onclick = () => { const b = $('#histBox'); const show = b.style.display === 'none'; b.style.display = show ? '' : 'none'; if (show) loadHistory() }
+
+// ───────── roles ─────────
+let roles = [], me = null
+async function loadRoles() {
+  $('#roleRows').innerHTML = '<tr><td colspan="6" class="empty"><span class="spin"></span></td></tr>'
+  try {
+    const r = await api('/roles', { conn: conn() }); roles = r.roles; me = r.me
+    $('#meInfo').innerHTML = `Connecté en tant que <b>${esc(me.name)}</b>${me.superuser ? ' <span class="badge su">superutilisateur</span>' : me.createrole ? ' <span class="badge ac">CREATEROLE</span>' : ' — vous ne pouvez changer que votre propre mot de passe.'}`
+    const now = Date.now()
+    $('#roleRows').innerHTML = roles.map((x) => {
+      const exp = x.valid_until && !String(x.valid_until).startsWith('infinity') ? new Date(x.valid_until) : null
+      const expired = exp && exp.getTime() < now
+      const canEdit = me.superuser || me.createrole || x.name === me.name
+      return `<tr><td><b>${esc(x.name)}</b>${x.name === me.name ? ' <span class="badge ok">vous</span>' : ''}</td>
+      <td>${x.superuser ? '<span class="badge su">superutilisateur</span>' : ''}${x.login ? '<span class="badge ac">connexion</span>' : '<span class="badge">groupe (sans connexion)</span>'}${x.createdb ? '<span class="badge">CREATEDB</span>' : ''}${x.createrole ? '<span class="badge">CREATEROLE</span>' : ''}${x.replication ? '<span class="badge">REPLICATION</span>' : ''}${x.conn_limit >= 0 ? `<span class="badge">max ${x.conn_limit} conn.</span>` : ''}</td>
+      <td>${x.member_of.map((m) => `<span class="badge">${esc(m)}</span>`).join('') || '<span class="hint">—</span>'}</td>
+      <td>${exp ? `<span class="badge ${expired ? 'su' : 'warn'}">${expired ? 'expiré le ' : ''}${exp.toLocaleDateString('fr-FR')}</span>` : '<span class="hint">jamais</span>'}</td>
+      <td class="num">${x.sessions}</td>
+      <td>${canEdit ? `<button class="small" data-pw="${esc(x.name)}">🔑 Mot de passe</button>` : ''}</td></tr>`
+    }).join('')
+    document.querySelectorAll('[data-pw]').forEach((b) => b.onclick = () => openPw(b.dataset.pw))
+  } catch (e) { $('#roleRows').innerHTML = `<tr><td colspan="6"><div class="msg bad">${esc(e.message)}</div></td></tr>` }
+}
+$('#btnRoles').onclick = loadRoles
+
+function genPassword(n = 20) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789-_!@#%+=.'
+  const v = new Uint32Array(n); crypto.getRandomValues(v)
+  return [...v].map((x) => chars[x % chars.length]).join('')
+}
+function strength(p) {
+  let pool = 0
+  if (/[a-z]/.test(p)) pool += 26; if (/[A-Z]/.test(p)) pool += 26; if (/\d/.test(p)) pool += 10; if (/[^A-Za-z0-9]/.test(p)) pool += 30
+  const bits = p.length * Math.log2(pool || 1)
+  return bits < 40 ? [15, '#ef4444', 'Très faible'] : bits < 60 ? [40, '#f97316', 'Faible'] : bits < 80 ? [65, '#eab308', 'Correct'] : bits < 100 ? [85, '#22c55e', 'Fort'] : [100, '#16a34a', 'Très fort']
+}
+function updMeter() {
+  const p = $('#pw1').value, [w, c, t] = p ? strength(p) : [0, '', '']
+  $('#pwMeter').style.width = w + '%'; $('#pwMeter').style.background = c; $('#pwStrength').textContent = t ? `${t} · ${p.length} caractères` : ''
+}
+let pwRole = null
+function openPw(role) {
+  pwRole = role
+  $('#pwRole').textContent = role; $('#pw1').value = ''; $('#pw2').value = ''; $('#pwMsg').innerHTML = ''; $('#pwValid').value = ''; $('#pwDate').style.display = 'none'
+  $('#pw1').type = 'password'; $('#pw2').type = 'password'
+  $('#pwSelfWrap').style.display = role === current.user ? '' : 'none'
+  $('#btnPwGo').disabled = false
+  updMeter(); $('#pwDlg').classList.add('on'); $('#pw1').focus()
+}
+$('#pw1').oninput = updMeter
+$('#btnGen').onclick = () => { const p = genPassword(); $('#pw1').value = p; $('#pw2').value = p; $('#pw1').type = 'text'; updMeter() }
+$('#pwValid').onchange = () => { $('#pwDate').style.display = $('#pwValid').value === 'date' ? '' : 'none' }
+$('#btnPwCancel').onclick = () => $('#pwDlg').classList.remove('on')
+$('#btnPwGo').onclick = async () => {
+  const p1 = $('#pw1').value, p2 = $('#pw2').value
+  if (!p1) return msgBox($('#pwMsg'), 'bad', 'Saisissez un mot de passe.')
+  if (p1 !== p2) return msgBox($('#pwMsg'), 'bad', 'Les deux mots de passe ne correspondent pas.')
+  let valid = $('#pwValid').value || null
+  if (valid === 'date') { valid = $('#pwDate').value; if (!valid) return msgBox($('#pwMsg'), 'bad', 'Choisissez une date.') }
+  const self = pwRole === current.user && $('#pwSelf').checked
+  $('#btnPwGo').disabled = true; $('#pwMsg').innerHTML = '<div class="msg"><span class="spin"></span> Modification…</div>'
+  try {
+    const r = await api('/roles/password', { conn: conn(), role: pwRole, new_password: p1, method: document.querySelector('[name=pwm]:checked').value, valid_until: valid, update_profile: self })
+    let html = `✓ Mot de passe de <b>${esc(pwRole)}</b> modifié.`
+    if (self) { current.password = p1; if (r.profile_updated) html += ' Profil mémorisé mis à jour.' }
+    if ($('#pwTest').checked) {
+      try { await api('/roles/test-login', { conn: conn(), role: pwRole, password: p1 }); html += '<br>✓ Connexion testée avec succès avec le nouveau mot de passe.' }
+      catch (e) { html += `<br>⚠️ Test de connexion : ${esc(e.message)}` + (e.code === 'HBA_REJECT' || e.code === 'ROLE_NOT_FOUND' ? '' : '') }
+    }
+    msgBox($('#pwMsg'), html.includes('⚠️') ? 'warn' : 'ok', html)
+    loadRoles()
+  } catch (e) { msgBox($('#pwMsg'), 'bad', esc(e.message), e.detail); $('#btnPwGo').disabled = false }
+}
+
+$('#btnNewRole').onclick = () => { $('#roleMsg').innerHTML = ''; $('#rName').value = ''; $('#rPass').value = ''; $('#roleDlg').classList.add('on'); $('#rName').focus() }
+$('#btnRoleCancel').onclick = () => $('#roleDlg').classList.remove('on')
+$('#btnGen2').onclick = () => { $('#rPass').value = genPassword(); $('#rPass').type = 'text' }
+$('#btnRoleGo').onclick = async () => {
+  const role = $('#rName').value.trim()
+  if (!role) return msgBox($('#roleMsg'), 'bad', 'Nom requis.')
+  try {
+    await api('/roles/create', { conn: conn(), role, password: $('#rPass').value || null, login: $('#rLogin').checked, createdb: $('#rCreatedb').checked, createrole: $('#rCreaterole').checked, superuser: $('#rSuper').checked })
+    msgBox($('#roleMsg'), 'ok', `✓ Utilisateur <b>${esc(role)}</b> créé.`); loadRoles()
+  } catch (e) { msgBox($('#roleMsg'), 'bad', esc(e.message), e.detail) }
+}
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') document.querySelectorAll('.overlay.on').forEach((o) => o.classList.remove('on')) })
+
+// ───────── init ─────────
+;(async () => {
+  try { const s = await api('/status'); if (!s.driver) showBanner('Le pilote psycopg n\'est pas installé. Installez les dépendances du module (bouton « dépendances »).') } catch (e) { showBanner(e.message) }
+  await loadProfiles()
+  if (profiles.length) pickProfile(profiles[0].id)
+  loadServices()
+})()
+</script>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Calculateur de sous-réseaux</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; --cyan: #06b6d4; --net: #818cf8; --host: #22d3ee; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 7px 14px; white-space: nowrap; }
+  button:hover:not(:disabled) { background: #2a2a30; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #4f46e5; }
+  button.sm { padding: 3px 9px; font-size: 12px; }
+  input, select, textarea { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; outline: none; min-width: 0; }
+  textarea { width: 100%; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  header { display: flex; align-items: center; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 14px 10px 0; font-weight: 600; }
+  .tab { border: none; background: transparent; border-radius: 6px 6px 0 0; padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); background: #222226; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 16px; max-width: 1150px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .form .grow { flex: 1; min-width: 220px; }
+  .form .grow input { width: 100%; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .stat { background: #111114; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; cursor: pointer; position: relative; }
+  .stat:hover { border-color: #3f3f46; }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .v { font-size: 16px; font-weight: 600; font-family: ui-monospace, Consolas, monospace; margin-top: 2px; word-break: break-all; }
+  .stat .s { font-size: 11px; color: var(--muted); }
+  .stat.big .v { font-size: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--card); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.bad td { color: #fca5a5; }
+  .tablewrap { max-height: 60vh; overflow: auto; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #27272a; color: #a1a1aa; font-weight: 500; white-space: nowrap; }
+  .pill.ok { background: rgba(34,197,94,.15); color: #86efac; }
+  .pill.bad { background: rgba(239,68,68,.12); color: #fca5a5; }
+  .pill.warn { background: rgba(245,158,11,.15); color: #fcd34d; }
+  .pill.acc { background: rgba(99,102,241,.18); color: #c7d2fe; }
+  .err { color: #fecaca; background: rgba(239,68,68,.1); border: 1px solid var(--danger); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .note { font-size: 12px; color: #fcd34d; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  .empty { padding: 26px; text-align: center; color: var(--muted); }
+  .bin { font: 13px/1.9 ui-monospace, 'Cascadia Mono', Consolas, monospace; overflow-x: auto; }
+  .bin .row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: baseline; }
+  .bin .row .k { color: var(--muted); font-family: system-ui; font-size: 12px; }
+  .bin .bits { white-space: nowrap; letter-spacing: .5px; }
+  .bin .n { color: var(--net); }
+  .bin .h { color: var(--host); }
+  .bin .sep { color: #52525b; margin: 0 2px; }
+  .bin .dec { color: var(--muted); margin-left: 12px; font-size: 12px; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .kv { display: grid; grid-template-columns: 190px 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv .k { color: var(--muted); }
+  .kv a, .link { color: #a5b4fc; cursor: pointer; text-decoration: none; }
+  .kv a:hover, .link:hover { text-decoration: underline; }
+  .meter { height: 10px; background: #111114; border-radius: 5px; overflow: hidden; display: flex; border: 1px solid var(--border); }
+  .meter > i { display: block; height: 100%; }
+  .vlsm-rows { display: flex; flex-direction: column; gap: 6px; }
+  .vlsm-row { display: grid; grid-template-columns: 1fr 140px auto; gap: 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } .kv { grid-template-columns: 130px 1fr; } .bin .row { grid-template-columns: 1fr; gap: 0; } }
+  .toast { position: fixed; bottom: 16px; right: 16px; background: #27272a; border: 1px solid #3f3f46; padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .q-ok { color: #86efac; } .q-bad { color: #fca5a5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧮 Calculateur de sous-réseaux</h1>
+  <button class="tab active" data-tab="calc">Calcul</button>
+  <button class="tab" data-tab="split">Découpage</button>
+  <button class="tab" data-tab="vlsm">VLSM</button>
+  <button class="tab" data-tab="member">Appartenance</button>
+  <button class="tab" data-tab="aggr">Agrégation</button>
+</header>
+<main>
+  <!-- CALCUL -->
+  <section class="panel active" id="p-calc">
+    <div class="card">
+      <div class="form">
+        <label class="grow">Adresse IPv4 / IPv6 avec préfixe ou masque
+          <input id="cInput" placeholder="192.168.1.10/24 · 10.0.0.1 255.255.0.0 · 2001:db8::1/64" autocomplete="off" spellcheck="false" />
+        </label>
+        <button class="primary" id="cGo">Calculer</button>
+      </div>
+      <div class="small muted" style="margin-top:8px">Formats acceptés : CIDR (<span class="mono">/24</span>), masque (<span class="mono">255.255.255.0</span>), masque générique (<span class="mono">0.0.0.255</span>). Cliquez sur une valeur pour la copier.</div>
+    </div>
+    <div id="cOut"></div>
+    <div class="card">
+      <details><summary>Aide-mémoire des préfixes IPv4</summary><div class="tablewrap" style="margin-top:10px" id="cheat"></div></details>
+    </div>
+  </section>
+
+  <!-- DÉCOUPAGE -->
+  <section class="panel" id="p-split">
+    <div class="card">
+      <div class="form">
+        <label class="grow">Réseau à découper
+          <input id="sNet" placeholder="192.168.0.0/24" value="192.168.0.0/24" spellcheck="false" />
+        </label>
+        <label>Méthode
+          <select id="sMode"><option value="count">Nombre de sous-réseaux</option><option value="prefix">Nouveau préfixe (/n)</option><option value="hosts">Hôtes par sous-réseau</option></select>
+        </label>
+        <label>Valeur <input id="sVal" type="number" min="1" value="4" style="width:110px" /></label>
+        <button class="primary" id="sGo">Découper</button>
+        <button id="sCsv" disabled>⬇ Export CSV</button>
+      </div>
+    </div>
+    <div id="sOut"></div>
+  </section>
+
+  <!-- VLSM -->
+  <section class="panel" id="p-vlsm">
+    <div class="card">
+      <div class="form" style="margin-bottom:12px">
+        <label class="grow">Réseau disponible
+          <input id="vNet" placeholder="192.168.10.0/24" value="192.168.10.0/24" spellcheck="false" />
+        </label>
+      </div>
+      <div class="small muted" style="margin-bottom:6px">Besoins (nom + nombre d'hôtes). Les sous-réseaux sont alloués du plus grand au plus petit.</div>
+      <div class="vlsm-rows" id="vRows"></div>
+      <div class="form" style="margin-top:10px">
+        <button id="vAdd">+ Ajouter un besoin</button>
+        <button id="vExample" class="sm">Exemple</button>
+        <span style="flex:1"></span>
+        <button class="primary" id="vGo">Calculer le plan VLSM</button>
+        <button id="vCsv" disabled>⬇ Export CSV</button>
+      </div>
+    </div>
+    <div id="vOut"></div>
+  </section>
+
+  <!-- APPARTENANCE -->
+  <section class="panel" id="p-member">
+    <div class="grid2">
+      <div class="card"><h3>Adresses IP à tester</h3><textarea id="mIps" rows="8" placeholder="192.168.1.50&#10;10.1.2.3"></textarea></div>
+      <div class="card"><h3>Réseaux (CIDR)</h3><textarea id="mNets" rows="8" placeholder="192.168.1.0/24&#10;192.168.0.0/16&#10;10.0.0.0/8"></textarea></div>
+    </div>
+    <div class="form" style="margin-bottom:12px"><button class="primary" id="mGo">Vérifier appartenance et chevauchements</button>
+      <span class="small muted">Une entrée par ligne (ou séparées par des virgules). Laissez les IP vides pour ne tester que les chevauchements.</span></div>
+    <div id="mOut"></div>
+  </section>
+
+  <!-- AGRÉGATION -->
+  <section class="panel" id="p-aggr">
+    <div class="card"><h3>Réseaux à agréger (résumé de routes)</h3>
+      <textarea id="aNets" rows="9" placeholder="192.168.0.0/24&#10;192.168.1.0/24&#10;192.168.2.0/24&#10;192.168.3.0/24"></textarea>
+      <div class="form" style="margin-top:10px"><button class="primary" id="aGo">Agréger</button></div>
+    </div>
+    <div id="aOut"></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/subnet-calc/api`;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function lsGet(k, d) { try { const v = localStorage.getItem('subnet.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } }
+function lsSet(k, v) { try { localStorage.setItem('subnet.' + k, JSON.stringify(v)); } catch {} }
+async function api(path, body) {
+  let r;
+  try { r = await fetch(BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+  catch (e) { throw new Error('Backend injoignable : ' + e.message); }
+  let d = null; try { d = await r.json(); } catch {}
+  if (!r.ok) throw new Error(d && d.error ? d.error : 'Entrée invalide (HTTP ' + r.status + ')');
+  return d;
+}
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1600); }
+function copyText(text) {
+  const fb = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch {} ta.remove(); toast(ok ? `Copié : ${text}` : 'Copie impossible'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast(`Copié : ${text}`), fb); else fb();
+}
+function download(file) {
+  const a = document.createElement('a'); a.href = `${BASE}/file/${encodeURIComponent(file)}`; a.download = file;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+const errBox = (e) => `<div class="err">${esc(e.message)}</div>`;
+
+/* Tabs */
+function showTab(name) {
+  $$('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
+  $$('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + name));
+  lsSet('tab', name);
+}
+$$('.tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+document.addEventListener('click', e => { const s = e.target.closest('[data-copy]'); if (s) copyText(s.dataset.copy); });
+
+/* ── Calcul ── */
+let calcTimer = null;
+async function doCalc(silent) {
+  const v = $('#cInput').value.trim();
+  if (!v) { $('#cOut').innerHTML = ''; return; }
+  try {
+    const d = await api('/info', { input: v });
+    lsSet('calc', v); renderCalc(d);
+  } catch (e) { if (!silent) $('#cOut').innerHTML = errBox(e); else $('#cOut').innerHTML = `<div class="card muted small">${esc(e.message)}</div>`; }
+}
+function stat(label, value, sub, big) {
+  if (value == null || value === '') return '';
+  return `<div class="stat ${big ? 'big' : ''}" data-copy="${esc(value)}" title="Cliquer pour copier"><div class="l">${label}</div><div class="v">${esc(value)}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`;
+}
+function binRow(label, bits, prefix, ver, dec) {
+  const group = ver === 4 ? 8 : 16;
+  let html = '';
+  for (let i = 0; i < bits.length; i++) {
+    if (i && i % group === 0) html += `<span class="sep">${ver === 4 ? '.' : ':'}</span>`;
+    if (ver === 6 && i === 64) html += '<br>';
+    html += `<span class="${i < prefix ? 'n' : 'h'}">${bits[i]}</span>`;
+  }
+  return `<div class="row"><div class="k">${label}</div><div><span class="bits">${html}</span>${dec ? `<span class="dec">${esc(dec)}</span>` : ''}</div></div>`;
+}
+const navLink = (net) => net ? `<a data-nav="${esc(net)}">${esc(net)}</a>` : '—';
+function renderCalc(d) {
+  const v4 = d.version === 4;
+  let html = d.notes.map(n => `<div class="note">${esc(n)}</div>`).join('');
+  const sp = d.special;
+  const scopeCls = d.scope === 'publique' ? 'acc' : d.scope === 'privée' ? 'ok' : 'warn';
+  html += `<div class="card"><h3><span class="mono" style="font-size:16px">${esc(d.address)}/${d.prefix}</span>
+    <span class="pill acc">IPv${d.version}</span>${v4 ? `<span class="pill">Classe ${esc(d.class.cls)}</span>` : ''}
+    <span class="pill ${scopeCls}">${esc(d.scope)}</span>${sp ? `<span class="pill">${esc(sp.label)} · ${esc(sp.rfc)}</span>` : ''}
+    ${d.is_network_address ? '<span class="pill warn">adresse de réseau</span>' : ''}${d.is_broadcast_address ? '<span class="pill warn">adresse de diffusion</span>' : ''}</h3>
+    <div class="stats">
+      ${stat('Réseau', d.cidr, null, true)}
+      ${v4 ? stat('Masque', d.netmask, `/${d.prefix} · ${d.mask_hex}`, true) : stat('Préfixe', '/' + d.prefix, null, true)}
+      ${v4 ? stat('Masque générique (wildcard)', d.wildcard) : ''}
+      ${v4 ? stat('Diffusion', d.broadcast || '—', d.broadcast ? '' : 'pas de diffusion en /31 et /32') : stat('Dernière adresse', d.last_address)}
+      ${stat('Première adresse hôte', d.first_host)}
+      ${stat('Dernière adresse hôte', d.last_host)}
+      ${stat('Hôtes utilisables', d.usable_fmt, v4 && d.prefix < 31 ? 'total − réseau − diffusion' : '')}
+      ${stat('Adresses au total', d.total_fmt, d.total_pow)}
+      ${!v4 && d.subnets_64_fmt ? stat('Sous-réseaux /64', d.subnets_64_fmt) : ''}
+    </div></div>`;
+  html += `<div class="card"><h3>Vue binaire</h3><div class="bin">
+    ${binRow('Adresse', d.bin_address, d.prefix, d.version, d.address)}
+    ${binRow(v4 ? 'Masque' : 'Masque de préfixe', d.bin_mask, d.prefix, d.version, v4 ? d.netmask : '/' + d.prefix)}
+    ${binRow('Réseau', d.bin_network, d.prefix, d.version, d.network)}
+    ${binRow(v4 ? 'Diffusion / dernière' : 'Dernière adresse', d.bin_last, d.prefix, d.version, v4 ? (d.broadcast || d.last_host) : d.last_address)}
+    ${v4 ? binRow('Wildcard', d.bin_wildcard, d.prefix, d.version, d.wildcard) : ''}
+    </div><div class="legend"><span><i style="background:var(--net)"></i>${d.prefix} bits réseau</span><span><i style="background:var(--host)"></i>${d.bits - d.prefix} bits hôte</span></div></div>`;
+  html += `<div class="card"><h3>Détails</h3><div class="kv">
+    ${v4 ? `<div class="k">Classe</div><div>${esc(d.class.cls)} <span class="muted small">(${esc(d.class.range)}${d.class.default_prefix ? ', masque par défaut /' + d.class.default_prefix : ''})</span></div>` : ''}
+    <div class="k">Type d'adresse</div><div>${sp ? `${esc(sp.label)} <span class="muted small">${esc(sp.range)} — ${esc(sp.rfc)}</span>` : (d.scope === 'publique' ? 'Publique (routable sur Internet)' : esc(d.scope))}</div>
+    ${d.network_special && (!sp || d.network_special.range !== sp.range) ? `<div class="k">Plage du réseau</div><div>${esc(d.network_special.label)} <span class="muted small">${esc(d.network_special.range)}</span></div>` : ''}
+    ${!v4 ? `<div class="k">Forme développée</div><div class="mono">${esc(d.exploded)}</div><div class="k">Forme compressée</div><div class="mono">${esc(d.compressed)}</div>` : ''}
+    ${d.embedded_ipv4 ? `<div class="k">IPv4 intégrée</div><div class="mono">${esc(d.embedded_ipv4)}</div>` : ''}
+    <div class="k">Position dans le réseau</div><div>n° ${esc(d.index_in_network)}</div>
+    <div class="k">Valeur entière / hexa</div><div class="mono small">${esc(d.integer)} · ${esc(d.hex)}</div>
+    <div class="k">Pointeur inverse (PTR)</div><div class="mono small">${esc(d.reverse_pointer)}</div>
+    <div class="k">Zone inverse</div><div class="mono small">${esc(d.reverse_zone)}</div>
+    <div class="k">Réseau précédent</div><div class="mono">${navLink(d.prev_network)}</div>
+    <div class="k">Réseau suivant</div><div class="mono">${navLink(d.next_network)}</div>
+    <div class="k">Sur-réseau (/${d.prefix - 1})</div><div class="mono">${navLink(d.supernet)}</div>
+    </div>
+    <div class="form" style="margin-top:12px"><button class="sm" id="toSplit">Découper ce réseau →</button><button class="sm" id="toVlsm">Plan VLSM →</button><button class="sm" id="cCopyAll">📋 Copier le résumé</button></div></div>`;
+  $('#cOut').innerHTML = html;
+  $$('#cOut [data-nav]').forEach(a => a.onclick = () => { $('#cInput').value = a.dataset.nav; doCalc(); });
+  $('#toSplit').onclick = () => { $('#sNet').value = d.cidr; showTab('split'); doSplit(); };
+  $('#toVlsm').onclick = () => { $('#vNet').value = d.cidr; showTab('vlsm'); };
+  $('#cCopyAll').onclick = () => copyText([
+    `Adresse : ${d.address}/${d.prefix}`, `Réseau : ${d.cidr}`, v4 ? `Masque : ${d.netmask}` : '', v4 ? `Wildcard : ${d.wildcard}` : '',
+    v4 && d.broadcast ? `Diffusion : ${d.broadcast}` : '', `Plage d'hôtes : ${d.first_host} – ${d.last_host}`, `Hôtes utilisables : ${d.usable_fmt}`,
+  ].filter(Boolean).join('\n'));
+}
+$('#cGo').onclick = () => doCalc();
+$('#cInput').addEventListener('keydown', e => { if (e.key === 'Enter') doCalc(); });
+$('#cInput').addEventListener('input', () => { clearTimeout(calcTimer); calcTimer = setTimeout(() => doCalc(true), 350); });
+
+// Aide-mémoire
+(function cheat() {
+  let rows = '';
+  for (let p = 8; p <= 32; p++) {
+    const m = p === 0 ? 0 : (0xFFFFFFFF << (32 - p)) >>> 0;
+    const mask = [24, 16, 8, 0].map(s => (m >>> s) & 255).join('.');
+    const wc = [24, 16, 8, 0].map(s => (~m >>> s) & 255).join('.');
+    const total = 2 ** (32 - p), hosts = p >= 31 ? (p === 31 ? 2 : 1) : total - 2;
+    rows += `<tr><td class="mono">/${p}</td><td class="mono">${mask}</td><td class="mono">${wc}</td><td class="num">${total.toLocaleString('fr-FR')}</td><td class="num">${hosts.toLocaleString('fr-FR')}</td></tr>`;
+  }
+  $('#cheat').innerHTML = `<table><thead><tr><th>Préfixe</th><th>Masque</th><th>Wildcard</th><th class="num">Adresses</th><th class="num">Hôtes</th></tr></thead><tbody>${rows}</tbody></table>`;
+})();
+
+/* ── Découpage ── */
+let lastSplit = null;
+async function doSplit() {
+  const body = { network: $('#sNet').value.trim(), mode: $('#sMode').value, value: parseInt($('#sVal').value, 10) };
+  if (!body.network) return $('#sNet').focus();
+  if (!Number.isFinite(body.value)) { $('#sOut').innerHTML = errBox(new Error('Valeur numérique requise.')); return; }
+  $('#sGo').disabled = true;
+  try {
+    const d = await api('/split', body); lastSplit = body; renderSplit(d);
+    $('#sCsv').disabled = false;
+  } catch (e) { $('#sOut').innerHTML = errBox(e); $('#sCsv').disabled = true; }
+  finally { $('#sGo').disabled = false; }
+}
+function renderSplit(d) {
+  const v4 = d.version === 4;
+  let html = d.notes.map(n => `<div class="note">${esc(n)}</div>`).join('');
+  html += `<div class="card"><div class="stats">
+    ${stat('Réseau parent', d.network)}${stat('Nouveau préfixe', '/' + d.new_prefix, d.netmask || '')}
+    ${stat('Sous-réseaux', d.count_fmt)}${stat('Hôtes par sous-réseau', d.usable_each_fmt)}</div></div>`;
+  html += `<div class="card">${d.truncated ? `<div class="note">Affichage limité aux ${d.shown} premiers sous-réseaux sur ${esc(d.count_fmt)}.</div>` : ''}
+    <div class="tablewrap"><table><thead><tr><th class="num">#</th><th>Sous-réseau</th><th>Première adresse</th><th>Dernière adresse</th>${v4 ? '<th>Diffusion</th>' : ''}<th class="num">Hôtes</th></tr></thead><tbody>
+    ${d.rows.map(r => `<tr><td class="num muted">${r.index}</td><td class="mono"><span class="link" data-copy="${esc(r.cidr)}">${esc(r.cidr)}</span></td><td class="mono">${esc(r.first)}</td><td class="mono">${esc(r.last)}</td>${v4 ? `<td class="mono">${esc(r.broadcast || '—')}</td>` : ''}<td class="num">${Number(r.usable) <= Number.MAX_SAFE_INTEGER ? Number(r.usable).toLocaleString('fr-FR') : esc(r.usable)}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  $('#sOut').innerHTML = html;
+}
+$('#sGo').onclick = doSplit;
+['sNet', 'sVal'].forEach(id => $('#' + id).addEventListener('keydown', e => { if (e.key === 'Enter') doSplit(); }));
+$('#sMode').onchange = () => { $('#sVal').value = { count: 4, prefix: 26, hosts: 50 }[$('#sMode').value]; };
+$('#sCsv').onclick = async () => {
+  if (!lastSplit) return;
+  $('#sCsv').disabled = true;
+  try { const d = await api('/export/split', lastSplit); download(d.file); } catch (e) { toast(e.message); }
+  finally { $('#sCsv').disabled = false; }
+};
+
+/* ── VLSM ── */
+function addVRow(name = '', hosts = '') {
+  const div = document.createElement('div'); div.className = 'vlsm-row';
+  div.innerHTML = `<input class="vn" placeholder="Nom (ex. LAN Siège)" value="${esc(name)}" /><input class="vh" type="number" min="1" placeholder="Hôtes" value="${esc(hosts)}" /><button class="sm" title="Supprimer">×</button>`;
+  div.querySelector('button').onclick = () => { div.remove(); saveVRows(); };
+  div.addEventListener('input', saveVRows);
+  $('#vRows').appendChild(div);
+}
+function getVRows() { return $$('#vRows .vlsm-row').map(r => ({ name: r.querySelector('.vn').value.trim(), hosts: parseInt(r.querySelector('.vh').value, 10) })).filter(r => r.name || Number.isFinite(r.hosts)); }
+function saveVRows() { lsSet('vlsm', { net: $('#vNet').value, rows: getVRows() }); }
+function setExample() {
+  $('#vRows').innerHTML = '';
+  [['LAN Siège', 100], ['Agence Lyon', 50], ['Agence Nantes', 25], ['Wi-Fi invités', 20], ['Liaison WAN 1', 2], ['Liaison WAN 2', 2]].forEach(r => addVRow(...r));
+  saveVRows();
+}
+let lastVlsm = null;
+async function doVlsm() {
+  const reqs = getVRows();
+  if (reqs.some(r => !Number.isFinite(r.hosts) || r.hosts < 1)) { $('#vOut').innerHTML = errBox(new Error('Chaque besoin doit avoir un nombre d\'hôtes ≥ 1.')); return; }
+  const body = { network: $('#vNet').value.trim(), requirements: reqs };
+  $('#vGo').disabled = true;
+  try { const d = await api('/vlsm', body); lastVlsm = body; renderVlsm(d); $('#vCsv').disabled = false; }
+  catch (e) { $('#vOut').innerHTML = errBox(e); $('#vCsv').disabled = true; }
+  finally { $('#vGo').disabled = false; }
+}
+const COLORS = ['#6366f1', '#22d3ee', '#22c55e', '#f59e0b', '#ec4899', '#a78bfa', '#14b8a6', '#f97316', '#84cc16', '#e879f9'];
+function renderVlsm(d) {
+  const v4 = d.version === 4;
+  let html = d.notes.map(n => `<div class="note">${esc(n)}</div>`).join('');
+  if (d.failed) html += `<div class="err">${d.failed} besoin(s) n'ont pas pu être alloués : espace insuffisant dans ${esc(d.network)}.</div>`;
+  const ok = d.allocations.filter(a => a.ok);
+  const total = Number(d.total);
+  html += `<div class="card"><div class="stats">${stat('Réseau', d.network)}${stat('Sous-réseaux alloués', `${d.allocated} / ${d.allocations.length}`)}${stat('Espace utilisé', d.used_pct + ' %', `${Number(d.used).toLocaleString('fr-FR')} / ${Number(d.total).toLocaleString('fr-FR')} adresses`)}${stat('Hôtes demandés', String(d.requested_hosts))}</div>
+    <div class="meter" style="margin-top:12px" title="Occupation du réseau">${ok.map((a, i) => { const size = 2 ** (d.version === 4 ? 32 - Number(a.cidr.split('/')[1]) : 128 - Number(a.cidr.split('/')[1])); return `<i title="${esc(a.name)} ${esc(a.cidr)}" style="width:${Math.max(0.3, size / total * 100)}%;background:${COLORS[i % COLORS.length]}"></i>`; }).join('')}</div></div>`;
+  html += `<div class="card"><div class="tablewrap"><table><thead><tr><th>Nom</th><th class="num">Demandés</th><th>Sous-réseau</th>${v4 ? '<th>Masque</th>' : ''}<th>Plage d'hôtes</th>${v4 ? '<th>Diffusion</th>' : ''}<th class="num">Dispo.</th><th class="num">Efficacité</th></tr></thead><tbody>
+    ${d.allocations.map((a, i) => a.ok ? `<tr><td><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${COLORS[ok.indexOf(a) % COLORS.length]};margin-right:6px"></i>${esc(a.name)}</td><td class="num">${a.hosts}</td><td class="mono"><span class="link" data-copy="${esc(a.cidr)}">${esc(a.cidr)}</span></td>${v4 ? `<td class="mono">${esc(a.netmask)}</td>` : ''}<td class="mono small">${esc(a.first)} – ${esc(a.last)}</td>${v4 ? `<td class="mono">${esc(a.broadcast)}</td>` : ''}<td class="num">${esc(a.usable)}</td><td class="num">${a.efficiency} %</td></tr>`
+      : `<tr class="bad"><td>${esc(a.name)}</td><td class="num">${a.hosts}</td><td colspan="${v4 ? 6 : 4}">Non alloué — ${esc(a.reason)} (besoin d'un /${a.prefix})</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  html += `<div class="card"><h3>Espace libre restant <span class="pill">${d.free_count} bloc(s)</span></h3>${d.free.length ? `<div class="mono small">${d.free.map(f => `<span class="link" data-copy="${esc(f)}">${esc(f)}</span>`).join(' · ')}</div>` : '<span class="muted small">Aucun — le réseau est entièrement utilisé.</span>'}</div>`;
+  $('#vOut').innerHTML = html;
+}
+$('#vAdd').onclick = () => { addVRow(); $$('#vRows .vn').pop().focus(); };
+$('#vExample').onclick = setExample;
+$('#vGo').onclick = doVlsm;
+$('#vNet').addEventListener('input', saveVRows);
+$('#vCsv').onclick = async () => {
+  if (!lastVlsm) return;
+  $('#vCsv').disabled = true;
+  try { const d = await api('/export/vlsm', lastVlsm); download(d.file); } catch (e) { toast(e.message); }
+  finally { $('#vCsv').disabled = false; }
+};
+(function initV() {
+  const s = lsGet('vlsm', null);
+  if (s && s.rows && s.rows.length) { $('#vNet').value = s.net || $('#vNet').value; s.rows.forEach(r => addVRow(r.name, Number.isFinite(r.hosts) ? r.hosts : '')); }
+  else setExample();
+})();
+
+/* ── Appartenance ── */
+async function doMember() {
+  $('#mGo').disabled = true;
+  lsSet('member', { ips: $('#mIps').value, nets: $('#mNets').value });
+  try {
+    const d = await api('/membership', { ips: $('#mIps').value, networks: $('#mNets').value });
+    let html = d.errors.length ? `<div class="err">${d.errors.map(esc).join('<br>')}</div>` : '';
+    if (d.results.length) {
+      html += `<div class="card"><h3>Appartenance des adresses</h3><table><thead><tr><th>Adresse</th><th>Résultat</th><th>Réseaux contenant l'adresse (le plus spécifique en premier)</th></tr></thead><tbody>
+        ${d.results.map(r => `<tr><td class="mono">${esc(r.ip)}</td><td>${r.match ? '<span class="pill ok">✔ appartient</span>' : '<span class="pill bad">✖ hors réseaux</span>'}</td>
+        <td class="mono small">${r.networks.map((n, i) => `${i === 0 ? '<b>' : ''}${esc(n.network)}${i === 0 ? '</b>' : ''}${n.note ? ` <span class="pill warn">${esc(n.note)}</span>` : ''}`).join('<br>') || '<span class="muted">—</span>'}</td></tr>`).join('')}
+        </tbody></table></div>`;
+    }
+    html += `<div class="card"><h3>Chevauchements entre réseaux ${d.overlaps.length ? `<span class="pill warn">${d.overlaps.length}</span>` : '<span class="pill ok">aucun</span>'}</h3>`;
+    if (d.overlaps.length) html += `<table><thead><tr><th>Réseau A</th><th>Relation</th><th>Réseau B</th><th>Zone commune</th></tr></thead><tbody>${d.overlaps.map(o => `<tr><td class="mono">${esc(o.a)}</td><td>${esc(o.relation === 'A ⊂ B' ? 'A est inclus dans B' : o.relation === 'B ⊂ A' ? 'B est inclus dans A' : o.relation)}</td><td class="mono">${esc(o.b)}</td><td class="mono">${esc(o.common)}</td></tr>`).join('')}</tbody></table>`;
+    else html += `<div class="small muted">Les ${d.networks.length} réseau(x) saisis sont disjoints.</div>`;
+    const norm = d.networks.filter(n => n.normalized);
+    if (norm.length) html += `<div class="small muted" style="margin-top:8px">Normalisés : ${norm.map(n => `${esc(n.input)} → <span class="mono">${esc(n.network)}</span>`).join(', ')}</div>`;
+    html += `</div>`;
+    $('#mOut').innerHTML = html;
+  } catch (e) { $('#mOut').innerHTML = errBox(e); }
+  finally { $('#mGo').disabled = false; }
+}
+$('#mGo').onclick = doMember;
+
+/* ── Agrégation ── */
+async function doAggr() {
+  $('#aGo').disabled = true;
+  lsSet('aggr', $('#aNets').value);
+  try {
+    const d = await api('/summarize', { networks: $('#aNets').value });
+    let html = d.errors.length ? `<div class="err">${d.errors.map(esc).join('<br>')}</div>` : '';
+    for (const v of d.versions) {
+      html += `<div class="card"><h3>IPv${v.version} <span class="pill">${v.input} réseau(x) → ${v.summary_count}</span>${v.exact ? '<span class="pill ok">agrégation exacte en une route</span>' : ''}</h3>
+        <div class="grid2"><div><div class="small muted" style="margin-bottom:6px">Agrégation exacte (sans adresse supplémentaire)</div>
+          <div class="mono">${v.summarized.map(s => `<div><span class="link" data-copy="${esc(s)}">${esc(s)}</span></div>`).join('')}</div>
+          <div class="small muted" style="margin-top:6px">${esc(v.addresses_fmt)} adresses couvertes</div>
+          <button class="sm" style="margin-top:8px" data-copy="${esc(v.summarized.join('\n'))}">📋 Copier la liste</button></div>
+        <div><div class="small muted" style="margin-bottom:6px">Super-réseau unique couvrant tout</div>
+          <div class="mono" style="font-size:16px"><span class="link" data-copy="${esc(v.supernet)}">${esc(v.supernet)}</span></div>
+          <div class="small ${v.supernet_extra === '0' ? 'q-ok' : 'muted'}" style="margin-top:6px">${v.supernet_extra === '0' ? 'Aucune adresse superflue.' : `Inclut ${esc(v.supernet_extra_fmt)} adresse(s) hors des réseaux saisis (sur ${esc(v.supernet_addresses_fmt)}).`}</div></div></div></div>`;
+    }
+    $('#aOut').innerHTML = html;
+  } catch (e) { $('#aOut').innerHTML = errBox(e); }
+  finally { $('#aGo').disabled = false; }
+}
+$('#aGo').onclick = doAggr;
+
+/* Init */
+const m0 = lsGet('member', null); if (m0) { $('#mIps').value = m0.ips || ''; $('#mNets').value = m0.nets || ''; }
+$('#aNets').value = lsGet('aggr', '');
+$('#cInput').value = lsGet('calc', '192.168.1.10/24');
+doCalc(true);
+showTab(lsGet('tab', 'calc'));
+</script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wi-Fi</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --bg: #0f0f12; --card: #18181b; --card2: #1f1f23; --border: #27272a; --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --danger: #ef4444; --ok: #22c55e; --warn: #f59e0b; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--card2); border-radius: 6px; padding: 7px 14px; white-space: nowrap; }
+  button:hover { background: #2a2a30; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #4f46e5; }
+  button.danger { color: #fca5a5; }
+  button.dangerf { background: var(--danger); border-color: var(--danger); color: #fff; }
+  button.sm { padding: 3px 9px; font-size: 12px; }
+  input, select { background: #111114; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; outline: none; min-width: 0; }
+  input:focus { border-color: var(--accent); }
+  header { display: flex; align-items: center; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 10px 10px 0; font-weight: 600; }
+  header .badge { margin: 0 14px 10px 0; }
+  .tab { border: none; background: transparent; border-radius: 6px 6px 0 0; padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); background: #222226; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 16px; max-width: 1150px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card h2 .sp { flex: 1; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: #111114; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; word-break: break-all; }
+  .stat .s { font-size: 12px; color: var(--muted); }
+  .hero { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
+  .hero .ssid { font-size: 22px; font-weight: 700; }
+  .bars4 { display: inline-flex; align-items: flex-end; gap: 3px; height: 28px; }
+  .bars4 i { width: 7px; background: #3f3f46; border-radius: 2px; }
+  .bars4 i.on { background: var(--ok); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; }
+  th.sort { cursor: pointer; user-select: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.me td { background: rgba(99,102,241,.08); }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #27272a; color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .pill.ok { background: rgba(34,197,94,.15); color: #86efac; }
+  .pill.bad { background: rgba(239,68,68,.12); color: #fca5a5; }
+  .pill.warn { background: rgba(245,158,11,.14); color: #fcd34d; }
+  .pill.acc { background: rgba(99,102,241,.18); color: #c7d2fe; }
+  .sig { display: inline-flex; align-items: center; gap: 6px; }
+  .sig .b { width: 60px; height: 6px; background: #111114; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+  .sig .b i { display: block; height: 100%; }
+  .note { font-size: 13px; color: #fcd34d; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .err { color: #fecaca; background: rgba(239,68,68,.1); border: 1px solid var(--danger); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .tip { position: absolute; pointer-events: none; background: #0b0b0e; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 12px; white-space: nowrap; display: none; z-index: 3; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .pwd { display: inline-flex; gap: 6px; align-items: center; }
+  .pwd code { background: #111114; border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; font-size: 12.5px; }
+  .confirm { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: #fca5a5; }
+  .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid #3f3f46; border-top-color: var(--accent); border-radius: 50%; animation: rot .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #3f1d1d; border: 1px solid var(--danger); color: #fecaca; padding: 8px 14px; border-radius: 8px; display: none; z-index: 99; max-width: 90%; }
+  #toast.ok { background: #14301f; border-color: var(--ok); color: #bbf7d0; }
+  .hide { display: none !important; }
+  .tblwrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📶 Wi-Fi</h1>
+  <span class="pill badge" id="adminBadge">…</span>
+  <button class="tab active" data-tab="conn">Connexion</button>
+  <button class="tab" data-tab="nets">Réseaux à proximité</button>
+  <button class="tab" data-tab="profiles">Profils enregistrés</button>
+</header>
+<main>
+  <!-- CONNEXION -->
+  <section class="panel active" id="p-conn">
+    <div id="connMsg"></div>
+    <div class="card" id="connCard"><span class="spin"></span>Lecture de l'interface…</div>
+    <div class="card">
+      <h2>Signal en direct <span class="pill" id="liveInfo">toutes les 2 s</span><span class="sp"></span>
+        <button class="sm" id="livePause">⏸ Pause</button><button class="sm" id="liveClear">Effacer</button></h2>
+      <div class="chart" id="sigChart"></div>
+      <div class="small muted" style="margin-top:6px">Qualité du signal (%) rapportée par Windows sur les 3 dernières minutes. Survolez la courbe pour voir le débit et le RSSI.</div>
+    </div>
+  </section>
+
+  <!-- RESEAUX -->
+  <section class="panel" id="p-nets">
+    <div class="card">
+      <div class="toolbar">
+        <button class="primary" id="scanBtn">↻ Nouveau balayage</button>
+        <input id="netQ" placeholder="Filtrer par SSID / BSSID…" style="flex:1;min-width:180px" />
+        <span class="small muted" id="netInfo"></span>
+      </div>
+      <div id="netMsg"></div>
+      <div class="tblwrap"><table><thead><tr>
+        <th class="sort" data-k="ssid">SSID</th><th class="sort" data-k="bssid">BSSID</th><th class="sort num" data-k="signal">Signal</th>
+        <th class="sort num" data-k="channel">Canal</th><th class="sort" data-k="band_key">Bande</th><th>Radio</th><th>Sécurité</th><th class="num">Clients</th>
+      </tr></thead><tbody id="netList"><tr><td colspan="8" class="muted">Chargement…</td></tr></tbody></table></div>
+    </div>
+    <div id="chanCharts"></div>
+  </section>
+
+  <!-- PROFILS -->
+  <section class="panel" id="p-profiles">
+    <div class="card">
+      <div class="toolbar">
+        <button id="profReload">↻ Actualiser</button>
+        <button id="profCsv">Exporter la liste (CSV, sans mots de passe)</button>
+        <span class="small muted" id="profInfo"></span>
+      </div>
+      <div class="tblwrap"><table><thead><tr><th>Profil</th><th>Sécurité</th><th>Connexion</th><th>Portée</th><th>Mot de passe</th><th></th></tr></thead>
+        <tbody id="profList"><tr><td colspan="6" class="muted">Chargement…</td></tr></tbody></table></div>
+      <div class="small muted" style="margin-top:8px">Les mots de passe ne sont lus qu'à la demande et ne sont jamais enregistrés ni exportés.</div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const PORT = parseInt(location.port) || 8765;
+const BASE = `http://127.0.0.1:${PORT}/modules/wifi-tools/api`;
+const $ = s => document.querySelector(s);
+const SERIES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9'];
+const OTHER = '#52525b';
+let IS_ADMIN = false;
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function v(x) { return (x === null || x === undefined || x === '') ? '<span class="muted">–</span>' : esc(x); }
+function toast(msg, ok) { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3500); }
+async function api(path, opts = {}) {
+  const o = { method: opts.method || 'GET', headers: {} };
+  if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  let r; try { r = await fetch(BASE + path, o); } catch (e) { throw new Error('Backend injoignable'); }
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok || (data && data.error)) {
+    const er = new Error((data && (data.error || (data.detail && 'Paramètres invalides'))) || ('Erreur ' + r.status));
+    er.code = data && data.code; throw er;
+  }
+  return data;
+}
+function copyText(t, label) {
+  const done = () => toast(label || 'Copié', true);
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { toast('Copie impossible'); } ta.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+}
+function download(fn) { const a = document.createElement('a'); a.href = `${BASE}/file/${encodeURIComponent(fn)}`; a.download = fn; document.body.appendChild(a); a.click(); a.remove(); }
+function sigColor(s) { return s >= 70 ? 'var(--ok)' : s >= 40 ? 'var(--warn)' : 'var(--danger)'; }
+function sigCell(s) { if (s == null) return '–'; return `<span class="sig"><span class="b"><i style="width:${s}%;background:${sigColor(s)}"></i></span>${s} %</span>`; }
+function bandLabel(k) { return k === '2.4' ? '2,4 GHz' : k ? k + ' GHz' : '–'; }
+function quality(s) { return s >= 80 ? 'Excellent' : s >= 60 ? 'Bon' : s >= 40 ? 'Moyen' : 'Faible'; }
+
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + b.dataset.tab));
+  if (b.dataset.tab === 'nets' && !nets.loaded) loadNets(false);
+  if (b.dataset.tab === 'profiles' && !profs.loaded) loadProfiles();
+});
+
+/* ── Connexion ── */
+async function loadConn() {
+  try {
+    const r = await api('/interfaces');
+    $('#connMsg').innerHTML = r.message ? `<div class="note">${esc(r.message)}</div>` : '';
+    if (!r.interfaces.length) { $('#connCard').innerHTML = '<span class="muted">Aucune interface Wi-Fi.</span>'; return; }
+    $('#connCard').innerHTML = r.interfaces.map(i => {
+      const s = i.signal, on = s == null ? 0 : Math.ceil(s / 25);
+      if (!i.connected) return `<h2>${esc(i.name)} <span class="pill bad">${esc(i.state || 'déconnecté')}</span></h2><div class="muted small">${esc(i.description || '')}</div>`;
+      return `<div class="hero"><span class="bars4">${[1, 2, 3, 4].map(n => `<i class="${n <= on ? 'on' : ''}" style="height:${n * 25}%"></i>`).join('')}</span>
+        <div><div class="ssid">${esc(i.ssid)}</div><div class="small muted">${esc(i.name)} · ${esc(i.description || '')}</div></div>
+        <span class="pill ok">Connecté</span></div>
+      <div class="stats">
+        <div class="stat"><div class="l">Signal</div><div class="v" style="color:${sigColor(s)}">${s ?? '–'} %</div><div class="s">${quality(s)}</div></div>
+        <div class="stat"><div class="l">RSSI</div><div class="v">${i.rssi ?? '–'} dBm</div><div class="s">${i.rssi_estimated ? 'estimé depuis le %' : 'mesuré'}</div></div>
+        <div class="stat"><div class="l">Canal</div><div class="v">${i.channel ?? '–'}</div><div class="s">${esc(i.band || bandLabel(i.band_key))}</div></div>
+        <div class="stat"><div class="l">Débit réception</div><div class="v">${i.rx_mbps ?? '–'}</div><div class="s">Mbit/s</div></div>
+        <div class="stat"><div class="l">Débit émission</div><div class="v">${i.tx_mbps ?? '–'}</div><div class="s">Mbit/s</div></div>
+        <div class="stat"><div class="l">Norme radio</div><div class="v" style="font-size:15px">${v(i.radio)}</div></div>
+        <div class="stat"><div class="l">Sécurité</div><div class="v" style="font-size:15px">${v(i.auth)}</div><div class="s">${esc(i.cipher || '')}</div></div>
+        <div class="stat"><div class="l">BSSID (point d'accès)</div><div class="v mono" style="font-size:14px">${v(i.bssid)}</div></div>
+        <div class="stat"><div class="l">Adresse MAC</div><div class="v mono" style="font-size:14px">${v(i.mac)}</div></div>
+      </div>`;
+    }).join('<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">');
+  } catch (e) { $('#connCard').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+/* Live signal graph */
+const live = { pts: [], paused: false, max: 90, timer: null, lastSsid: null };
+async function tick() {
+  if (live.paused || document.hidden) return;
+  try {
+    const s = await api('/signal');
+    if (s.connected) {
+      if (live.lastSsid && s.bssid !== live.lastSsid) loadConn();
+      live.lastSsid = s.bssid;
+      live.pts.push({ t: Date.now(), s: s.signal, rssi: s.rssi, est: s.rssi_estimated, rx: s.rx_mbps, tx: s.tx_mbps, ssid: s.ssid });
+    } else live.pts.push({ t: Date.now(), s: null });
+    if (live.pts.length > live.max) live.pts.shift();
+    drawLive();
+  } catch (e) { /* silencieux : la boucle réessaie */ }
+}
+function drawLive() {
+  const W = 760, H = 180, L = 34, R = 10, T = 10, B = 22, iw = W - L - R, ih = H - T - B;
+  const pts = live.pts, n = live.max;
+  const x = i => L + (n - pts.length + i) * iw / (n - 1), y = s => T + ih - s * ih / 100;
+  let grid = '';
+  for (const g of [0, 25, 50, 75, 100]) grid += `<line x1="${L}" x2="${W - R}" y1="${y(g)}" y2="${y(g)}" stroke="#27272a" stroke-width="1"/><text x="${L - 6}" y="${y(g) + 4}" text-anchor="end" fill="#71717a" font-size="10">${g}</text>`;
+  grid += `<text x="${W - R}" y="${H - 4}" text-anchor="end" fill="#71717a" font-size="10">maintenant</text><text x="${L}" y="${H - 4}" fill="#71717a" font-size="10">−3 min</text>`;
+  let path = '', segs = [];
+  pts.forEach((p, i) => { if (p.s == null) { if (path) segs.push(path); path = ''; } else path += (path ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(p.s).toFixed(1); });
+  if (path) segs.push(path);
+  const last = [...pts].reverse().find(p => p.s != null);
+  const lastIdx = last ? pts.lastIndexOf(last) : -1;
+  const svg = `<svg viewBox="0 0 ${W} ${H}" id="liveSvg">${grid}
+    ${segs.map(d => `<path d="${d}" fill="none" stroke="#6366f1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).join('')}
+    ${last ? `<circle cx="${x(lastIdx)}" cy="${y(last.s)}" r="4" fill="#6366f1" stroke="#18181b" stroke-width="2"/><text x="${Math.min(x(lastIdx), W - R - 30)}" y="${y(last.s) - 9}" fill="#e2e2e8" font-size="11" text-anchor="middle">${last.s} %</text>` : ''}
+    <line id="liveX" y1="${T}" y2="${T + ih}" stroke="#71717a" stroke-width="1" stroke-dasharray="3 3" style="display:none"/>
+    <rect x="${L}" y="${T}" width="${iw}" height="${ih}" fill="transparent" id="liveHit"/></svg><div class="tip" id="liveTip"></div>`;
+  $('#sigChart').innerHTML = svg;
+  $('#liveInfo').textContent = live.paused ? 'en pause' : (last ? `${last.ssid} · ${pts.length} mesures` : 'toutes les 2 s');
+  const hit = $('#liveHit');
+  hit.onmousemove = e => {
+    const svgEl = $('#liveSvg'), rect = svgEl.getBoundingClientRect(), sx = (e.clientX - rect.left) * W / rect.width;
+    const i = Math.round((sx - L) * (n - 1) / iw) - (n - pts.length);
+    const p = pts[i]; const tip = $('#liveTip'), xl = $('#liveX');
+    if (!p) { tip.style.display = 'none'; xl.style.display = 'none'; return; }
+    xl.setAttribute('x1', x(i)); xl.setAttribute('x2', x(i)); xl.style.display = '';
+    tip.innerHTML = p.s == null ? `${new Date(p.t).toLocaleTimeString('fr-FR')}<br>Déconnecté` : `<b>${new Date(p.t).toLocaleTimeString('fr-FR')}</b><br>Signal : ${p.s} %<br>RSSI : ${p.rssi} dBm${p.est ? ' (estimé)' : ''}<br>Débit : ↓ ${p.rx ?? '–'} / ↑ ${p.tx ?? '–'} Mbit/s`;
+    tip.style.display = 'block';
+    const px = x(i) * rect.width / W; tip.style.left = Math.min(px + 12, rect.width - 170) + 'px'; tip.style.top = '8px';
+  };
+  hit.onmouseleave = () => { $('#liveTip').style.display = 'none'; $('#liveX').style.display = 'none'; };
+}
+$('#livePause').onclick = () => { live.paused = !live.paused; $('#livePause').textContent = live.paused ? '▶ Reprendre' : '⏸ Pause'; drawLive(); };
+$('#liveClear').onclick = () => { live.pts = []; drawLive(); };
+
+/* ── Réseaux ── */
+const nets = { loaded: false, list: [], key: 'signal', dir: -1, q: '', current: null };
+async function loadNets(rescan) {
+  const btn = $('#scanBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>' + (rescan ? 'Balayage…' : 'Chargement…');
+  try {
+    if (rescan) { try { await api('/scan', { method: 'POST' }); } catch (e) {} await new Promise(r => setTimeout(r, 4000)); }
+    const [r, s] = await Promise.all([api('/networks'), api('/signal').catch(() => null)]);
+    nets.loaded = true; nets.list = r.networks; nets.current = s && s.connected ? s.bssid : null;
+    let msg = '';
+    if (r.denied) msg = `<div class="note">📍 ${esc(r.message)}<div style="margin-top:8px"><button class="sm" id="openLoc">Ouvrir les paramètres de localisation</button></div></div>`;
+    else if (r.message) msg = `<div class="note">${esc(r.message)}</div>`;
+    $('#netMsg').innerHTML = msg;
+    const ol = $('#openLoc'); if (ol) ol.onclick = () => api('/open-location-settings', { method: 'POST' }).then(() => toast('Paramètres ouverts', true)).catch(e => toast(e.message));
+    $('#netInfo').textContent = `${new Set(r.networks.map(n => n.ssid)).size} réseaux · ${r.networks.length} points d'accès · ${new Date().toLocaleTimeString('fr-FR')}`;
+    drawNets(); drawChannels();
+  } catch (e) { $('#netMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+  finally { btn.disabled = false; btn.textContent = '↻ Nouveau balayage'; }
+}
+function drawNets() {
+  const q = nets.q.toLowerCase(), { key, dir } = nets;
+  const list = nets.list.filter(n => !q || (n.ssid + ' ' + n.bssid).toLowerCase().includes(q)).sort((a, b) => {
+    const x = a[key] ?? '', y = b[key] ?? ''; return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { numeric: true })) * dir;
+  });
+  document.querySelectorAll('#p-nets th.sort').forEach(th => { th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (th.dataset.k === key ? (dir > 0 ? ' ▲' : ' ▼') : ''); });
+  $('#netList').innerHTML = list.map(n => {
+    const open = /ouvert|open|aucun|none/i.test(n.auth || '');
+    return `<tr class="${n.bssid === nets.current ? 'me' : ''}"><td>${n.ssid ? esc(n.ssid) : '<span class="muted">(masqué)</span>'}${n.bssid === nets.current ? ' <span class="pill acc">connecté</span>' : ''}</td>
+    <td class="mono">${esc(n.bssid)}</td><td class="num">${sigCell(n.signal)}<div class="small muted">≈ ${n.rssi ?? '–'} dBm</div></td><td class="num">${v(n.channel)}</td><td>${bandLabel(n.band_key)}</td>
+    <td class="small">${v(n.radio)}</td><td><span class="pill ${open ? 'bad' : 'ok'}">${esc(n.auth || '–')}</span> <span class="small muted">${esc(n.cipher || '')}</span></td>
+    <td class="num">${n.stations ?? '–'}${n.utilization != null ? `<div class="small muted">canal ${n.utilization} %</div>` : ''}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="muted">Aucun réseau</td></tr>';
+}
+document.querySelectorAll('#p-nets th.sort').forEach(th => th.onclick = () => { const k = th.dataset.k; nets.dir = nets.key === k ? -nets.dir : (k === 'signal' ? -1 : 1); nets.key = k; drawNets(); });
+$('#netQ').oninput = e => { nets.q = e.target.value; drawNets(); };
+$('#scanBtn').onclick = () => loadNets(true);
+
+const BANDS = {
+  '2.4': { name: '2,4 GHz', chans: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], ticks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], span: 2 },
+  '5': { name: '5 GHz', chans: null, ticks: [36, 40, 44, 48, 52, 56, 60, 64, 100, 108, 116, 124, 132, 140, 149, 157, 165], span: 2 },
+  '6': { name: '6 GHz', chans: null, ticks: [1, 33, 65, 97, 129, 161, 193, 225], span: 2 },
+};
+function drawChannels() {
+  const byBand = {};
+  nets.list.forEach(n => { if (n.channel != null && n.band_key) (byBand[n.band_key] = byBand[n.band_key] || []).push(n); });
+  // Couleur suivant l'entité (SSID), ordre fixe par signal max décroissant
+  const ssids = [...new Map(nets.list.slice().sort((a, b) => (b.signal || 0) - (a.signal || 0)).map(n => [n.ssid || '(masqué)', 1])).keys()];
+  const color = s => { const i = ssids.indexOf(s || '(masqué)'); return i >= 0 && i < SERIES.length ? SERIES[i] : OTHER; };
+  const html = Object.keys(BANDS).filter(k => byBand[k]).map(k => {
+    const B = BANDS[k], list = byBand[k];
+    let lo, hi;
+    if (k === '2.4') { lo = -1; hi = 16; } else { const cs = list.map(n => n.channel); lo = Math.min(...cs, k === '5' ? 36 : 1) - 4; hi = Math.max(...cs, k === '5' ? 64 : 33) + 4; }
+    const W = 760, H = 200, L = 34, R = 10, T = 14, Bm = 24, iw = W - L - R, ih = H - T - Bm;
+    const x = c => L + (c - lo) * iw / (hi - lo), y = s => T + ih - s * ih / 100;
+    let g = '';
+    for (const s of [0, 50, 100]) g += `<line x1="${L}" x2="${W - R}" y1="${y(s)}" y2="${y(s)}" stroke="#27272a"/><text x="${L - 6}" y="${y(s) + 4}" text-anchor="end" fill="#71717a" font-size="10">${s}</text>`;
+    B.ticks.filter(c => c >= lo && c <= hi).forEach(c => g += `<text x="${x(c)}" y="${H - 6}" text-anchor="middle" fill="#71717a" font-size="10">${c}</text>`);
+    const sorted = list.slice().sort((a, b) => (a.signal || 0) - (b.signal || 0));
+    const shapes = sorted.map((n, i) => {
+      const c = n.channel, s = n.signal || 0, x0 = x(c - B.span), x1 = x(c + B.span), xm = x(c), yt = y(s), yb = y(0);
+      const d = `M${x0},${yb} C${xm - (xm - x0) * .35},${yt} ${xm - (xm - x0) * .2},${yt} ${xm},${yt} C${xm + (x1 - xm) * .2},${yt} ${xm + (x1 - xm) * .35},${yt} ${x1},${yb}`;
+      const col = color(n.ssid);
+      return `<path d="${d}" fill="${col}" fill-opacity=".14" stroke="${col}" stroke-width="2" stroke-linejoin="round" data-i="${nets.list.indexOf(n)}" class="cshape" style="cursor:default"/>`;
+    }).join('');
+    // Étiquettes directes : seulement les 4 signaux les plus forts
+    const labels = sorted.slice(-4).map(n => `<text x="${x(n.channel)}" y="${y(n.signal || 0) - 5}" text-anchor="middle" fill="#e2e2e8" font-size="10.5">${esc((n.ssid || '(masqué)').slice(0, 18))}</text>`).join('');
+    // Encombrement par canal
+    const counts = {}; list.forEach(n => counts[n.channel] = (counts[n.channel] || 0) + 1);
+    let advice = '';
+    if (k === '2.4') {
+      const score = ch => list.reduce((a, n) => a + (Math.abs(n.channel - ch) <= 4 ? (n.signal || 0) * (1 - Math.abs(n.channel - ch) / 5) : 0), 0);
+      const best = [1, 6, 11].sort((a, b) => score(a) - score(b))[0];
+      advice = `Canal le moins encombré parmi 1 / 6 / 11 : <b>${best}</b>. `;
+    }
+    const congest = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<span class="pill ${n >= 4 ? 'bad' : n >= 2 ? 'warn' : ''}">canal ${c} : ${n}</span>`).join(' ');
+    const legendSsids = [...new Set(list.map(n => n.ssid || '(masqué)'))].sort((a, b) => ssids.indexOf(a) - ssids.indexOf(b));
+    const shown = legendSsids.filter(s => ssids.indexOf(s) < SERIES.length), others = legendSsids.length - shown.length;
+    return `<div class="card"><h2>Occupation des canaux — ${B.name} <span class="pill">${list.length} point(s) d'accès</span></h2>
+      <div class="chart" data-band="${k}"><svg viewBox="0 0 ${W} ${H}">${g}${shapes}${labels}</svg><div class="tip"></div></div>
+      <div class="legend">${shown.map(s => `<span><i style="background:${color(s)}"></i>${esc(s)}</span>`).join('')}${others ? `<span><i style="background:${OTHER}"></i>Autres (${others})</span>` : ''}</div>
+      <div class="small" style="margin-top:10px">${advice}<span class="muted">Réseaux par canal :</span> ${congest}</div></div>`;
+  }).join('');
+  $('#chanCharts').innerHTML = html || '';
+  document.querySelectorAll('#chanCharts .chart').forEach(ch => {
+    const tip = ch.querySelector('.tip');
+    ch.querySelectorAll('.cshape').forEach(p => {
+      p.onmouseenter = () => p.setAttribute('fill-opacity', '.35');
+      p.onmouseleave = () => { p.setAttribute('fill-opacity', '.14'); tip.style.display = 'none'; };
+      p.onmousemove = e => {
+        const n = nets.list[+p.dataset.i], r = ch.getBoundingClientRect();
+        tip.innerHTML = `<b>${esc(n.ssid || '(masqué)')}</b><br>${esc(n.bssid)}<br>Canal ${n.channel} · ${n.signal} % (≈ ${n.rssi} dBm)<br>${esc(n.radio || '')}`;
+        tip.style.display = 'block'; tip.style.left = Math.min(e.clientX - r.left + 12, r.width - 190) + 'px'; tip.style.top = Math.max(0, e.clientY - r.top - 70) + 'px';
+      };
+    });
+  });
+}
+
+/* ── Profils ── */
+const profs = { loaded: false, list: [], details: {}, pwd: {}, confirm: null, busy: {} };
+async function loadProfiles() {
+  profs.loaded = true; profs.pwd = {}; profs.confirm = null;
+  try {
+    const r = await api('/profiles'); profs.list = r.profiles; drawProfiles();
+    const d = await api('/profiles/details'); profs.details = {}; d.profiles.forEach(p => profs.details[p.name] = p); drawProfiles();
+  } catch (e) { $('#profList').innerHTML = `<tr><td colspan="6"><div class="err">${esc(e.message)}</div></td></tr>`; }
+}
+function drawProfiles() {
+  $('#profInfo').textContent = `${profs.list.length} profil(s)`;
+  $('#profList').innerHTML = profs.list.map((p, i) => {
+    const d = profs.details[p.name], pw = profs.pwd[p.name];
+    let pwHtml;
+    if (!pw) pwHtml = `<button class="sm" data-act="show" data-i="${i}">${profs.busy[p.name] ? '<span class="spin"></span>' : '👁'} Afficher le mot de passe</button>`;
+    else if (pw.needs_admin) pwHtml = `<span class="small muted">Droits admin requis</span> <button class="sm" data-act="show-admin" data-i="${i}">🛡 Afficher (admin)</button>`;
+    else if (pw.open) pwHtml = '<span class="pill">Réseau ouvert</span>';
+    else if (!pw.value) pwHtml = '<span class="muted small">Aucune clé enregistrée</span>';
+    else pwHtml = `<span class="pwd"><code>${pw.visible ? esc(pw.value) : '•'.repeat(Math.min(pw.value.length, 16))}</code>
+      <button class="sm" data-act="toggle" data-i="${i}" title="${pw.visible ? 'Masquer' : 'Afficher'}">${pw.visible ? '🙈' : '👁'}</button>
+      <button class="sm" data-act="copy" data-i="${i}" title="Copier">📋</button></span>`;
+    let act;
+    if (profs.confirm && profs.confirm.name === p.name) {
+      act = `<span class="confirm">${profs.confirm.admin ? 'Droits admin requis — réessayer avec UAC ?' : 'Oublier ce réseau ?'}
+        <button class="sm dangerf" data-act="${profs.confirm.admin ? 'forget-admin' : 'forget-yes'}" data-i="${i}">Oui, oublier</button><button class="sm" data-act="forget-no">Annuler</button></span>`;
+    } else act = `<button class="sm danger" data-act="forget" data-i="${i}" ${p.group_policy ? 'disabled title="Profil imposé par stratégie"' : ''}>${profs.busy['f:' + p.name] ? '<span class="spin"></span>' : '🗑'} Oublier</button>`;
+    return `<tr><td><b>${esc(p.name)}</b>${d && d.ssid && d.ssid !== p.name ? `<div class="small muted">SSID : ${esc(d.ssid)}</div>` : ''}${p.group_policy ? ' <span class="pill warn">GPO</span>' : ''}</td>
+      <td class="small">${d ? esc(d.auth.join(' / ') || '–') : '<span class="muted">…</span>'}</td>
+      <td class="small">${d ? v(d.connection_mode) : ''}</td><td class="small">${v(p.scope)}</td><td>${pwHtml}</td><td><div class="row-actions">${act}</div></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="muted">Aucun profil enregistré</td></tr>';
+}
+$('#profList').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const act = b.dataset.act, p = profs.list[+b.dataset.i];
+  if (act === 'forget-no') { profs.confirm = null; return drawProfiles(); }
+  if (!p) return;
+  if (act === 'show' || act === 'show-admin') {
+    profs.busy[p.name] = true; drawProfiles();
+    try {
+      const r = await api('/profiles/password', { method: 'POST', body: { name: p.name, elevate: act === 'show-admin' } });
+      profs.pwd[p.name] = { value: r.password, visible: true, open: r.open_network, needs_admin: r.needs_admin && act !== 'show-admin' };
+    } catch (er) { toast(er.message); }
+    profs.busy[p.name] = false; drawProfiles();
+  } else if (act === 'toggle') { profs.pwd[p.name].visible = !profs.pwd[p.name].visible; drawProfiles(); }
+  else if (act === 'copy') copyText(profs.pwd[p.name].value, 'Mot de passe copié');
+  else if (act === 'forget') { profs.confirm = { name: p.name, admin: false }; drawProfiles(); }
+  else if (act === 'forget-yes' || act === 'forget-admin') {
+    profs.confirm = null; profs.busy['f:' + p.name] = true; drawProfiles();
+    try {
+      await api('/profiles/forget', { method: 'POST', body: { name: p.name, elevate: act === 'forget-admin' } });
+      toast(`Profil « ${p.name} » supprimé`, true);
+      profs.list = profs.list.filter(x => x.name !== p.name); delete profs.pwd[p.name];
+    } catch (er) {
+      if (er.code === 'NEEDS_ADMIN') profs.confirm = { name: p.name, admin: true }; else toast(er.message);
+    }
+    profs.busy['f:' + p.name] = false; drawProfiles();
+  }
+});
+$('#profReload').onclick = loadProfiles;
+$('#profCsv').onclick = async () => {
+  const b = $('#profCsv'); b.disabled = true;
+  try { const r = await api('/export/profiles', { method: 'POST' }); download(r.filename); toast(`${r.count} profils exportés`, true); }
+  catch (e) { toast(e.message); } finally { b.disabled = false; }
+};
+
+/* ── Init ── */
+api('/status').then(s => {
+  IS_ADMIN = s.admin; const b = $('#adminBadge'); b.textContent = s.admin ? 'Administrateur' : 'Mode standard'; b.className = 'pill badge ' + (s.admin ? 'warn' : 'acc');
+  if (!s.wlan_available) $('#connMsg').innerHTML = '<div class="note">Aucune interface Wi-Fi disponible sur ce PC.</div>';
+}).catch(() => { $('#adminBadge').textContent = 'Hors ligne'; });
+loadConn();
+drawLive(); tick();
+live.timer = setInterval(tick, 2000);
+setInterval(() => { if (!document.hidden && document.querySelector('#p-conn.active')) loadConn(); }, 30000);
+</script>
+</body>
+</html>

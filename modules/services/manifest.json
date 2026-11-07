@@ -1,0 +1,29 @@
+{
+  "id": "services",
+  "name": "Services Windows",
+  "version": "1.0.0",
+  "description": "Liste, recherche et gestion des services Windows : démarrer, arrêter, redémarrer, type de démarrage.",
+  "category": "Système",
+  "tags": [
+    "windows",
+    "services",
+    "admin"
+  ],
+  "icon": "🧰",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "psutil"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

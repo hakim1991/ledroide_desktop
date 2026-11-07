@@ -3,6 +3,11 @@
   "name": "Générateur de mots de passe",
   "version": "1.0.0",
   "description": "Génère des mots de passe sécurisés avec contrôle de la longueur, des types de caractères et indicateur de force.",
+  "category": "Sécurité",
+  "tags": [
+    "mot de passe",
+    "génération"
+  ],
   "author": "LedroideDesktop",
   "entry": {
     "backend": "backend/main.py",

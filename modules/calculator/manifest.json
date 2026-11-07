@@ -3,6 +3,11 @@
   "name": "Calculatrice",
   "version": "1.0.0",
   "description": "Calculatrice normale et scientifique avec historique",
+  "category": "Maths & données",
+  "tags": [
+    "calcul",
+    "scientifique"
+  ],
   "icon": "⌗",
   "entry": {
     "backend": "backend/main.py",

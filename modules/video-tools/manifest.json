@@ -1,0 +1,29 @@
+{
+  "id": "video-tools",
+  "name": "Outils vidéo",
+  "version": "1.0.0",
+  "description": "Couper, compresser, convertir en GIF, extraire des images ou l'audio d'une vidéo (ffmpeg).",
+  "category": "Images & médias",
+  "tags": [
+    "vidéo",
+    "gif",
+    "conversion"
+  ],
+  "icon": "🎬",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "imageio-ffmpeg>=0.5,<1"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}
