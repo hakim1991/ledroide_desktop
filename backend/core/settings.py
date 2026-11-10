@@ -19,6 +19,13 @@ os.environ["LEDROIDE_DATA_DIR"] = str(DATA_DIR)
 # every app update, so only the modules shipped with the app live in MODULES_DIR.
 USER_MODULES_DIR = DATA_DIR / "installed-modules"
 
+# GitHub repository listing the modules offered in « Disponibles » (one folder per
+# module at its root). Empty LEDROIDE_CATALOG_REPO disables it. A private repo
+# needs GITHUB_TOKEN (menu « Variables »).
+CATALOG_REPO       = os.environ.get("LEDROIDE_CATALOG_REPO", "hakim1991/ledroide_module").strip()
+CATALOG_BRANCH     = os.environ.get("LEDROIDE_CATALOG_BRANCH", "main").strip() or "main"
+REMOTE_CATALOG_DIR = DATA_DIR / "remote-catalog"
+
 CONFIGS_FILE = DATA_DIR / "configs.json"
 STATE_FILE   = DATA_DIR / "state.json"
 

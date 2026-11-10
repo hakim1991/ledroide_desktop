@@ -96,6 +96,16 @@ async def deactivate_module(module_id: str):
     return await registry.deactivate(module_id)
 
 
+@app.get("/modules/catalog")
+async def catalog_info():
+    return registry.catalog_info()
+
+
+@app.post("/modules/catalog/refresh")
+async def catalog_refresh():
+    return await registry.refresh_catalog(force=True)
+
+
 @app.post("/modules/install")
 async def install_modules(payload: InstallManyPayload):
     return await registry.install_many(payload.ids)
@@ -186,6 +196,8 @@ async def get_env():
 async def set_env(payload: EnvPayload):
     variables, changed = env_store.replace(payload)
     await registry.broadcast(SYSTEM_CHANNEL, "env:changed", {"keys": changed})
+    if registry.remote.repo and set(changed) & {"GITHUB_TOKEN", "GH_TOKEN"}:
+        registry.schedule_catalog_refresh(force=True)
     return {"vars": variables, "changed": changed}
 
 

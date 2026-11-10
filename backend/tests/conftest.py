@@ -61,7 +61,7 @@ async def who(payload):
 '''
 
 
-def _write_module(root: Path, mid: str, code: str, helper: str | None = None, **manifest):
+def write_module(root: Path, mid: str, code: str, helper: str | None = None, **manifest):
     d = root / mid
     (d / "backend").mkdir(parents=True)
     (d / "frontend").mkdir()
@@ -79,11 +79,11 @@ def client(tmp_path, monkeypatch):
     available = tmp_path / "modules-available"
     modules.mkdir()
     available.mkdir()
-    _write_module(modules, "alpha", ALPHA, helper="alpha", database={"type": "sqlite"},
+    write_module(modules, "alpha", ALPHA, helper="alpha", database={"type": "sqlite"},
                   config_schema={"step": {"type": "integer", "default": 1}})
-    _write_module(modules, "beta", BETA, helper="beta")
-    _write_module(modules, "broken", "raise RuntimeError('boom')\n")
-    _write_module(available, "gamma", "from ledroide_sdk import Module\nmodule = Module(__file__)\n")
+    write_module(modules, "beta", BETA, helper="beta")
+    write_module(modules, "broken", "raise RuntimeError('boom')\n")
+    write_module(available, "gamma", "from ledroide_sdk import Module\nmodule = Module(__file__)\n")
     (available / "catalog.json").write_text(
         json.dumps({"modules": [{"id": "gamma", "name": "Gamma", "version": "1.0.0"}]})
     )
@@ -91,6 +91,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "MODULES_DIR", modules)
     monkeypatch.setattr(settings, "AVAILABLE_DIR", available)
     monkeypatch.setattr(settings, "USER_MODULES_DIR", tmp_path / "installed-modules")
+    monkeypatch.setattr(settings, "REMOTE_CATALOG_DIR", tmp_path / "remote-catalog")
+    monkeypatch.setattr(settings, "CATALOG_REPO", "")
+    (settings.DATA_DIR / "remote-catalog.json").unlink(missing_ok=True)
     for f in (settings.STATE_FILE, settings.CONFIGS_FILE):
         f.unlink(missing_ok=True)
 
@@ -101,4 +104,6 @@ def client(tmp_path, monkeypatch):
     with TestClient(main.app, base_url=BASE_URL) as c:
         c.modules_dir = modules
         c.user_modules_dir = tmp_path / "installed-modules"
+        c.remote_dir = tmp_path / "remote-catalog" / "content"
+        c.app_main = main
         yield c

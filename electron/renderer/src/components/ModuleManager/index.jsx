@@ -12,25 +12,70 @@ const TABS = [
   { id: 'available', label: 'Disponibles' },
 ]
 
+function timeAgo(ts) {
+  if (!ts) return 'jamais'
+  const s = Math.max(0, Date.now() / 1000 - ts)
+  if (s < 60) return "à l'instant"
+  if (s < 3600) return `il y a ${Math.round(s / 60)} min`
+  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`
+  return new Date(ts * 1000).toLocaleDateString('fr-FR')
+}
+
 const isInstalled = (m) => m.status === 'installed' || m.status === 'active' || m.status === 'error'
+
+const STATUS_FILTERS = [
+  { id: 'all',      label: 'Tous',        test: () => true },
+  { id: 'active',   label: 'Activés',     test: (m) => m.status === 'active' },
+  { id: 'inactive', label: 'Non activés', test: (m) => m.status === 'installed' },
+  { id: 'error',    label: 'En erreur',   test: (m) => m.status === 'error' },
+]
 
 export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeactivated, showToast, onHotReload, onRestartBackend, onOpenEnv, op }) {
   const busy = !!op
   const [tab, setTab]         = useState('installed')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [catalog, setCatalog]   = useState(null)
+  const [syncing, setSyncing]   = useState(false)
   const [modal, setModal]     = useState(null)
   const [selected, setSelected] = useState(() => new Set())
   const [batch, setBatch]       = useState(null)      // null | { index, total }
   // modal: null | { mod, type: 'activate'|'deactivate'|'uninstall'|'config'|'meta', loading, loadingMsg, log: [] }
 
   const inTab      = modules.filter((m) => (tab === 'installed' ? isInstalled(m) : m.status === 'available'))
-  const filtered   = filterModules(inTab, filters).sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+  const matching   = filterModules(inTab, filters)
+  const statusCounts = Object.fromEntries(STATUS_FILTERS.map((s) => [s.id, matching.filter(s.test).length]))
+  const statusTest = tab === 'installed' ? STATUS_FILTERS.find((s) => s.id === statusFilter).test : () => true
+  const filtered   = matching.filter(statusTest).sort((a, b) => a.name.localeCompare(b.name, 'fr'))
   const categories = [...new Set(modules.map((m) => m.category))].sort((a, b) => a.localeCompare(b, 'fr'))
 
   const selectable  = tab === 'available'
   const filteredIds = filtered.map((m) => m.id)
   const nSelFilter  = filteredIds.filter((id) => selected.has(id)).length
   const allSelected = filteredIds.length > 0 && nSelFilter === filteredIds.length
+
+  useEffect(() => {
+    api('/modules/catalog').then(setCatalog).catch(() => {})
+    return window.ledroide.on(SYSTEM, 'modules:changed', (d) => {
+      if (d?.catalog) setCatalog(d.catalog)
+      onRefresh()
+    })
+  }, [])
+
+  async function syncCatalog() {
+    setSyncing(true)
+    try {
+      const info = await api('/modules/catalog/refresh', { method: 'POST' })
+      setCatalog(info)
+      await onRefresh()
+      if (info.error) showToast(info.error, false)
+      else showToast(info.new_modules?.length ? `${info.new_modules.length} nouveau(x) module(s) disponible(s)` : 'Catalogue à jour')
+    } catch (err) {
+      showToast(err.message, false)
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   useEffect(() => {
     const available = new Set(modules.filter((m) => m.status === 'available').map((m) => m.id))
@@ -206,9 +251,42 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
             {counts[id] > 0 && <span className="cp-badge">{counts[id]}</span>}
           </button>
         ))}
+        {tab === 'installed' && (
+          <div className="cp-status" role="group" aria-label="Filtrer par état">
+            {STATUS_FILTERS.filter((s) => s.id !== 'error' || statusCounts.error > 0 || statusFilter === 'error').map((s) => (
+              <button
+                key={s.id}
+                className={`cp-status-btn st-${s.id}${statusFilter === s.id ? ' active' : ''}`}
+                onClick={() => setStatusFilter(s.id)}
+                aria-pressed={statusFilter === s.id}
+              >
+                {s.label}
+                <span className="cp-status-n">{statusCounts[s.id]}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
 
       <div className="cp-content">
+        {tab === 'available' && catalog?.enabled && (
+          <div className={`cp-repo ${catalog.error ? 'err' : ''}`}>
+            <span className="cp-repo-icon">⎇</span>
+            <span className="cp-repo-text">
+              Dépôt <b>{catalog.repo}</b> <span className="cp-repo-branch">{catalog.branch}</span>
+              {' · '}
+              {catalog.error
+                ? <span className="cp-repo-error">{catalog.error}</span>
+                : <>{catalog.count} module{catalog.count > 1 ? 's' : ''} · mis à jour {timeAgo(catalog.updated_at)}</>}
+            </span>
+            {catalog.error && !catalog.has_token && onOpenEnv && (
+              <button className="btn btn-ghost" onClick={onOpenEnv} title="Ajouter GITHUB_TOKEN">Variables…</button>
+            )}
+            <button className="btn btn-ghost" onClick={syncCatalog} disabled={syncing || busy} title="Télécharger la dernière version du dépôt">
+              {syncing ? <span className="cp-spinner" /> : '↻'} Actualiser
+            </button>
+          </div>
+        )}
         {selectable && filtered.length > 0 && (
           <div className="cp-bulk">
             <label className="cp-bulk-all">
@@ -241,8 +319,10 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
         {filtered.length === 0 && (
           <p className="cp-empty">
             {inTab.length > 0
-              ? 'Aucun module ne correspond aux filtres.'
-              : tab === 'installed' ? 'Aucun module installé.' : 'Aucun module disponible dans le catalogue.'}
+              ? (matching.length > 0 && statusFilter !== 'all'
+                  ? `Aucun module ${{ active: 'activé', inactive: 'non activé', error: 'en erreur' }[statusFilter]}.`
+                  : 'Aucun module ne correspond aux filtres.')
+              : tab === 'installed' ? 'Aucun module installé.' : (catalog?.enabled && !catalog.error && catalog.count > 0 ? 'Tous les modules du dépôt sont déjà installés.' : 'Aucun module disponible dans le catalogue.')}
           </p>
         )}
         <div className="cp-grid">
@@ -489,6 +569,7 @@ function CatalogCard({ mod, onAction, onInstall, installing, selected, onToggle,
           <span className="cc-version">v{mod.version}</span>
         </div>
         {mod.status === 'active' && <span className="cc-badge-active">Actif</span>}
+        {mod.status === 'available' && mod.source === 'remote' && <span className="cc-badge-remote" title="Module du dépôt GitHub">Dépôt</span>}
         {mod.status === 'error' && <span className="cc-badge-error">Erreur</span>}
       </div>
 

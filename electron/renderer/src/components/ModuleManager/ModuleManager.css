@@ -149,6 +149,38 @@
 
 .cp-tab:hover { color: var(--text-mid); }
 
+.cp-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius);
+}
+
+.cp-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .25rem .65rem;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text-lo);
+  font-size: .775rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .12s;
+}
+
+.cp-status-btn:hover { color: var(--text-mid); }
+.cp-status-btn.active { background: var(--bg-border); color: var(--text-hi); }
+.cp-status-n { font-size: .7rem; opacity: .7; font-variant-numeric: tabular-nums; }
+.cp-status-btn.active .cp-status-n { opacity: 1; }
+.cp-status-btn.st-error .cp-status-n { color: #f87171; }
+
 .cp-tab.active {
   background: var(--bg-surface);
   border-color: var(--bg-border);
@@ -290,6 +322,36 @@
   font-size: .7rem;
   color: var(--text-lo);
 }
+
+.cc-badge-remote {
+  font-size: .65rem;
+  font-weight: 600;
+  padding: .2rem .45rem;
+  border-radius: 4px;
+  background: rgba(56,189,248,.1);
+  color: #38bdf8;
+  border: 1px solid rgba(56,189,248,.2);
+  flex-shrink: 0;
+}
+
+.cp-repo {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .5rem .85rem;
+  margin-bottom: .875rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius);
+  font-size: .8rem;
+  color: var(--text-mid);
+}
+.cp-repo.err { border-color: rgba(239,68,68,.35); }
+.cp-repo-icon { color: var(--text-lo); font-size: 1rem; }
+.cp-repo-text { flex: 1; min-width: 0; }
+.cp-repo-text b { color: var(--text-hi); font-weight: 600; }
+.cp-repo-branch { font-family: 'Cascadia Code', Consolas, monospace; font-size: .72rem; padding: 1px 6px; border-radius: 4px; background: var(--bg-border); }
+.cp-repo-error { color: #f87171; }
 
 .cc-badge-active {
   font-size: .65rem;

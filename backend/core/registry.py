@@ -19,6 +19,7 @@ from core import settings
 from core.errors import LedroideError, error_body
 from core.ipc import Connection, WsCall, WsEvent, WsResponse
 from core.packages import run_pip
+from core.remote_catalog import RemoteCatalog
 
 log = logging.getLogger("ledroide.registry")
 
@@ -98,6 +99,8 @@ class ModuleRegistry:
         self._instances: dict[str, Any] = {}
         self._routes: dict[str, list] = {}
         self._lock = asyncio.Lock()
+        self.remote = RemoteCatalog()
+        self._bg_tasks: set[asyncio.Task] = set()
 
     def _save_meta(self):
         _atomic_write_json(settings.DATA_DIR / "module_meta.json", self._meta)
@@ -133,13 +136,39 @@ class ModuleRegistry:
             except LedroideError as exc:
                 log.error("auto-reactivation of %s failed: %s", mod_id, exc.message)
         self._save_state()
+        if self.remote.repo:
+            self.schedule_catalog_refresh(force=False)
+
+    def schedule_catalog_refresh(self, force: bool = False):
+        task = asyncio.create_task(self._refresh_catalog_bg(force))
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+    async def _refresh_catalog_bg(self, force: bool):
+        try:
+            await self.refresh_catalog(force=force)
+        except Exception:
+            log.exception("background catalog refresh failed")
+
+    async def refresh_catalog(self, force: bool = True) -> dict:
+        info = await self.remote.refresh(force=force)
+        new_ids = self._scan()
+        await self.broadcast(SYSTEM_CHANNEL, "modules:changed", {"catalog": info, "new_modules": new_ids})
+        return {**info, "new_modules": new_ids}
+
+    def catalog_info(self) -> dict:
+        return self.remote.info()
 
     async def shutdown(self):
+        for task in list(self._bg_tasks):
+            task.cancel()
         for mod_id, instance in list(self._instances.items()):
             await self._shutdown_instance(mod_id, instance)
         self._instances.clear()
 
     async def hot_reload(self) -> dict:
+        if self.remote.repo:
+            await self.remote.refresh(force=False)
         new_ids = self._scan()
         log.info("hot_reload: %d new module(s)", len(new_ids))
         return {"new_modules": new_ids, "total": len(self._modules)}
@@ -183,6 +212,22 @@ class ModuleRegistry:
             if MODULE_ID_RE.match(str(mod.get("id", ""))) and mod["id"] not in self._modules:
                 self._modules[mod["id"]] = {**mod, "status": "available"}
                 new_ids.append(mod["id"])
+
+        # Remote repository: modules not present locally.
+        remote_dirs = self.remote.module_dirs()
+        for mod_id in [m for m, d in self._modules.items() if d.get("source") == "remote" and d["status"] == "available"]:
+            if mod_id not in remote_dirs:
+                self._modules.pop(mod_id)
+                self._dirs.pop(mod_id, None)
+        for mod_id, module_dir in remote_dirs.items():
+            if mod_id in self._modules or not MODULE_ID_RE.match(mod_id):
+                continue
+            manifest = _read_json(module_dir / "manifest.json", None)
+            if not manifest or manifest.get("id") != mod_id:
+                continue
+            self._modules[mod_id] = {**manifest, "status": "available", "bundled": False, "source": "remote"}
+            self._dirs[mod_id] = module_dir
+            new_ids.append(mod_id)
         return new_ids
 
     # ── Module lifecycle ─────────────────────────────────────────────────────
@@ -279,7 +324,7 @@ class ModuleRegistry:
         target = settings.USER_MODULES_DIR / module_id
         if target.exists():
             await asyncio.to_thread(_rmtree_force, target)
-        source_dir = settings.AVAILABLE_DIR / module_id
+        source_dir = self._dirs[module_id] if mod.get("source") == "remote" else settings.AVAILABLE_DIR / module_id
         archive = mod.get("archive")
         if source_dir.is_dir() and (source_dir / "manifest.json").exists():
             await asyncio.to_thread(shutil.copytree, source_dir, target)

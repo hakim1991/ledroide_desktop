@@ -20,6 +20,7 @@ Spécification complète : `SPECIFICATION.md`.
 - Les appels WebSocket sont traités en parallèle (une tâche par message) : un handler lent ne bloque pas les autres.
 - Données utilisateur : `LEDROIDE_DATA_DIR` (= `userData/data` sous Electron) contient `state.json`, `configs.json` et `modules/<id>/` (données des modules). Ne jamais écrire dans le dossier d'installation : il est effacé à chaque mise à jour.
 - Modules : `modules/` (installation) = modules livrés, en lecture seule ; les modules installés depuis le catalogue vont dans `<data>/installed-modules/<id>/` (prioritaires). Désinstaller un module livré le masque seulement (`removed_bundled` dans `state.json`). Toujours résoudre le dossier d'un module via `registry.module_dir(id)`.
+- Catalogue distant (`core/remote_catalog.py`) : dépôt GitHub `settings.CATALOG_REPO` (défaut `hakim1991/ledroide_module`, branche `main`, un dossier par module à la racine ; `LEDROIDE_CATALOG_REPO=""` le désactive). Téléchargé en zip dans `<data>/remote-catalog/` au démarrage (cache 15 min), via « Recharger » ou `POST /modules/catalog/refresh` ; « Disponibles » = modules du dépôt absents en local (`source: "remote"`). Dépôt privé : `GITHUB_TOKEN` dans « Variables » (relance l'actualisation).
 - Bibliothèques pip : installées avec `--user` dans `PYTHONUSERBASE` = `<data>/python` (fixé par Electron), pas dans le Python embarqué.
 
 ### Modules
@@ -96,4 +97,4 @@ ledroide-desktop/
 4. **Premier module** : démo complète
 5. **Catalogue** : install depuis catalogue, dépendances Python
 
-Phase actuelle : phases 1 à 4 réalisées, phase 5 partielle (installation depuis `modules-available/<id>/` ou une archive zip déclarée dans `catalog.json` ; pas de catalogue distant ni de mise à jour auto).
+Phase actuelle : phases 1 à 4 réalisées, phase 5 partielle (installation depuis `modules-available/<id>/` ou une archive zip déclarée dans `catalog.json` ; catalogue distant GitHub ; pas de mise à jour auto des modules installés).
