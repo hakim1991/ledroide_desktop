@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Snippets</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  button.danger:hover:not(:disabled) { color: #fca5a5; border-color: rgba(239,68,68,.5); }
+  button.on { color: var(--warn); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+
+  #side { width: 330px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  .side-head { padding: 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); }
+  .side-head .row { display: flex; gap: 6px; }
+  .side-head input { flex: 1; min-width: 0; }
+  .side-head select { flex: 1; min-width: 0; }
+  #tags { display: flex; gap: 4px; flex-wrap: wrap; max-height: 74px; overflow-y: auto; }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--border);
+          color: var(--muted); cursor: pointer; user-select: none; }
+  .chip:hover { color: var(--text); }
+  .chip.active { background: rgba(99,102,241,.2); border-color: var(--accent); color: #fff; }
+  .chip small { opacity: .7; margin-left: 3px; }
+  #list { flex: 1; overflow-y: auto; padding: 6px; }
+  .item { padding: 8px; border-radius: 7px; cursor: pointer; display: flex; gap: 8px; align-items: flex-start; border: 1px solid transparent; }
+  .item:hover { background: var(--surface2); }
+  .item.current { background: rgba(99,102,241,.14); border-color: rgba(99,102,241,.35); }
+  .item .body { flex: 1; min-width: 0; }
+  .item .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .d { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+  .item .meta { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 11px; color: var(--muted); }
+  .item .acts { display: flex; flex-direction: column; gap: 2px; }
+  .item .star { color: var(--warn); }
+  .lang { font-family: var(--mono); font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: var(--bg);
+          border: 1px solid var(--border); color: var(--accent-h); }
+  .count-line { padding: 6px 10px; color: var(--muted); font-size: 11.5px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px 12px; gap: 10px; }
+  .topbar { display: flex; align-items: center; gap: 8px; }
+  .topbar .grow { flex: 1; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; flex: 1; min-height: 0;
+          display: flex; flex-direction: column; }
+  .view-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  .view-head h2 { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .view-head .desc { color: #a1a1aa; margin-top: 6px; white-space: pre-wrap; line-height: 1.5; }
+  .view-head .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; color: var(--muted); font-size: 11.5px; }
+  .view-actions { display: flex; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--border); align-items: center; flex-wrap: wrap; }
+  .view-actions .grow { flex: 1; }
+  .code-wrap { flex: 1; min-height: 0; overflow: auto; position: relative; }
+  pre.code { font-family: var(--mono); font-size: 12.5px; line-height: 1.55; padding: 12px 16px; white-space: pre; tab-size: 4;
+             counter-reset: ln; }
+  pre.code.wrap { white-space: pre-wrap; word-break: break-word; }
+  .tk-kw { color: #c084fc; } .tk-str { color: #86efac; } .tk-cm { color: #6b7280; font-style: italic; }
+  .tk-num { color: #fbbf24; } .tk-fn { color: #93c5fd; } .tk-var { color: #f472b6; } .tk-key { color: #7dd3fc; }
+  .tk-tag { color: #f87171; } .tk-attr { color: #fbbf24; } .tk-dec { color: #f472b6; }
+  .tk-ph { color: #fff; background: rgba(99,102,241,.35); border-radius: 3px; padding: 0 2px; }
+
+  form.edit { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 180px; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { color: var(--muted); font-size: 11.5px; }
+  .field.grow { flex: 1; min-height: 0; }
+  #f-content { flex: 1; min-height: 160px; resize: none; font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+               white-space: pre; tab-size: 4; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .hint code { font-family: var(--mono); color: var(--accent-h); }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  .placeholder { color: var(--muted); flex: 1; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 8px; text-align: center; padding: 20px; line-height: 1.5; }
+  .placeholder .big { font-size: 36px; }
+
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(640px, 94vw);
+           max-height: 88vh; display: flex; flex-direction: column; }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; align-items: center; }
+  .modal-head span { flex: 1; }
+  .modal-body { padding: 12px 14px; overflow: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .ph-grid { display: grid; grid-template-columns: 150px 1fr; gap: 6px 10px; align-items: center; }
+  .ph-grid label { font-family: var(--mono); color: var(--accent-h); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+  .ph-preview { max-height: 220px; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+  .ph-preview pre.code { padding: 8px 10px; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="side-head">
+    <div class="row"><input id="q" type="search" placeholder="Rechercher… (Ctrl+F)" spellcheck="false" /></div>
+    <div class="row">
+      <select id="f-lang" title="Langage"><option value="">Tous les langages</option></select>
+      <select id="f-sort" title="Tri">
+        <option value="recent">Récents</option>
+        <option value="used">Plus utilisés</option>
+        <option value="title">Titre A→Z</option>
+      </select>
+      <button id="f-fav" class="icon" title="Favoris uniquement">☆</button>
+    </div>
+    <div id="tags"></div>
+  </div>
+  <div id="list"></div>
+  <div class="count-line"><span id="count"></span><span><kbd>Ctrl+N</kbd> nouveau</span></div>
+</aside>
+
+<main id="main">
+  <div class="topbar">
+    <span class="grow"></span>
+    <button id="btn-import" title="Importer un fichier JSON">Importer</button>
+    <button id="btn-export" title="Exporter tous les snippets en JSON">Exporter</button>
+    <button id="btn-new" class="primary" title="Nouveau snippet (Ctrl+N)">＋ Nouveau</button>
+    <input id="file" type="file" accept=".json,application/json" class="hidden" />
+  </div>
+  <section class="card" id="view"></section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'snippets'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const LANG_LABELS = {
+  text: 'Texte', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', sql: 'SQL', bash: 'Bash',
+  powershell: 'PowerShell', json: 'JSON', html: 'HTML', css: 'CSS', yaml: 'YAML', go: 'Go',
+}
+const state = {
+  items: [], total: 0, tags: {}, languages: {},
+  filters: { q: '', language: '', tag: '', favorite: false, sort: 'recent' },
+  current: null, editing: null, wrap: false,
+  phValues: {},
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 1800)
+}
+function fmtDate(iso) {
+  if (!iso) return '—'
+  try { return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) } catch { return '' }
+}
+
+// ── Highlighter ─────────────────────────────────────────────────────────────
+const JS_KW = 'async await break case catch class const continue debugger default delete do else export extends false finally for from function if import in instanceof let new null of return static super switch this throw true try typeof undefined var void while with yield'
+const LANGS = {
+  python: { kw: 'False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield self match case', line: '#', strings: ['"""', "'''", '"', "'"], extra: [['dec', '@[A-Za-z_][\\w.]*']] },
+  javascript: { kw: JS_KW, line: '//', block: ['/*', '*/'], strings: ['`', '"', "'"] },
+  typescript: { kw: JS_KW + ' interface type enum implements private public protected readonly declare namespace abstract as keyof any unknown never string number boolean void satisfies', line: '//', block: ['/*', '*/'], strings: ['`', '"', "'"] },
+  sql: { kw: 'select from where and or not null is in like between insert into values update set delete create table view index unique primary key foreign references on as if exists default join left right inner outer full cross group by order having limit offset union all distinct case when then else end drop alter add column begin commit rollback transaction returning with recursive asc desc count sum avg min max cast integer int text varchar real boolean date timestamp serial true false', ci: true, line: '--', block: ['/*', '*/'], strings: ["'", '"'] },
+  bash: { kw: 'if then else elif fi for while until do done case esac function in return local export readonly declare echo printf exit set unset source alias sudo cd shift trap true false', line: '#', strings: ['"', "'"], extra: [['var', '\\$(?:\\{[^}\\n]*\\}|[A-Za-z_]\\w*|[0-9#?@*$!-])']] },
+  powershell: { kw: 'begin break catch class continue data do dynamicparam else elseif end exit filter finally for foreach from function if in param process return switch throw trap try until using while', ci: true, line: '#', block: ['<#', '#>'], strings: ['"', "'"], word: '[A-Za-z_][\\w]*(?:-[A-Za-z]\\w*)*', extra: [['var', '\\$(?:\\{[^}\\n]*\\}|[\\w:]+)'], ['kw', '-(?:eq|ne|gt|ge|lt|le|like|notlike|match|notmatch|contains|in|notin|and|or|not|replace|split|join|is|as|f)\\b']] },
+  json: { kw: 'true false null', strings: ['"'], extra: [['key', '"(?:\\\\.|[^"\\\\\\n])*"(?=\\s*:)']] },
+  html: { line: null, block: ['<!--', '-->'], strings: ['"', "'"], extra: [['tag', '</?[A-Za-z][\\w:-]*|/?>'], ['attr', '[A-Za-z_:][\\w:.-]*(?==)'], ['str', '&[#\\w]+;']], noWords: true },
+  css: { kw: 'important media import keyframes font-face supports from to and not only screen print', block: ['/*', '*/'], strings: ['"', "'"], word: '-?[A-Za-z_][\\w-]*', extra: [['num', '#[\\da-fA-F]{3,8}\\b'], ['key', '-?[A-Za-z_][\\w-]*(?=\\s*:(?!:))'], ['tag', '[.#][A-Za-z_][\\w-]*'], ['num', '-?\\d*\\.?\\d+(?:px|em|rem|%|vh|vw|vmin|vmax|s|ms|deg|fr|ch|ex|pt)?\\b']] },
+  yaml: { kw: 'true false null yes no on off ~', line: '#', strings: ['"', "'"], extra: [['key', '[\\w.-][\\w .-]*(?=\\s*:(?:\\s|$))'], ['tag', '^\\s*-(?=\\s)|---|\\.\\.\\.'], ['var', '[&*][\\w-]+']] },
+  go: { kw: 'break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var nil true false iota int int8 int16 int32 int64 uint uint8 uint16 uint32 uint64 float32 float64 string bool byte rune error any', line: '//', block: ['/*', '*/'], strings: ['`', '"', "'"] },
+}
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const PH_SRC = '\\{\\{\\s*[\\w.-]+\\s*(?::[^}\\n]*)?\\}\\}'
+const compiled = {}
+function compile(lang) {
+  if (compiled[lang]) return compiled[lang]
+  const L = LANGS[lang]
+  const pats = [['ph', PH_SRC]]
+  if (L.block) pats.push(['cm', reEsc(L.block[0]) + '[\\s\\S]*?(?:' + reEsc(L.block[1]) + '|$)'])
+  if (L.line) pats.push(['cm', reEsc(L.line) + '[^\\n]*'])
+  for (const [cls, src] of L.extra || []) if (cls === 'key' || cls === 'dec' || cls === 'tag') pats.push([cls, src])
+  for (const q of L.strings || []) {
+    if (q.length === 3) pats.push(['str', reEsc(q) + '[\\s\\S]*?(?:' + reEsc(q) + '|$)'])
+    else if (q === '`') pats.push(['str', '`(?:\\\\[\\s\\S]|[^`\\\\])*`?'])
+    else pats.push(['str', reEsc(q) + '(?:\\\\[\\s\\S]|(?!' + reEsc(q) + ')[^\\\\\\n])*' + reEsc(q) + '?'])
+  }
+  for (const [cls, src] of L.extra || []) if (!['key', 'dec', 'tag'].includes(cls)) pats.push([cls, src])
+  pats.push(['num', '\\b(?:0[xX][\\da-fA-F]+|\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b'])
+  if (!L.noWords) pats.push(['word', L.word || '[A-Za-z_$][\\w$]*'])
+  const re = new RegExp(pats.map(([, s], i) => `(?<g${i}>${s})`).join('|'), 'gm' + (L.ci ? 'i' : ''))
+  const kw = new Set((L.kw || '').split(/\s+/).filter(Boolean).map((k) => (L.ci ? k.toLowerCase() : k)))
+  return (compiled[lang] = { re, classes: pats.map(([c]) => c), kw, ci: !!L.ci })
+}
+const phMark = (html) => html.replace(new RegExp(PH_SRC, 'g'), (m) => `<span class="tk-ph">${m}</span>`)
+function highlight(code, lang) {
+  if (!LANGS[lang]) return phMark(esc(code))
+  const { re, classes, kw, ci } = compile(lang)
+  let out = '', last = 0, m
+  re.lastIndex = 0
+  while ((m = re.exec(code))) {
+    if (m[0] === '') { re.lastIndex++; continue }
+    out += esc(code.slice(last, m.index))
+    const idx = Object.keys(m.groups).findIndex((k) => m.groups[k] !== undefined)
+    let cls = classes[idx]
+    const text = m[0]
+    if (cls === 'word') {
+      if (kw.has(ci ? text.toLowerCase() : text)) cls = 'kw'
+      else if (code[re.lastIndex] === '(' || (lang === 'powershell' && /^[A-Z][a-z]+-[A-Z]/.test(text))) cls = 'fn'
+      else { out += esc(text); last = re.lastIndex; continue }
+    }
+    const inner = esc(text)
+    out += `<span class="tk-${cls}">${cls === 'str' || cls === 'cm' ? phMark(inner) : inner}</span>`
+    last = re.lastIndex
+  }
+  return out + esc(code.slice(last))
+}
+
+// ── Placeholders ───────────────────────────────────────────────────────────
+const PH_RE = /\{\{\s*([\w.-]+)\s*(?::([^}\n]*))?\}\}/g
+function placeholdersOf(content) {
+  const seen = new Map()
+  for (const m of content.matchAll(PH_RE)) if (!seen.has(m[1])) seen.set(m[1], (m[2] || '').trim())
+  return [...seen].map(([name, def]) => ({ name, default: def }))
+}
+const fillPh = (content, values) => content.replace(PH_RE, (_, n, d) => (values[n] !== undefined && values[n] !== '' ? values[n] : (d || '').trim()))
+
+// ── Data ───────────────────────────────────────────────────────────────────
+async function load() {
+  try {
+    const r = await call('list', state.filters)
+    state.items = r.items; state.total = r.total; state.tags = r.tags; state.languages = r.languages
+    if (state.current) state.current = r.items.find((s) => s._id === state.current._id) || (await getFresh(state.current._id))
+  } catch (e) { toast(e.message, true) }
+  renderFilters(); renderList()
+  if (!state.editing) renderView()
+}
+async function getFresh(id) { try { return await call('get', { id }) } catch { return null } }
+
+function renderFilters() {
+  const sel = $('#f-lang')
+  const cur = state.filters.language
+  sel.innerHTML = '<option value="">Tous les langages</option>' + Object.keys(LANG_LABELS)
+    .filter((l) => state.languages[l] || l === cur)
+    .map((l) => `<option value="${l}" ${l === cur ? 'selected' : ''}>${LANG_LABELS[l]} (${state.languages[l] || 0})</option>`).join('')
+  $('#tags').innerHTML = Object.entries(state.tags).map(([t, n]) =>
+    `<span class="chip ${state.filters.tag === t ? 'active' : ''}" data-tag="${esc(t)}">#${esc(t)}<small>${n}</small></span>`).join('')
+  const fav = $('#f-fav')
+  fav.textContent = state.filters.favorite ? '★' : '☆'
+  fav.classList.toggle('on', state.filters.favorite)
+}
+
+function renderList() {
+  const el = $('#list')
+  $('#count').textContent = state.items.length === state.total ? `${state.total} snippet(s)` : `${state.items.length} / ${state.total} snippet(s)`
+  if (!state.items.length) {
+    el.innerHTML = `<div class="placeholder" style="height:100%">${state.total ? 'Aucun résultat pour ces filtres.' : 'Aucun snippet.<br>Créez-en un avec « ＋ Nouveau » ou importez un fichier JSON.'}</div>`
+    return
+  }
+  el.innerHTML = state.items.map((s) => `
+    <div class="item ${state.current && state.current._id === s._id ? 'current' : ''}" data-id="${s._id}">
+      <div class="body">
+        <div class="t">${s.favorite ? '<span class="star">★</span> ' : ''}${esc(s.title)}</div>
+        ${s.description ? `<div class="d">${esc(s.description)}</div>` : ''}
+        <div class="meta"><span class="lang">${esc(LANG_LABELS[s.language] || s.language)}</span>
+          ${s.tags.slice(0, 3).map((t) => `<span>#${esc(t)}</span>`).join('')}
+          <span style="flex:1"></span><span title="Nombre de copies">⧉ ${s.uses || 0}</span></div>
+      </div>
+      <div class="acts"><button class="ghost icon" data-copy="${s._id}" title="Copier${s.placeholders.length ? ' (remplir les placeholders)' : ''}">⧉</button></div>
+    </div>`).join('')
+}
+
+function renderView() {
+  const el = $('#view')
+  const s = state.current
+  if (!s) {
+    el.innerHTML = `<div class="placeholder"><div class="big">✂️</div><b>${state.total ? 'Sélectionnez un snippet' : 'Votre bibliothèque est vide'}</b>
+      Stockez commandes et bouts de code, retrouvez-les par recherche, langage ou tag,<br>et copiez-les en un clic.
+      Utilisez <code style="font-family:var(--mono);color:var(--accent-h)">{{nom}}</code> ou <code style="font-family:var(--mono);color:var(--accent-h)">{{nom:valeur par défaut}}</code> pour des variables à remplir avant la copie.
+      <div style="margin-top:8px"><button class="primary" data-act="new">＋ Nouveau snippet</button></div></div>`
+    return
+  }
+  el.innerHTML = `
+    <div class="view-head">
+      <h2>${esc(s.title)} <span class="lang">${esc(LANG_LABELS[s.language] || s.language)}</span></h2>
+      ${s.description ? `<div class="desc">${esc(s.description)}</div>` : ''}
+      <div class="meta">${s.tags.map((t) => `<span class="chip" data-tag="${esc(t)}">#${esc(t)}</span>`).join('')}
+        <span>Copié ${s.uses || 0} fois${s.last_used ? ' · dernière copie ' + fmtDate(s.last_used) : ''} · modifié ${fmtDate(s.updated)}</span></div>
+    </div>
+    <div class="view-actions">
+      <button class="primary" data-act="copy" title="Copier (Ctrl+Maj+C)">⧉ Copier${s.placeholders.length ? ` (${s.placeholders.length} variable${s.placeholders.length > 1 ? 's' : ''})` : ''}</button>
+      ${s.placeholders.length ? '<button data-act="copy-raw" title="Copier sans remplir les variables">Copier brut</button>' : ''}
+      <button data-act="fav" class="${s.favorite ? 'on' : ''}" title="Favori">${s.favorite ? '★ Favori' : '☆ Favori'}</button>
+      <span class="grow"></span>
+      <button class="ghost" data-act="wrap" title="Retour à la ligne">${state.wrap ? '↵ Retour ligne : oui' : '↵ Retour ligne : non'}</button>
+      <button data-act="edit" title="Modifier (E)">✎ Modifier</button>
+      <button data-act="dup" title="Dupliquer">Dupliquer</button>
+      <button class="danger" data-act="del" title="Supprimer (Suppr)">🗑</button>
+    </div>
+    <div class="code-wrap"><pre class="code ${state.wrap ? 'wrap' : ''}">${highlight(s.content, s.language)}</pre></div>`
+}
+
+function renderEdit() {
+  const s = state.editing
+  const el = $('#view')
+  el.innerHTML = `
+    <form class="edit" id="edit-form" autocomplete="off">
+      <div class="grid2">
+        <div class="field"><label>Titre *</label><input id="f-title" maxlength="200" value="${esc(s.title)}" placeholder="ex. Lister les ports ouverts" /></div>
+        <div class="field"><label>Langage</label><select id="f-language">${Object.entries(LANG_LABELS).map(([k, v]) => `<option value="${k}" ${k === s.language ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      </div>
+      <div class="field"><label>Tags (séparés par des virgules)</label><input id="f-tags" value="${esc((s.tags || []).join(', '))}" placeholder="réseau, windows, debug" list="tag-list" />
+        <datalist id="tag-list">${Object.keys(state.tags).map((t) => `<option value="${esc(t)}">`).join('')}</datalist></div>
+      <div class="field"><label>Description</label><input id="f-desc" maxlength="5000" value="${esc(s.description)}" placeholder="À quoi sert ce snippet ?" /></div>
+      <div class="field grow"><label>Contenu *</label><textarea id="f-content" spellcheck="false" placeholder="netstat -ano | findstr :{{port:8080}}">${esc(s.content)}</textarea></div>
+      <div class="hint">Variables : <code>{{nom}}</code> ou <code>{{nom:défaut}}</code> — un formulaire les demandera avant la copie. <kbd>Ctrl+S</kbd> enregistrer · <kbd>Échap</kbd> annuler · <kbd>Tab</kbd> indente.</div>
+      <div class="form-actions">
+        <label style="display:flex;gap:6px;align-items:center;margin-right:auto;cursor:pointer"><input type="checkbox" id="f-favorite" ${s.favorite ? 'checked' : ''} style="accent-color:var(--accent)" /> Favori</label>
+        <button type="button" data-act="cancel">Annuler</button>
+        <button type="submit" class="primary">Enregistrer</button>
+      </div>
+    </form>`
+  $('#edit-form').onsubmit = (e) => { e.preventDefault(); saveEdit() }
+  $('#f-content').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); e.target.setRangeText('    ', e.target.selectionStart, e.target.selectionEnd, 'end') }
+  })
+  setTimeout(() => (s._id ? $('#f-content') : $('#f-title')).focus(), 0)
+}
+
+function startEdit(s) {
+  state.editing = s ? { ...s } : { title: '', language: state.filters.language || 'bash', tags: state.filters.tag ? [state.filters.tag] : [], description: '', content: '', favorite: false }
+  renderEdit()
+}
+async function saveEdit() {
+  const payload = {
+    id: state.editing._id, title: $('#f-title').value, language: $('#f-language').value,
+    tags: $('#f-tags').value, description: $('#f-desc').value, content: $('#f-content').value,
+    favorite: $('#f-favorite').checked,
+  }
+  try {
+    const saved = await call('save', payload)
+    state.editing = null
+    state.current = saved
+    toast('Snippet enregistré')
+    await load()
+  } catch (e) { toast(e.message, true) }
+}
+function cancelEdit() {
+  const dirty = state.editing && ($('#f-content').value !== (state.editing.content || '') || $('#f-title').value !== (state.editing.title || ''))
+  if (dirty && !confirm('Abandonner les modifications ?')) return
+  state.editing = null
+  renderView()
+}
+
+// ── Copy ───────────────────────────────────────────────────────────────────
+async function writeClipboard(text) {
+  try { await navigator.clipboard.writeText(text); return true } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text; document.body.appendChild(ta); ta.select()
+    const ok = document.execCommand('copy'); ta.remove(); return ok
+  }
+}
+async function doCopy(s, raw = false) {
+  const phs = placeholdersOf(s.content)
+  if (!raw && phs.length) return openPhForm(s, phs)
+  await finishCopy(s, s.content)
+}
+async function finishCopy(s, text) {
+  if (!(await writeClipboard(text))) { toast('Copie impossible', true); return }
+  toast('Copié dans le presse-papiers')
+  try {
+    const r = await call('use', { id: s._id })
+    const it = state.items.find((x) => x._id === s._id)
+    if (it) { it.uses = r.uses; it.last_used = r.last_used }
+    if (state.current && state.current._id === s._id) { state.current.uses = r.uses; state.current.last_used = r.last_used }
+    renderList()
+    if (!state.editing) renderView()
+  } catch { /* counter only */ }
+}
+function openPhForm(s, phs) {
+  const saved = state.phValues[s._id] || {}
+  const bd = document.createElement('div')
+  bd.className = 'backdrop'
+  bd.innerHTML = `<div class="modal"><div class="modal-head"><span>Variables — ${esc(s.title)}</span><button class="ghost icon" data-x>✕</button></div>
+    <form class="modal-body" id="ph-form" autocomplete="off">
+      <div class="ph-grid">${phs.map((p, i) => `<label for="ph-${i}" title="${esc(p.name)}">${esc(p.name)}</label>
+        <input id="ph-${i}" data-name="${esc(p.name)}" value="${esc(saved[p.name] ?? '')}" placeholder="${esc(p.default || '(vide)')}" spellcheck="false" />`).join('')}</div>
+      <div class="hint">Aperçu</div>
+      <div class="ph-preview"><pre class="code wrap" id="ph-out"></pre></div>
+      <button type="submit" class="hidden"></button>
+    </form>
+    <div class="modal-foot"><span class="hint" style="margin-right:auto"><kbd>Entrée</kbd> copier · <kbd>Échap</kbd> fermer</span>
+      <button data-x>Annuler</button><button class="primary" data-ok>⧉ Copier</button></div></div>`
+  const values = () => Object.fromEntries([...bd.querySelectorAll('input[data-name]')].map((i) => [i.dataset.name, i.value]))
+  const preview = () => { bd.querySelector('#ph-out').innerHTML = highlight(fillPh(s.content, values()), s.language) }
+  const close = () => { bd.remove(); document.removeEventListener('keydown', onKey, true) }
+  const ok = async () => { const v = values(); state.phValues[s._id] = v; close(); await finishCopy(s, fillPh(s.content, v)) }
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close() } }
+  document.addEventListener('keydown', onKey, true)
+  bd.addEventListener('input', preview)
+  bd.addEventListener('click', (e) => { if (e.target === bd || e.target.closest('[data-x]')) close(); if (e.target.closest('[data-ok]')) ok() })
+  bd.querySelector('#ph-form').onsubmit = (e) => { e.preventDefault(); ok() }
+  document.body.appendChild(bd)
+  preview()
+  bd.querySelector('input').focus()
+}
+
+// ── Events ─────────────────────────────────────────────────────────────────
+async function select(id) {
+  if (state.editing) { cancelEdit(); if (state.editing) return }
+  state.current = state.items.find((s) => s._id === id) || null
+  renderList(); renderView()
+}
+$('#list').addEventListener('click', (e) => {
+  const cp = e.target.closest('[data-copy]')
+  if (cp) { e.stopPropagation(); const s = state.items.find((x) => x._id === cp.dataset.copy); if (s) doCopy(s); return }
+  const it = e.target.closest('[data-id]')
+  if (it) select(it.dataset.id)
+})
+$('#list').addEventListener('dblclick', (e) => {
+  const it = e.target.closest('[data-id]')
+  if (it && !e.target.closest('[data-copy]')) { const s = state.items.find((x) => x._id === it.dataset.id); if (s) doCopy(s) }
+})
+$('#view').addEventListener('click', async (e) => {
+  const tag = e.target.closest('[data-tag]')
+  if (tag) { state.filters.tag = tag.dataset.tag; load(); return }
+  const b = e.target.closest('[data-act]')
+  if (!b) return
+  const s = state.current
+  switch (b.dataset.act) {
+    case 'new': startEdit(null); break
+    case 'cancel': cancelEdit(); break
+    case 'copy': doCopy(s); break
+    case 'copy-raw': doCopy(s, true); break
+    case 'edit': startEdit(s); break
+    case 'wrap': state.wrap = !state.wrap; renderView(); break
+    case 'dup': startEdit({ ...s, _id: undefined, title: s.title + ' (copie)', favorite: false }); break
+    case 'fav':
+      try { await call('favorite', { id: s._id }); await load() } catch (err) { toast(err.message, true) }
+      break
+    case 'del':
+      if (!confirm(`Supprimer le snippet « ${s.title} » ?`)) return
+      try { await call('delete', { id: s._id }); state.current = null; toast('Snippet supprimé'); await load() } catch (err) { toast(err.message, true) }
+      break
+  }
+})
+$('#tags').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-tag]')
+  if (!c) return
+  state.filters.tag = state.filters.tag === c.dataset.tag ? '' : c.dataset.tag
+  load()
+})
+let qTimer
+$('#q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.filters.q = $('#q').value; load() }, 200) })
+$('#f-lang').onchange = () => { state.filters.language = $('#f-lang').value; load() }
+$('#f-sort').onchange = () => { state.filters.sort = $('#f-sort').value; load() }
+$('#f-fav').onclick = () => { state.filters.favorite = !state.filters.favorite; load() }
+$('#btn-new').onclick = () => startEdit(null)
+
+$('#btn-export').onclick = async () => {
+  try {
+    const r = await call('export', {}, { timeout: 30000 })
+    if (!r.count) { toast('Rien à exporter', true); return }
+    const blob = new Blob([JSON.stringify(r, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `snippets-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a); a.click()
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove() }, 1000)
+    toast(`${r.count} snippet(s) exporté(s)`)
+  } catch (e) { toast(e.message, true) }
+}
+$('#btn-import').onclick = () => $('#file').click()
+$('#file').onchange = async () => {
+  const f = $('#file').files[0]
+  $('#file').value = ''
+  if (!f) return
+  let data
+  try { data = JSON.parse(await f.text()) } catch { toast('Fichier JSON invalide', true); return }
+  try {
+    const r = await call('import', { data }, { timeout: 60000 })
+    toast(`${r.imported} importé(s), ${r.skipped} doublon(s) ignoré(s)${r.invalid.length ? `, ${r.invalid.length} invalide(s)` : ''}`, r.invalid.length > 0)
+    await load()
+  } catch (e) { toast(e.message, true) }
+}
+
+document.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase()
+  const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
+  if (document.querySelector('.backdrop')) return
+  if (e.ctrlKey && k === 'n') { e.preventDefault(); startEdit(null); return }
+  if (e.ctrlKey && k === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select(); return }
+  if (state.editing) {
+    if (e.ctrlKey && k === 's') { e.preventDefault(); saveEdit() }
+    if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+    return
+  }
+  if (e.ctrlKey && e.shiftKey && k === 'c' && state.current) { e.preventDefault(); doCopy(state.current); return }
+  if (inField) { if (e.key === 'ArrowDown' && document.activeElement.id === 'q') { e.preventDefault(); move(1) } return }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); move(e.key === 'ArrowDown' ? 1 : -1) }
+  if (e.key === 'Enter' && state.current) doCopy(state.current)
+  if (k === 'e' && state.current) startEdit(state.current)
+  if (e.key === 'Delete' && state.current) $('[data-act="del"]').click()
+})
+function move(d) {
+  if (!state.items.length) return
+  document.activeElement.blur()
+  const i = state.current ? state.items.findIndex((s) => s._id === state.current._id) : -1
+  const n = state.items[Math.min(state.items.length - 1, Math.max(0, i + d))]
+  select(n._id)
+  const el = $(`.item[data-id="${n._id}"]`)
+  if (el) el.scrollIntoView({ block: 'nearest' })
+}
+
+load()
+</script>
+</body>
+</html>

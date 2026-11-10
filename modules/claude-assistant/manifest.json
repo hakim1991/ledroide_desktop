@@ -1,0 +1,74 @@
+{
+  "id": "claude-assistant",
+  "name": "Assistant Claude",
+  "version": "1.0.0",
+  "description": "Assistant IA basé sur l'API Claude d'Anthropic : conversations multiples en streaming, prompt système, choix du modèle, et actions rapides (résumer, traduire, corriger, reformuler, expliquer du code, message de commit).",
+  "category": "Productivité",
+  "tags": [
+    "ia",
+    "claude",
+    "anthropic",
+    "chat",
+    "assistant",
+    "traduction"
+  ],
+  "icon": "✨",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "anthropic>=2,<3"
+    ],
+    "modules": []
+  },
+  "env": [
+    {
+      "key": "ANTHROPIC_API_KEY",
+      "description": "Clé d'API Anthropic (console.anthropic.com)",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "config_schema": {
+    "default_model": {
+      "type": "string",
+      "title": "Modèle par défaut",
+      "default": "claude-opus-5-5",
+      "enum": [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5",
+        "claude-fable-5-1"
+      ]
+    },
+    "max_tokens": {
+      "type": "integer",
+      "title": "Longueur maximale d'une réponse (max_tokens)",
+      "default": 64000,
+      "minimum": 1024,
+      "maximum": 128000
+    },
+    "effort": {
+      "type": "string",
+      "title": "Effort de réflexion",
+      "default": "medium",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "id": "clipboard-actions",
+  "name": "Actions presse-papier",
+  "version": "1.0.0",
+  "description": "Analyse le contenu du presse-papier (URL, JSON, JWT, couleur, IP, date, chemin, UUID, Base64, calcul, téléphone, GPS…) et propose des actions directes à copier en un clic.",
+  "category": "Productivité",
+  "tags": [
+    "presse-papier",
+    "conversion",
+    "json",
+    "texte",
+    "outils"
+  ],
+  "icon": "📋",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "clipboard",
+    "filesystem"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "watch_default": {
+      "type": "boolean",
+      "title": "Surveiller le presse-papier à l'ouverture",
+      "default": true
+    }
+  }
+}

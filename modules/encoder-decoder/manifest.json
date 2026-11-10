@@ -1,0 +1,30 @@
+{
+  "id": "encoder-decoder",
+  "name": "Encodeur / Décodeur",
+  "version": "1.0.0",
+  "description": "Transformations de texte en direct et enchaînables : URL, entités HTML, Base32, hexadécimal, binaire, échappements Unicode, ROT13, Punycode/IDNA, quoted-printable, conversions de casse et compteurs.",
+  "category": "Développement",
+  "tags": [
+    "encodage",
+    "url",
+    "html",
+    "punycode",
+    "texte",
+    "casse"
+  ],
+  "icon": "🔣",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

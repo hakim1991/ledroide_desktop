@@ -1,0 +1,45 @@
+{
+  "id": "pdf-forms",
+  "name": "Formulaires PDF",
+  "version": "1.0.0",
+  "description": "Créez des modèles de formulaires dynamiques (champs, sections, tableaux, signatures) et générez des PDF avec en-tête (logo, titre, coordonnées) et pied de page (numéros de page, date). Génération unitaire ou par lot depuis un CSV.",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "pdf",
+    "formulaire",
+    "modele",
+    "document",
+    "generation"
+  ],
+  "icon": "🧾",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "filesystem"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "fpdf2>=2.7.6,<3"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "output_dir": {
+      "type": "string",
+      "title": "Dossier d'enregistrement des PDF (vide = dossier du module)",
+      "default": ""
+    },
+    "open_after": {
+      "type": "boolean",
+      "title": "Ouvrir le PDF après génération",
+      "default": true
+    }
+  }
+}

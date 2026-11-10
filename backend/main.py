@@ -15,7 +15,7 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.requests import Request
 from typing import Optional
 
@@ -24,6 +24,7 @@ from core.env import EnvPayload, EnvStore
 from core.errors import install_handlers
 from core.ipc import Connection, parse_call
 from core.log import setup_logging
+from core.packages import InstallPayload, PackageManager
 from core.registry import SYSTEM_CHANNEL, ModuleRegistry, validate_module_id
 from core.security import SecurityMiddleware
 
@@ -66,6 +67,11 @@ async def no_cache_module_frontend(request: Request, call_next):
 
 env_store = EnvStore()
 registry = ModuleRegistry(app)
+packages = PackageManager(lambda event, payload: registry.broadcast(SYSTEM_CHANNEL, event, payload))
+
+
+class InstallManyPayload(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=200)
 
 
 class ModuleMeta(BaseModel):
@@ -90,6 +96,11 @@ async def deactivate_module(module_id: str):
     return await registry.deactivate(module_id)
 
 
+@app.post("/modules/install")
+async def install_modules(payload: InstallManyPayload):
+    return await registry.install_many(payload.ids)
+
+
 @app.post("/modules/{module_id}/install")
 async def install_module(module_id: str):
     return await registry.install(module_id)
@@ -103,7 +114,7 @@ async def uninstall_module(module_id: str):
 @app.get("/modules/{module_id}/icon")
 async def module_icon(module_id: str):
     validate_module_id(module_id)
-    icon_path = settings.MODULES_DIR / module_id / "icon.png"
+    icon_path = registry.module_dir(module_id) / "icon.png"
     if not icon_path.is_file():
         return Response(status_code=404)
     return FileResponse(str(icon_path), media_type="image/png")
@@ -176,6 +187,31 @@ async def set_env(payload: EnvPayload):
     variables, changed = env_store.replace(payload)
     await registry.broadcast(SYSTEM_CHANNEL, "env:changed", {"keys": changed})
     return {"vars": variables, "changed": changed}
+
+
+@app.get("/system/packages")
+async def list_packages():
+    return packages.listing(registry.list_modules())
+
+
+@app.get("/system/packages/outdated")
+async def outdated_packages():
+    return await packages.outdated()
+
+
+@app.post("/system/packages")
+async def install_package(payload: InstallPayload):
+    return await packages.install(payload.spec)
+
+
+@app.post("/system/packages/{name}/upgrade")
+async def upgrade_package(name: str):
+    return await packages.upgrade(name)
+
+
+@app.delete("/system/packages/{name}")
+async def uninstall_package(name: str):
+    return await packages.uninstall(name)
 
 
 @app.post("/system/shutdown")

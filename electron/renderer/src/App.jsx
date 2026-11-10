@@ -5,6 +5,7 @@ import ModuleFrame from './components/ModuleFrame'
 import CatalogPanel from './components/ModuleManager'
 import ModuleIcon from './components/ModuleIcon'
 import EnvPanel from './components/EnvPanel'
+import PackagesPanel from './components/PackagesPanel'
 import { EMPTY_FILTERS } from './components/ModuleFilters'
 
 const api = (path, opts) => window.ledroide.api(path, opts)
@@ -14,7 +15,7 @@ export default function App() {
   const [openIds, setOpenIds]       = useState([])
   const [currentId, setCurrentId]   = useState(null)
   const [reloadKeys, setReloadKeys] = useState({})
-  const [view, setView]             = useState('modules') // 'modules' | 'module' | 'catalog' | 'env'
+  const [view, setView]             = useState('modules') // 'modules' | 'module' | 'catalog' | 'env' | 'packages'
   const [homeFilters, setHomeFilters] = useState(EMPTY_FILTERS)
   const [toast, setToast]           = useState(null)
   const [op, setOp]                 = useState(null)      // 'reloading' | 'restarting'
@@ -186,6 +187,15 @@ export default function App() {
 
         {view === 'env' && (
           <EnvPanel modules={modules} onSaved={fetchModules} showToast={showToast} />
+        )}
+
+        {view === 'packages' && (
+          <PackagesPanel
+            modules={modules}
+            showToast={showToast}
+            onRestartBackend={restartBackend}
+            onChanged={fetchModules}
+          />
         )}
       </main>
     </div>

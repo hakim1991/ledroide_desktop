@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Démarrage Windows</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-wrap: wrap; }
+  header h1 { font-size: 15px; font-weight: 600; margin-right: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tab { padding: 4px 10px; border-radius: 5px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .tab .n { color: var(--accent-h); font-size: 11px; margin-left: 3px; }
+  .spacer { flex: 1; }
+  #q { width: 220px; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.admin { color: var(--ok); border-color: rgba(34,197,94,.4); }
+  .badge.user { color: var(--warn); border-color: rgba(245,158,11,.4); }
+
+  main { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11.5px; padding: 6px 8px;
+                  border-bottom: 1px solid var(--border); position: sticky; top: -10px; background: var(--bg); z-index: 1;
+                  cursor: pointer; user-select: none; }
+  table.grid th.nosort { cursor: default; }
+  table.grid td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.grid tr:hover td { background: var(--surface); }
+  table.grid tr.off td .nm, table.grid tr.off td .cmd { opacity: .5; }
+  .nm { font-weight: 600; }
+  .sub { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .cmd { font-family: var(--mono); font-size: 11.5px; color: #a1a1aa; max-width: 420px; overflow: hidden;
+         text-overflow: ellipsis; white-space: nowrap; }
+  .loc { font-size: 11.5px; color: var(--muted); }
+  .warn-ico { color: var(--warn); margin-left: 4px; cursor: help; }
+  .acts { white-space: nowrap; text-align: right; }
+  .scope { font-size: 10.5px; padding: 1px 6px; border-radius: 8px; margin-left: 6px; }
+  .scope.machine { background: rgba(245,158,11,.13); color: #fbbf24; }
+  .scope.user { background: rgba(56,189,248,.13); color: #7dd3fc; }
+  .state-pill { font-size: 11px; padding: 1px 7px; border-radius: 8px; background: var(--surface2); color: var(--muted); }
+  .state-pill.Ready, .state-pill.Running { color: var(--ok); }
+  .state-pill.Disabled { color: var(--err); }
+
+  .switch { position: relative; width: 34px; height: 18px; display: inline-block; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; background: #3f3f46; border-radius: 10px; cursor: pointer; transition: .15s; }
+  .switch span::before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: #fff;
+                         border-radius: 50%; transition: .15s; }
+  .switch input:checked + span { background: var(--ok); }
+  .switch input:checked + span::before { transform: translateX(16px); }
+  .switch input:disabled + span { opacity: .35; cursor: not-allowed; }
+
+  .placeholder { color: var(--muted); padding: 60px 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .placeholder .big { font-size: 30px; }
+  .infobar { color: var(--muted); font-size: 12px; margin-bottom: 10px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .infobar label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(600px, 94vw);
+           max-height: 86vh; display: flex; flex-direction: column; }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .modal-body { padding: 12px 14px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .modal-body label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+  .modal-body input { color: var(--text); }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .hint code { font-family: var(--mono); color: var(--accent-h); }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚀 Démarrage</h1>
+  <div class="tabs">
+    <div class="tab active" data-tab="entries">Programmes<span class="n" id="n-entries"></span></div>
+    <div class="tab" data-tab="tasks">Tâches planifiées<span class="n" id="n-tasks"></span></div>
+  </div>
+  <span class="spacer"></span>
+  <input id="q" type="search" placeholder="Rechercher (Ctrl+F)…" spellcheck="false" />
+  <select id="f-state" title="État">
+    <option value="all">Tous</option><option value="on">Activés</option><option value="off">Désactivés</option>
+  </select>
+  <select id="f-scope" title="Portée">
+    <option value="all">Toutes portées</option><option value="user">Utilisateur</option><option value="machine">Machine</option>
+  </select>
+  <span id="admin-badge" class="badge"></span>
+  <button id="btn-add" title="Ajouter une entrée (Ctrl+N)">＋ Ajouter</button>
+  <button id="btn-refresh" title="Actualiser (F5)">⟳ Actualiser</button>
+</header>
+
+<main>
+  <section data-panel="entries">
+    <div class="infobar">
+      <span>La désactivation est réversible et identique à celle du Gestionnaire des tâches de Windows (valeurs <span class="mono">StartupApproved</span>).</span>
+      <span class="spacer"></span>
+      <button class="ghost" data-open-folder="user_folder">📂 Dossier Démarrage utilisateur</button>
+      <button class="ghost" data-open-folder="common_folder">📂 Dossier commun</button>
+    </div>
+    <div id="entries"></div>
+  </section>
+  <section data-panel="tasks" class="hidden">
+    <div class="infobar">
+      <span>Tâches du Planificateur Windows déclenchées à l'ouverture de session ou au démarrage (lecture seule).</span>
+      <span class="spacer"></span>
+      <label><input type="checkbox" id="show-ms" /> Afficher les tâches Microsoft</label>
+    </div>
+    <div id="tasks"></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'startup-manager'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const state = { tab: 'entries', items: [], tasks: null, tasksLoading: false, loading: false, isAdmin: false,
+                sort: { key: 'name', dir: 1 } }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+
+function fmtDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return isNaN(d) ? '' : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+async function load() {
+  state.loading = true
+  if (!state.items.length) $('#entries').innerHTML = '<div class="placeholder"><span class="spinner"></span> Lecture des entrées de démarrage…</div>'
+  try {
+    const r = await call('list', {}, { timeout: 60000 })
+    state.items = r.items
+    state.isAdmin = r.is_admin
+    const b = $('#admin-badge')
+    b.textContent = r.is_admin ? 'Administrateur' : 'Utilisateur standard'
+    b.className = 'badge ' + (r.is_admin ? 'admin' : 'user')
+    b.title = r.is_admin ? 'Les entrées machine (HKLM) sont modifiables'
+      : 'Les entrées « Machine » nécessitent de lancer LedroideDesktop en administrateur'
+  } catch (e) {
+    toast(e.message, true)
+    if (!state.items.length) $('#entries').innerHTML = `<div class="placeholder"><div class="big">⚠️</div>${esc(e.message)}</div>`
+  } finally {
+    state.loading = false
+    render()
+  }
+}
+
+async function loadTasks() {
+  if (state.tasksLoading) return
+  state.tasksLoading = true
+  $('#tasks').innerHTML = '<div class="placeholder"><span class="spinner"></span> Interrogation du Planificateur de tâches…</div>'
+  try {
+    state.tasks = (await call('tasks', {}, { timeout: 90000 })).items
+  } catch (e) {
+    state.tasks = null
+    $('#tasks').innerHTML = `<div class="placeholder"><div class="big">⚠️</div>${esc(e.message)}<button id="retry-tasks">Réessayer</button></div>`
+    $('#retry-tasks').onclick = loadTasks
+    return
+  } finally {
+    state.tasksLoading = false
+  }
+  renderTasks()
+}
+
+function matches(text) {
+  const q = $('#q').value.trim().toLowerCase()
+  return !q || text.toLowerCase().includes(q)
+}
+
+function render() {
+  const fs = $('#f-state').value, fsc = $('#f-scope').value
+  const { key, dir } = state.sort
+  const rows = state.items
+    .filter((it) => fs === 'all' || (fs === 'on') === it.enabled)
+    .filter((it) => fsc === 'all' || it.scope === fsc)
+    .filter((it) => matches([it.name, it.command, it.publisher, it.description, it.location].join(' ')))
+    .sort((a, b) => {
+      const va = key === 'enabled' ? +a.enabled : String(a[key] || '').toLowerCase()
+      const vb = key === 'enabled' ? +b.enabled : String(b[key] || '').toLowerCase()
+      return (va < vb ? -1 : va > vb ? 1 : 0) * dir
+    })
+  const on = state.items.filter((i) => i.enabled).length
+  $('#n-entries').textContent = state.items.length ? `${on}/${state.items.length}` : ''
+  if (!state.items.length && !state.loading) {
+    $('#entries').innerHTML = '<div class="placeholder"><div class="big">🚀</div>Aucun programme au démarrage.</div>'
+    return
+  }
+  if (!rows.length) {
+    $('#entries').innerHTML = '<div class="placeholder"><div class="big">🔍</div>Aucune entrée ne correspond aux filtres.</div>'
+    return
+  }
+  const arrow = (k) => (state.sort.key === k ? (state.sort.dir > 0 ? ' ▲' : ' ▼') : '')
+  $('#entries').innerHTML = `<table class="grid"><thead><tr>
+      <th data-sort="enabled" style="width:60px">État${arrow('enabled')}</th>
+      <th data-sort="name">Nom${arrow('name')}</th>
+      <th data-sort="publisher">Éditeur${arrow('publisher')}</th>
+      <th data-sort="command">Commande${arrow('command')}</th>
+      <th data-sort="location">Emplacement${arrow('location')}</th>
+      <th class="nosort"></th></tr></thead><tbody>
+    ${rows.map((it) => `<tr class="${it.enabled ? '' : 'off'}" data-id="${esc(it.id)}">
+      <td><label class="switch" title="${it.can_toggle ? (it.enabled ? 'Désactiver' : 'Activer') : 'RunOnce : non désactivable'}">
+        <input type="checkbox" data-toggle ${it.enabled ? 'checked' : ''} ${it.can_toggle ? '' : 'disabled'} /><span></span></label></td>
+      <td><div class="nm">${esc(it.name)}${it.exists ? '' : '<span class="warn-ico" title="Exécutable introuvable : ' + esc(it.exe || '?') + '">⚠</span>'}</div>
+        <div class="sub">${esc(it.description || '')}${!it.enabled && it.disabled_at ? ` · désactivé le ${esc(fmtDate(it.disabled_at))}` : ''}</div></td>
+      <td>${esc(it.publisher || '—')}</td>
+      <td><div class="cmd" title="${esc(it.command)}">${esc(it.command)}</div></td>
+      <td class="loc" title="${esc(it.location_path)}">${esc(it.location)}<span class="scope ${it.scope}">${it.scope === 'machine' ? 'Machine' : 'Utilisateur'}</span></td>
+      <td class="acts">
+        <button class="ghost icon" data-copy title="Copier la commande">⧉</button>
+        <button class="ghost icon" data-reveal ${it.exists ? '' : 'disabled'} title="Ouvrir l'emplacement du fichier">📂</button>
+        <button class="ghost icon" data-del title="Supprimer l'entrée">🗑</button></td>
+    </tr>`).join('')}</tbody></table>`
+}
+
+function renderTasks() {
+  if (!state.tasks) return
+  const showMs = $('#show-ms').checked
+  const rows = state.tasks.filter((t) => showMs || !t.microsoft)
+    .filter((t) => matches([t.name, t.path, t.description, t.publisher, t.author, ...t.actions].join(' ')))
+  $('#n-tasks').textContent = String(state.tasks.filter((t) => !t.microsoft).length)
+  if (!rows.length) {
+    $('#tasks').innerHTML = `<div class="placeholder"><div class="big">🗓️</div>Aucune tâche${showMs ? '' : ' (hors tâches Microsoft)'}.</div>`
+    return
+  }
+  const stateFr = { Ready: 'Prête', Running: 'En cours', Disabled: 'Désactivée', Queued: 'En file' }
+  $('#tasks').innerHTML = `<table class="grid"><thead><tr>
+      <th class="nosort">Tâche</th><th class="nosort">État</th><th class="nosort">Déclencheur</th>
+      <th class="nosort">Action</th><th class="nosort">Éditeur / auteur</th></tr></thead><tbody>
+    ${rows.map((t) => `<tr>
+      <td><div class="nm">${esc(t.name)}</div><div class="sub">${esc(t.path)}${t.description ? ' · ' + esc(t.description) : ''}</div></td>
+      <td><span class="state-pill ${esc(t.state)}">${esc(stateFr[t.state] || t.state)}</span></td>
+      <td>${esc(t.triggers.join(', '))}</td>
+      <td><div class="cmd" title="${esc(t.actions.join('\n'))}">${esc(t.actions.join(' ; ') || '—')}</div></td>
+      <td>${esc(t.publisher || t.author || '—')}</td></tr>`).join('')}</tbody></table>`
+}
+
+function itemById(id) { return state.items.find((i) => i.id === id) }
+
+$('#entries').addEventListener('click', async (e) => {
+  const th = e.target.closest('th[data-sort]')
+  if (th) {
+    const k = th.dataset.sort
+    state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : 1 }
+    render()
+    return
+  }
+  const tr = e.target.closest('tr[data-id]')
+  if (!tr) return
+  const it = itemById(tr.dataset.id)
+  if (!it) return
+  if (e.target.closest('[data-copy]')) {
+    try { await navigator.clipboard.writeText(it.command); toast('Commande copiée') } catch { toast('Copie impossible', true) }
+  } else if (e.target.closest('[data-reveal]')) {
+    try { await call('reveal', { path: it.file || it.exe }) } catch (err) { toast(err.message, true) }
+  } else if (e.target.closest('[data-del]')) {
+    const what = it.kind === 'folder' ? `le raccourci « ${it.name} » du dossier Démarrage (le fichier sera supprimé)`
+      : `la valeur de registre « ${it.name} »`
+    if (!confirm(`Supprimer définitivement ${what} ?\n\n${it.command}\n\nAstuce : la désactivation (interrupteur) est réversible, la suppression ne l'est pas.`)) return
+    try {
+      await call('delete', { id: it.id })
+      toast(`« ${it.name} » supprimé`)
+      load()
+    } catch (err) { toast(err.message, true) }
+  }
+})
+
+$('#entries').addEventListener('change', async (e) => {
+  if (!e.target.matches('[data-toggle]')) return
+  const tr = e.target.closest('tr[data-id]')
+  const it = itemById(tr.dataset.id)
+  const enabled = e.target.checked
+  e.target.disabled = true
+  try {
+    await call('set_enabled', { id: it.id, enabled })
+    it.enabled = enabled
+    it.disabled_at = enabled ? null : new Date().toISOString()
+    toast(`« ${it.name} » ${enabled ? 'activé' : 'désactivé'} au prochain démarrage`)
+  } catch (err) {
+    e.target.checked = !enabled
+    toast(err.message, true)
+  }
+  render()
+})
+
+$$('[data-open-folder]').forEach((b) => b.addEventListener('click', async () => {
+  try { await call('open_folder', { source: b.dataset.openFolder }) } catch (e) { toast(e.message, true) }
+}))
+
+function switchTab(tab) {
+  state.tab = tab
+  $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab))
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab))
+  $('#f-state').classList.toggle('hidden', tab !== 'entries')
+  $('#f-scope').classList.toggle('hidden', tab !== 'entries')
+  if (tab === 'tasks' && !state.tasks) loadTasks()
+}
+$$('.tab').forEach((t) => t.addEventListener('click', () => switchTab(t.dataset.tab)))
+
+function refresh() {
+  if (state.tab === 'tasks') loadTasks()
+  else load()
+}
+
+function openAdd() {
+  const back = document.createElement('div')
+  back.className = 'backdrop'
+  back.innerHTML = `<div class="modal">
+    <div class="modal-head">Ajouter un programme au démarrage (utilisateur courant)</div>
+    <div class="modal-body">
+      <label>Nom<input id="a-name" type="text" maxlength="200" placeholder="MonProgramme" /></label>
+      <label>Commande<input id="a-cmd" type="text" class="mono" spellcheck="false" placeholder='"C:\\Program Files\\App\\app.exe" --minimized' /></label>
+      <p class="hint">L'entrée est créée dans <code>HKCU\\…\\CurrentVersion\\Run</code> : elle ne concerne que votre compte et ne nécessite pas de droits administrateur.
+        Encadrez le chemin de guillemets s'il contient des espaces. Les variables comme <code>%LOCALAPPDATA%</code> sont acceptées.</p>
+    </div>
+    <div class="modal-foot"><button data-x>Annuler</button><button class="primary" data-ok>Ajouter</button></div></div>`
+  document.body.appendChild(back)
+  const close = () => back.remove()
+  const ok = async (overwrite = false) => {
+    const name = back.querySelector('#a-name').value.trim()
+    const command = back.querySelector('#a-cmd').value.trim()
+    if (!name || !command) { toast('Nom et commande obligatoires', true); return }
+    try {
+      const r = await call('add', { name, command, overwrite })
+      close()
+      toast(r.exe_exists ? `« ${name} » ajouté` : `« ${name} » ajouté — attention, l'exécutable est introuvable`, !r.exe_exists)
+      load()
+    } catch (e) {
+      if (e.code === 'EXISTS' && confirm(`${e.message}. La remplacer ?`)) return ok(true)
+      toast(e.message, true)
+    }
+  }
+  back.querySelector('[data-x]').onclick = close
+  back.querySelector('[data-ok]').onclick = () => ok()
+  back.addEventListener('mousedown', (e) => { if (e.target === back) close() })
+  back.addEventListener('keydown', (e) => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') close() })
+  back.querySelector('#a-name').focus()
+}
+
+$('#btn-add').addEventListener('click', openAdd)
+$('#btn-refresh').addEventListener('click', refresh)
+$('#q').addEventListener('input', () => (state.tab === 'tasks' ? renderTasks() : render()))
+$('#f-state').addEventListener('change', render)
+$('#f-scope').addEventListener('change', render)
+$('#show-ms').addEventListener('change', renderTasks)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F5') { e.preventDefault(); refresh() }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select() }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !document.querySelector('.backdrop')) { e.preventDefault(); openAdd() }
+})
+
+load()
+</script>
+</body>
+</html>

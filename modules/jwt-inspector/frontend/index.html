@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JWT Inspector</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    --c-h: #f472b6; --c-p: #c084fc; --c-s: #38bdf8;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; resize: none; width: 100%; }
+  .hidden { display: none !important; }
+
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .topbar .title { font-weight: 600; font-size: 14px; }
+  .topbar .title small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .topbar .spacer { flex: 1; }
+  .modes { display: flex; gap: 4px; }
+  .modes button.active { background: var(--bg); border-color: var(--accent); color: #fff; }
+
+  .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 42%) 1fr; gap: 10px; padding: 10px 12px; }
+  .pane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; }
+  .pane-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  .pane-head .lbl { font-weight: 600; flex: 1; }
+  .pane-body { flex: 1; min-height: 0; overflow: auto; padding: 10px; }
+  .sec-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 12px 0 5px; display: flex; align-items: center; gap: 6px; }
+  .sec-title:first-child { margin-top: 0; }
+  .sec-title .sp { flex: 1; }
+
+  #token { flex: 1; min-height: 120px; word-break: break-all; white-space: pre-wrap; }
+  .token-view { font-family: var(--mono); font-size: 12.5px; line-height: 1.55; word-break: break-all; padding: 8px;
+                background: var(--bg); border: 1px solid var(--border); border-radius: 6px; max-height: 40%; overflow: auto; }
+  .tv-h { color: var(--c-h); } .tv-p { color: var(--c-p); } .tv-s { color: var(--c-s); } .tv-dot { color: var(--muted); }
+  .status { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pill { padding: 2px 9px; border-radius: 10px; font-weight: 600; font-size: 11.5px; border: 1px solid transparent; }
+  .pill.ok { background: rgba(34,197,94,.14); color: #86efac; border-color: rgba(34,197,94,.3); }
+  .pill.err { background: rgba(239,68,68,.12); color: #fca5a5; border-color: rgba(239,68,68,.3); }
+  .pill.warn { background: rgba(245,158,11,.12); color: #fcd34d; border-color: rgba(245,158,11,.3); }
+  .pill.neutral { background: var(--surface2); color: var(--muted); border-color: var(--border); }
+  .warnings { display: flex; flex-direction: column; gap: 5px; }
+  .w { padding: 6px 9px; border-radius: 6px; font-size: 12.5px; border-left: 3px solid; }
+  .w.err { background: rgba(239,68,68,.08); border-color: var(--err); color: #fca5a5; }
+  .w.warn { background: rgba(245,158,11,.08); border-color: var(--warn); color: #fcd34d; }
+
+  pre.json { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+             background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  pre.json.h { border-left: 3px solid var(--c-h); } pre.json.p { border-left: 3px solid var(--c-p); }
+  .j-key { color: #93c5fd; } .j-str { color: #86efac; } .j-num { color: #fbbf24; } .j-bool { color: #c084fc; } .j-null { color: #f472b6; }
+  table.claims { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.claims td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.claims td.k { font-family: var(--mono); color: #93c5fd; width: 110px; white-space: nowrap; }
+  table.claims td.k small { display: block; color: var(--muted); font-family: system-ui; font-size: 11px; }
+  table.claims td.v { font-family: var(--mono); word-break: break-all; }
+  .t-rel { font-family: system-ui; font-size: 12px; margin-top: 2px; }
+  .t-rel.past { color: #fca5a5; } .t-rel.future { color: #86efac; } .t-rel.neutral { color: var(--muted); }
+  .sig { font-family: var(--mono); font-size: 11.5px; color: var(--c-s); word-break: break-all; }
+
+  .form { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row label { color: var(--muted); }
+  textarea.key { height: 150px; }
+  textarea.small { height: 90px; }
+  textarea.mid { height: 150px; }
+  .result-box { padding: 10px 12px; border-radius: 6px; font-weight: 600; }
+  .result-box.ok { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.35); color: #86efac; }
+  .result-box.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .hint code { font-family: var(--mono); color: var(--accent-h); }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 6px; text-align: center; padding: 20px; }
+  .placeholder .big { font-size: 34px; }
+  .error-box { color: #fca5a5; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; }
+  .gen-out { font-family: var(--mono); font-size: 12px; word-break: break-all; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="title">🎫 JWT Inspector<small>décoder · vérifier · générer</small></div>
+  <div class="spacer"></div>
+  <div class="modes" id="modes">
+    <button data-mode="decode" class="active" title="Alt+1">Décoder</button>
+    <button data-mode="verify" title="Alt+2">Vérifier</button>
+    <button data-mode="sign" title="Alt+3">Générer</button>
+  </div>
+</div>
+
+<div class="layout">
+  <section class="pane">
+    <div class="pane-head">
+      <span class="lbl">Jeton</span>
+      <button class="ghost" id="btn-paste" title="Coller depuis le presse-papiers">Coller</button>
+      <button class="ghost" id="btn-sample" title="Charger un exemple">Exemple</button>
+      <button class="ghost" id="btn-clear" title="Effacer">Effacer</button>
+    </div>
+    <div class="pane-body" style="display:flex;flex-direction:column;gap:10px">
+      <textarea id="token" spellcheck="false" placeholder="Collez un JWT ici (eyJhbGciOi…) — le préfixe « Bearer » est accepté."></textarea>
+      <div class="token-view hidden" id="token-view"></div>
+      <div class="status" id="status"></div>
+      <div class="warnings" id="warnings"></div>
+    </div>
+  </section>
+
+  <section class="pane">
+    <!-- Decode -->
+    <div class="pane-body" data-panel="decode" id="decoded">
+      <div class="placeholder"><div class="big">🎫</div><div>Collez un JWT à gauche pour le décoder.</div>
+        <div class="hint">Le décodage ne vérifie pas la signature : utilisez l'onglet « Vérifier ».</div></div>
+    </div>
+
+    <!-- Verify -->
+    <div class="pane-body hidden" data-panel="verify">
+      <div class="form">
+        <div class="row">
+          <label for="v-alg">Algorithme</label>
+          <select id="v-alg"></select>
+          <span class="hint" id="v-alg-hint"></span>
+        </div>
+        <div class="row" id="v-enc-row">
+          <label for="v-enc">Encodage du secret</label>
+          <select id="v-enc">
+            <option value="utf8">Texte (UTF-8)</option>
+            <option value="base64">Base64 / Base64url</option>
+            <option value="hex">Hexadécimal</option>
+          </select>
+        </div>
+        <label class="hint" id="v-key-label" for="v-key">Secret partagé</label>
+        <textarea id="v-key" class="key" spellcheck="false"></textarea>
+        <div class="row">
+          <button class="primary" id="btn-verify" title="Ctrl+Entrée">Vérifier la signature</button>
+          <span class="hint">Le secret / la clé ne sont ni enregistrés ni journalisés.</span>
+        </div>
+        <div id="v-result"></div>
+      </div>
+    </div>
+
+    <!-- Sign -->
+    <div class="pane-body hidden" data-panel="sign">
+      <div class="form">
+        <div class="row">
+          <label for="s-alg">Algorithme</label>
+          <select id="s-alg"></select>
+          <span style="flex:1"></span>
+          <button id="btn-genkey" title="Générer un secret ou une paire de clés de test">Générer une clé de test</button>
+        </div>
+        <div class="sec-title">Header <span class="sp"></span><span class="hint">« alg » est imposé par le sélecteur</span></div>
+        <textarea id="s-header" class="small" spellcheck="false"></textarea>
+        <div class="sec-title">Payload <span class="sp"></span>
+          <button class="ghost" id="btn-iat" title="iat = maintenant">iat = maintenant</button>
+          <button class="ghost" id="btn-exp1" title="exp = exp (ou maintenant) + 1 h">exp +1 h</button>
+          <button class="ghost" id="btn-exp24" title="exp = maintenant + 24 h">exp +24 h</button>
+          <button class="ghost" id="btn-expdel" title="Retirer exp">sans exp</button>
+        </div>
+        <textarea id="s-payload" class="mid" spellcheck="false"></textarea>
+        <div class="row" id="s-enc-row">
+          <label for="s-enc">Encodage du secret</label>
+          <select id="s-enc">
+            <option value="utf8">Texte (UTF-8)</option>
+            <option value="base64">Base64 / Base64url</option>
+            <option value="hex">Hexadécimal</option>
+          </select>
+        </div>
+        <label class="hint" id="s-key-label" for="s-key">Secret</label>
+        <textarea id="s-key" class="key" spellcheck="false"></textarea>
+        <div id="s-pub-wrap" class="hidden">
+          <div class="sec-title">Clé publique correspondante <span class="sp"></span><button class="ghost" id="btn-copy-pub">Copier</button></div>
+          <textarea id="s-pub" class="small" spellcheck="false" readonly></textarea>
+        </div>
+        <div class="row">
+          <button class="primary" id="btn-sign" title="Ctrl+Entrée">Générer le JWT</button>
+        </div>
+        <div id="s-result"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'jwt-inspector'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const SAMPLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
+const DEFAULT_ALGS = ['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512', 'ES256', 'ES384', 'ES512', 'EdDSA', 'none']
+const state = { mode: 'decode', decoded: null, cryptoOk: true, algs: DEFAULT_ALGS, seq: 0 }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2200)
+}
+
+async function copy(text, label = 'Copié') {
+  try { await navigator.clipboard.writeText(text); toast(label) }
+  catch { toast('Copie impossible', true) }
+}
+
+function highlightJson(text) {
+  return esc(text).replace(/(&quot;(?:\\.|[^&\\]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g,
+    (m, str, colon, bool) => {
+      if (str) return colon ? `<span class="j-key">${str}</span>${colon}` : `<span class="j-str">${str}</span>`
+      if (bool) return `<span class="j-bool">${m}</span>`
+      if (m === 'null') return `<span class="j-null">${m}</span>`
+      return `<span class="j-num">${m}</span>`
+    })
+}
+
+const isHmac = (a) => /^HS/.test(a)
+const keyLabel = (a, signing) => isHmac(a) ? (signing ? 'Secret' : 'Secret partagé')
+  : a === 'none' ? 'Aucune clé (jeton non signé)'
+  : signing ? 'Clé privée PEM (PKCS#8 ou traditionnelle, non chiffrée)'
+  : 'Clé publique PEM (ou certificat X.509, ou clé privée)'
+
+// ── Relative time ───────────────────────────────────────────────────────────
+const rtf = new Intl.RelativeTimeFormat('fr', { numeric: 'auto' })
+function humanDelta(seconds) {
+  const abs = Math.abs(seconds)
+  const units = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]]
+  for (const [u, s] of units) if (abs >= s || u === 'second') return rtf.format(Math.round(seconds / s), u)
+}
+function fmtDate(ms) {
+  return new Date(ms).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'medium' })
+}
+function timeLine(key, t) {
+  const delta = (t.epoch_ms - Date.now()) / 1000
+  const rel = humanDelta(delta)
+  let text = rel, cls = 'neutral'
+  if (key === 'exp') { text = delta > 0 ? `expire ${rel}` : `expiré depuis ${rel.replace(/^il y a /, '')}`; cls = delta > 0 ? 'future' : 'past' }
+  else if (key === 'nbf') { text = delta > 0 ? `valide ${rel}` : `valide depuis ${rel.replace(/^il y a /, '')}`; cls = delta > 0 ? 'past' : 'future' }
+  else if (key === 'iat') text = `émis ${rel}`
+  return `<div>${esc(fmtDate(t.epoch_ms))}</div><div class="t-rel ${cls}">${esc(text)}</div>`
+}
+
+// ── Decode ──────────────────────────────────────────────────────────────────
+function renderTokenView(raw) {
+  const tv = $('#token-view')
+  const tok = raw.trim().replace(/^bearer\s+/i, '').replace(/\s+/g, '')
+  const parts = tok.split('.')
+  if (!tok || parts.length < 2) { tv.classList.add('hidden'); return }
+  const cls = ['tv-h', 'tv-p', 'tv-s', 'tv-s', 'tv-s']
+  tv.innerHTML = parts.map((p, i) => `<span class="${cls[i] || 'tv-s'}">${esc(p)}</span>`).join('<span class="tv-dot">.</span>')
+  tv.classList.remove('hidden')
+}
+
+const STATUS = {
+  valid_time: ['ok', 'Dans sa période de validité'],
+  expired: ['err', 'Expiré'],
+  not_yet_valid: ['warn', 'Pas encore valide'],
+  unsigned: ['err', 'Non signé (alg none)'],
+}
+
+function renderStatus(d, error) {
+  const st = $('#status'), w = $('#warnings')
+  if (error) { st.innerHTML = '<span class="pill err">Jeton invalide</span>'; w.innerHTML = `<div class="w err">${esc(error)}</div>`; return }
+  if (!d) { st.innerHTML = ''; w.innerHTML = ''; return }
+  const [cls, label] = STATUS[d.status] || ['neutral', d.status]
+  st.innerHTML = `<span class="pill ${cls}">${label}</span>` +
+    `<span class="pill neutral">alg : ${esc(d.alg ?? '—')}</span>` +
+    (d.header.typ ? `<span class="pill neutral">typ : ${esc(d.header.typ)}</span>` : '') +
+    (d.header.kid ? `<span class="pill neutral">kid : ${esc(d.header.kid)}</span>` : '') +
+    `<span class="pill neutral">signature : ${d.signature_bytes} octets</span>`
+  w.innerHTML = d.warnings.map((x) => `<div class="w ${x.level}">${esc(x.text)}</div>`).join('')
+}
+
+function renderDecoded() {
+  const d = state.decoded, box = $('#decoded')
+  if (!d) {
+    box.innerHTML = `<div class="placeholder"><div class="big">🎫</div><div>Collez un JWT à gauche pour le décoder.</div>
+      <div class="hint">Le décodage ne vérifie pas la signature : utilisez l'onglet « Vérifier ».</div></div>`
+    return
+  }
+  const headerJson = JSON.stringify(d.header, null, 2)
+  const payloadJson = d.payload_is_json ? JSON.stringify(d.payload, null, 2) : d.payload_text
+  const claims = d.claims.length ? `
+    <div class="sec-title">Claims</div>
+    <table class="claims"><tbody>${d.claims.map((c) => `
+      <tr><td class="k">${esc(c.key)}${c.label ? `<small>${esc(c.label)}</small>` : ''}</td>
+      <td class="v">${c.time ? `<div style="color:var(--muted)">${esc(c.value)}</div>${timeLine(c.key, c.time)}`
+        : esc(typeof c.value === 'string' ? c.value : JSON.stringify(c.value))}</td></tr>`).join('')}
+    </tbody></table>` : ''
+  box.innerHTML = `
+    <div class="sec-title">Header <span class="sp"></span><button class="ghost" data-copy="h">Copier</button></div>
+    <pre class="json h">${highlightJson(headerJson)}</pre>
+    <div class="sec-title">Payload <span class="sp"></span><button class="ghost" data-copy="p">Copier</button>
+      <button class="ghost" data-edit title="Reprendre ce jeton dans l'onglet Générer">Modifier et re-signer</button></div>
+    <pre class="json p">${d.payload_is_json ? highlightJson(payloadJson) : esc(payloadJson)}</pre>
+    ${claims}
+    <div class="sec-title">Signature</div>
+    <div class="sig">${d.signature_hex ? esc(d.signature_hex) : '<span style="color:var(--muted)">(vide)</span>'}</div>`
+  box.querySelector('[data-copy="h"]').onclick = () => copy(headerJson, 'Header copié')
+  box.querySelector('[data-copy="p"]').onclick = () => copy(payloadJson, 'Payload copié')
+  box.querySelector('[data-edit]').onclick = () => {
+    const h = { ...d.header }; delete h.alg
+    $('#s-header').value = JSON.stringify(h, null, 2)
+    if (d.payload_is_json) $('#s-payload').value = payloadJson
+    if (state.algs.includes(d.alg)) { $('#s-alg').value = d.alg; onSignAlg() }
+    setMode('sign')
+  }
+}
+
+let decodeTimer
+function scheduleDecode() {
+  clearTimeout(decodeTimer)
+  decodeTimer = setTimeout(decodeNow, 150)
+}
+async function decodeNow() {
+  const raw = $('#token').value
+  renderTokenView(raw)
+  $('#v-result').innerHTML = ''
+  const seq = ++state.seq
+  if (!raw.trim()) { state.decoded = null; renderStatus(null); renderDecoded(); return }
+  try {
+    const d = await call('decode', { token: raw })
+    if (seq !== state.seq) return
+    state.decoded = d
+    renderStatus(d)
+    if (d.alg && state.algs.includes(d.alg) && d.alg !== 'none') { $('#v-alg').value = d.alg; onVerifyAlg() }
+  } catch (e) {
+    if (seq !== state.seq) return
+    state.decoded = null
+    renderStatus(null, e.message)
+  }
+  renderDecoded()
+}
+
+// ── Verify ──────────────────────────────────────────────────────────────────
+function onVerifyAlg() {
+  const a = $('#v-alg').value
+  $('#v-enc-row').classList.toggle('hidden', !isHmac(a))
+  $('#v-key-label').textContent = keyLabel(a, false)
+  $('#v-key').placeholder = isHmac(a) ? 'your-256-bit-secret' : '-----BEGIN PUBLIC KEY-----\n…\n-----END PUBLIC KEY-----'
+  $('#v-alg-hint').textContent = !isHmac(a) && !state.cryptoOk ? '⚠ bibliothèque « cryptography » absente' : ''
+}
+async function verify() {
+  const token = $('#token').value
+  if (!token.trim()) { toast('Collez d\'abord un jeton', true); $('#token').focus(); return }
+  const btn = $('#btn-verify'); btn.disabled = true
+  try {
+    const r = await call('verify', { token, alg: $('#v-alg').value, key: $('#v-key').value, secret_encoding: $('#v-enc').value }, { timeout: 20000 })
+    $('#v-result').innerHTML = `<div class="result-box ${r.valid ? 'ok' : 'err'}">${r.valid ? '✔' : '✖'} ${esc(r.message)}</div>`
+  } catch (e) {
+    $('#v-result').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+  } finally { btn.disabled = false }
+}
+
+// ── Sign ────────────────────────────────────────────────────────────────────
+function onSignAlg() {
+  const a = $('#s-alg').value
+  $('#s-enc-row').classList.toggle('hidden', !isHmac(a))
+  $('#s-key').classList.toggle('hidden', a === 'none')
+  $('#s-key-label').textContent = keyLabel(a, true)
+  $('#s-key').placeholder = isHmac(a) ? 'mon-secret' : '-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----'
+  $('#btn-genkey').disabled = a === 'none' || (!isHmac(a) && !state.cryptoOk)
+  $('#s-pub-wrap').classList.add('hidden')
+}
+function editPayload(fn) {
+  let obj
+  try { obj = JSON.parse($('#s-payload').value || '{}') } catch (e) { toast(`Payload JSON invalide : ${e.message}`, true); return }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) { toast('Le payload doit être un objet JSON', true); return }
+  fn(obj)
+  $('#s-payload').value = JSON.stringify(obj, null, 2)
+}
+const nowS = () => Math.floor(Date.now() / 1000)
+async function sign() {
+  const btn = $('#btn-sign'); btn.disabled = true
+  try {
+    const r = await call('sign', { alg: $('#s-alg').value, header: $('#s-header').value, payload: $('#s-payload').value,
+      key: $('#s-key').value, secret_encoding: $('#s-enc').value }, { timeout: 20000 })
+    $('#s-result').innerHTML = `<div class="sec-title">Jeton généré <span class="sp"></span>
+        <button class="ghost" data-a="copy">Copier</button><button data-a="inspect">Inspecter</button></div>
+      <div class="gen-out">${esc(r.token)}</div>`
+    $('#s-result [data-a="copy"]').onclick = () => copy(r.token, 'Jeton copié')
+    $('#s-result [data-a="inspect"]').onclick = () => {
+      $('#token').value = r.token
+      if (isHmac(r.alg)) { $('#v-key').value = $('#s-key').value; $('#v-enc').value = $('#s-enc').value }
+      else if (!$('#s-pub-wrap').classList.contains('hidden')) $('#v-key').value = $('#s-pub').value
+      decodeNow(); setMode('decode')
+    }
+  } catch (e) {
+    $('#s-result').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+  } finally { btn.disabled = false }
+}
+async function genKey() {
+  const a = $('#s-alg').value
+  if ($('#s-key').value.trim() && !confirm('Remplacer la clé / le secret actuel ?')) return
+  const btn = $('#btn-genkey'); btn.disabled = true
+  try {
+    const r = await call('generate_keys', { alg: a }, { timeout: 30000 })
+    if (r.secret) { $('#s-key').value = r.secret; $('#s-enc').value = 'utf8'; $('#s-pub-wrap').classList.add('hidden') }
+    else { $('#s-key').value = r.private_key; $('#s-pub').value = r.public_key; $('#s-pub-wrap').classList.remove('hidden') }
+    toast('Clé de test générée')
+  } catch (e) { toast(e.message, true) }
+  finally { btn.disabled = false }
+}
+
+// ── Modes & wiring ──────────────────────────────────────────────────────────
+function setMode(mode) {
+  state.mode = mode
+  $$('#modes button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode))
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== mode))
+}
+
+function fillAlgs() {
+  const opts = state.algs.map((a) => `<option value="${a}">${a}</option>`).join('')
+  $('#v-alg').innerHTML = state.algs.filter((a) => a !== 'none').map((a) => `<option value="${a}">${a}</option>`).join('')
+  $('#s-alg').innerHTML = opts
+}
+
+$$('#modes button').forEach((b) => (b.onclick = () => setMode(b.dataset.mode)))
+$('#token').addEventListener('input', scheduleDecode)
+$('#btn-sample').onclick = () => { $('#token').value = SAMPLE; $('#v-key').value = 'your-256-bit-secret'; $('#v-enc').value = 'utf8'; decodeNow() }
+$('#btn-clear').onclick = () => { $('#token').value = ''; decodeNow(); $('#token').focus() }
+$('#btn-paste').onclick = async () => {
+  try { $('#token').value = await navigator.clipboard.readText(); decodeNow() }
+  catch { toast('Lecture du presse-papiers refusée : utilisez Ctrl+V', true) }
+}
+$('#v-alg').onchange = onVerifyAlg
+$('#s-alg').onchange = onSignAlg
+$('#btn-verify').onclick = verify
+$('#btn-sign').onclick = sign
+$('#btn-genkey').onclick = genKey
+$('#btn-copy-pub').onclick = () => copy($('#s-pub').value, 'Clé publique copiée')
+$('#btn-iat').onclick = () => editPayload((o) => { o.iat = nowS() })
+$('#btn-exp1').onclick = () => editPayload((o) => { o.exp = (typeof o.exp === 'number' && o.exp > nowS() ? o.exp : nowS()) + 3600 })
+$('#btn-exp24').onclick = () => editPayload((o) => { o.exp = nowS() + 86400 })
+$('#btn-expdel').onclick = () => editPayload((o) => { delete o.exp })
+for (const id of ['#s-header', '#s-payload']) {
+  $(id).addEventListener('blur', () => {
+    const el = $(id)
+    try { if (el.value.trim()) el.value = JSON.stringify(JSON.parse(el.value), null, 2) } catch { /* left as typed */ }
+  })
+}
+document.addEventListener('keydown', (e) => {
+  if (e.altKey && ['1', '2', '3'].includes(e.key)) { e.preventDefault(); setMode(['decode', 'verify', 'sign'][+e.key - 1]) }
+  if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault()
+    if (state.mode === 'verify') verify()
+    else if (state.mode === 'sign') sign()
+    else decodeNow()
+  }
+})
+setInterval(() => { if (state.decoded && state.mode === 'decode') renderDecoded() }, 30000)
+
+async function init() {
+  fillAlgs()
+  $('#s-header').value = JSON.stringify({ typ: 'JWT' }, null, 2)
+  $('#s-payload').value = JSON.stringify({ sub: '1234567890', name: 'Jean Dupont', iat: nowS(), exp: nowS() + 3600 }, null, 2)
+  onVerifyAlg(); onSignAlg()
+  try {
+    const r = await call('algorithms')
+    state.cryptoOk = r.crypto_available
+    state.algs = r.algorithms
+    fillAlgs(); onVerifyAlg(); onSignAlg()
+    if (!r.crypto_available) toast('« cryptography » absente : seuls HS256/384/512 sont disponibles pour signer/vérifier', true)
+  } catch (e) { toast(e.message, true) }
+  $('#token').focus()
+}
+init()
+</script>
+</body>
+</html>

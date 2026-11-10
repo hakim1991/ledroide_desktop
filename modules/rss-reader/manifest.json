@@ -1,0 +1,54 @@
+{
+  "id": "rss-reader",
+  "name": "Lecteur RSS",
+  "version": "1.0.0",
+  "description": "Lecteur de flux RSS et Atom : découverte automatique du flux d'un site, dossiers, rafraîchissement automatique, articles non lus et favoris, recherche, lecture assainie et import/export OPML.",
+  "category": "Productivité",
+  "tags": [
+    "rss",
+    "atom",
+    "actualités",
+    "veille",
+    "opml"
+  ],
+  "icon": "📰",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "refresh_minutes": {
+      "type": "integer",
+      "title": "Rafraîchissement automatique (minutes, 0 = désactivé)",
+      "default": 30,
+      "minimum": 0,
+      "maximum": 1440
+    },
+    "max_items_per_feed": {
+      "type": "integer",
+      "title": "Articles conservés par flux (hors favoris)",
+      "default": 500,
+      "minimum": 50,
+      "maximum": 10000
+    },
+    "fetch_timeout": {
+      "type": "integer",
+      "title": "Délai de téléchargement d'un flux (secondes)",
+      "default": 20,
+      "minimum": 5,
+      "maximum": 120
+    }
+  }
+}

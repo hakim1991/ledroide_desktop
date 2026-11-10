@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gestionnaire de processus</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.danger:hover:not(:disabled) { background: rgba(239,68,68,.25); border-color: var(--err); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  button.on { border-color: var(--accent); color: #fff; background: rgba(99,102,241,.18); }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-wrap: wrap; }
+  header h1 { font-size: 15px; font-weight: 600; margin-right: 4px; }
+  .spacer { flex: 1; }
+  #q { width: 200px; }
+  .stats { display: flex; gap: 14px; color: var(--muted); font-size: 12px; }
+  .stats b { color: var(--text); font-weight: 600; }
+  .portbox { display: flex; gap: 4px; }
+  .portbox input { width: 90px; }
+
+  #wrap { flex: 1; min-height: 0; display: flex; }
+  #list { flex: 1; min-width: 0; overflow: auto; }
+  table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.grid th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11.5px; padding: 6px 8px;
+                  border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 1;
+                  cursor: pointer; user-select: none; white-space: nowrap; overflow: hidden; }
+  table.grid th.num, table.grid td.num { text-align: right; }
+  table.grid td { padding: 4px 8px; border-bottom: 1px solid #1c1c20; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.grid tbody tr { cursor: default; }
+  table.grid tbody tr:hover td { background: var(--surface); }
+  table.grid tbody tr.sel td { background: rgba(99,102,241,.16); }
+  td.num { font-family: var(--mono); font-size: 12px; }
+  .tw { display: inline-block; width: 14px; color: var(--muted); cursor: pointer; text-align: center; }
+  .prot { color: var(--warn); font-size: 11px; margin-left: 4px; }
+  .heat-1 { color: #fde68a; } .heat-2 { color: #fbbf24; } .heat-3 { color: #f87171; font-weight: 600; }
+  .user { color: var(--muted); }
+  .path { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
+
+  #detail { width: 400px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--surface);
+            display: flex; flex-direction: column; min-height: 0; }
+  .d-head { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 8px; }
+  .d-head .t { flex: 1; min-width: 0; }
+  .d-head .t b { font-size: 14px; word-break: break-all; }
+  .d-head .t div { color: var(--muted); font-size: 12px; }
+  .d-actions { padding: 8px 12px; display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--border); align-items: center; }
+  .tabs { display: flex; gap: 2px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .tab { padding: 4px 10px; border-radius: 5px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .tab .n { color: var(--accent-h); font-size: 11px; margin-left: 3px; }
+  .d-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; }
+  dl.kv { display: grid; grid-template-columns: 110px 1fr; gap: 5px 10px; font-size: 12px; }
+  dl.kv dt { color: var(--muted); }
+  dl.kv dd { word-break: break-all; }
+  dl.kv dd.mono { font-size: 11.5px; }
+  .link { color: var(--accent-h); cursor: pointer; }
+  .link:hover { text-decoration: underline; }
+  table.small { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  table.small td, table.small th { padding: 3px 5px; border-bottom: 1px solid var(--border); text-align: left; word-break: break-all; }
+  table.small th { color: var(--muted); font-weight: 600; }
+  .note { color: var(--muted); font-size: 12px; padding: 8px 0; }
+  .note.warn { color: var(--warn); }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 6px; text-align: center; padding: 20px; }
+  .placeholder .big { font-size: 30px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(760px, 94vw);
+           max-height: 86vh; display: flex; flex-direction: column; }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; }
+  .modal-head span { flex: 1; }
+  .modal-body { padding: 12px 14px; overflow: auto; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚙️ Processus</h1>
+  <input id="q" type="search" placeholder="Nom, PID, chemin… (Ctrl+F)" spellcheck="false" />
+  <button id="btn-tree" title="Vue arborescente parent / enfants (T)">🌳 Arborescence</button>
+  <select id="interval" title="Rafraîchissement">
+    <option value="0">Pause</option><option value="1000">1 s</option><option value="2000" selected>2 s</option>
+    <option value="5000">5 s</option><option value="10000">10 s</option>
+  </select>
+  <button id="btn-refresh" class="ghost icon" title="Actualiser (F5)">⟳</button>
+  <span class="spacer"></span>
+  <div class="stats" id="stats"></div>
+  <div class="portbox">
+    <input id="port" type="number" min="1" max="65535" placeholder="Port" title="Qui utilise ce port ?" />
+    <button id="btn-port" title="Qui utilise ce port ?">🔌 Qui utilise ce port ?</button>
+  </div>
+</header>
+
+<div id="wrap">
+  <div id="list"><div class="placeholder"><span class="spinner"></span> Chargement des processus…</div></div>
+  <aside id="detail" class="hidden"></aside>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'process-manager'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const PRIORITIES = [['idle', 'Basse'], ['below_normal', 'Inférieure à la normale'], ['normal', 'Normale'],
+  ['above_normal', 'Supérieure à la normale'], ['high', 'Haute']]
+const PRIO_LABEL = Object.fromEntries([...PRIORITIES, ['realtime', 'Temps réel']])
+const COLS = [
+  { key: 'name', label: 'Nom', w: '' },
+  { key: 'pid', label: 'PID', w: '70px', num: true },
+  { key: 'user', label: 'Utilisateur', w: '130px' },
+  { key: 'cpu', label: 'CPU', w: '70px', num: true },
+  { key: 'mem', label: 'Mémoire', w: '95px', num: true },
+  { key: 'threads', label: 'Threads', w: '70px', num: true },
+  { key: 'started', label: 'Démarré', w: '125px' },
+  { key: 'exe', label: 'Chemin', w: '28%' },
+]
+
+const state = { items: [], byPid: new Map(), sort: { key: 'cpu', dir: -1 }, tree: false, collapsed: new Set(),
+                selected: null, detail: null, dtab: 'info', timer: null, loading: false, system: null }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+
+function fmtBytes(n) {
+  if (n == null) return '—'
+  const u = ['o', 'Ko', 'Mo', 'Go', 'To']
+  let i = 0
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
+  return `${n.toFixed(i && n < 100 ? 1 : 0)} ${u[i]}`
+}
+const fmtTime = (t) => (t ? new Date(t * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' }) : '—')
+const shortUser = (u) => (u ? u.split('\\').pop() : '')
+
+async function refresh() {
+  if (state.loading) return
+  state.loading = true
+  try {
+    const r = await call('list', {}, { timeout: 30000 })
+    state.items = r.items
+    state.byPid = new Map(r.items.map((p) => [p.pid, p]))
+    state.system = r.system
+    renderStats()
+    renderList()
+    if (state.selected != null && !state.byPid.has(state.selected)) {
+      state.detail = { ...(state.detail || {}), ended: true }
+      renderDetail()
+    }
+  } catch (e) {
+    if (!state.items.length) $('#list').innerHTML = `<div class="placeholder"><div class="big">⚠️</div>${esc(e.message)}</div>`
+    else toast(e.message, true)
+  } finally {
+    state.loading = false
+  }
+}
+
+function schedule() {
+  clearInterval(state.timer)
+  const ms = +$('#interval').value
+  if (ms) state.timer = setInterval(() => { if (!document.hidden) refresh() }, ms)
+}
+
+function renderStats() {
+  const s = state.system
+  if (!s) return
+  $('#stats').innerHTML = `<span>Processus <b>${s.count}</b></span><span>CPU <b>${s.cpu.toFixed(0)} %</b></span>
+    <span>Mémoire <b>${fmtBytes(s.mem_used)}</b> / ${fmtBytes(s.mem_total)} (${s.mem_percent.toFixed(0)} %)</span>`
+}
+
+function cmp(a, b) {
+  const { key, dir } = state.sort
+  let va = a[key], vb = b[key]
+  if (typeof va === 'string' || typeof vb === 'string') { va = String(va || '').toLowerCase(); vb = String(vb || '').toLowerCase() }
+  else { va = va ?? -1; vb = vb ?? -1 }
+  return (va < vb ? -1 : va > vb ? 1 : a.pid - b.pid) * dir
+}
+
+function matchSet() {
+  const q = $('#q').value.trim().toLowerCase()
+  if (!q) return null
+  const set = new Set()
+  for (const p of state.items) {
+    if (String(p.pid) === q || [p.name, p.exe, p.cmdline, p.user].join(' ').toLowerCase().includes(q)) set.add(p.pid)
+  }
+  return set
+}
+
+function visibleRows() {
+  const match = matchSet()
+  if (!state.tree) return state.items.filter((p) => !match || match.has(p.pid)).sort(cmp).map((p) => ({ p, depth: 0 }))
+  const kids = new Map()
+  for (const p of state.items) {
+    const parent = p.ppid != null && state.byPid.has(p.ppid) ? p.ppid : 0
+    if (!kids.has(parent)) kids.set(parent, [])
+    kids.get(parent).push(p)
+  }
+  let keep = null
+  if (match) {
+    keep = new Set()
+    for (const pid of match) {
+      let cur = state.byPid.get(pid), guard = 0
+      while (cur && !keep.has(cur.pid) && guard++ < 64) { keep.add(cur.pid); cur = state.byPid.get(cur.ppid) }
+    }
+  }
+  const out = [], seen = new Set()
+  const walk = (parent, depth) => {
+    for (const p of (kids.get(parent) || []).sort(cmp)) {
+      if (seen.has(p.pid) || (keep && !keep.has(p.pid))) continue
+      seen.add(p.pid)
+      const has = (kids.get(p.pid) || []).some((c) => !keep || keep.has(c.pid))
+      out.push({ p, depth, has })
+      if (has && (match || !state.collapsed.has(p.pid))) walk(p.pid, depth + 1)
+    }
+  }
+  walk(0, 0)
+  return out
+}
+
+function heat(cpu) { return cpu == null ? '' : cpu >= 50 ? 'heat-3' : cpu >= 15 ? 'heat-2' : cpu >= 3 ? 'heat-1' : '' }
+
+function renderList() {
+  const rows = visibleRows()
+  const list = $('#list')
+  const scroll = list.scrollTop
+  const arrow = (k) => (state.sort.key === k ? (state.sort.dir > 0 ? ' ▲' : ' ▼') : '')
+  if (!rows.length) {
+    list.innerHTML = '<div class="placeholder"><div class="big">🔍</div>Aucun processus ne correspond à la recherche.</div>'
+    return
+  }
+  list.innerHTML = `<table class="grid"><colgroup>${COLS.map((c) => `<col style="width:${c.w || 'auto'}">`).join('')}</colgroup>
+    <thead><tr>${COLS.map((c) => `<th data-sort="${c.key}" class="${c.num ? 'num' : ''}">${c.label}${arrow(c.key)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(({ p, depth, has }) => `<tr data-pid="${p.pid}" class="${p.pid === state.selected ? 'sel' : ''}">
+      <td title="${esc(p.cmdline || p.name)}" style="padding-left:${8 + depth * 16}px">${state.tree
+        ? `<span class="tw" data-tw>${has ? (state.collapsed.has(p.pid) && !$('#q').value ? '▸' : '▾') : ''}</span>` : ''}${esc(p.name)}${p.protected ? '<span class="prot" title="Protégé : ' + esc(p.protected) + '">🛡</span>' : ''}</td>
+      <td class="num">${p.pid}</td>
+      <td class="user" title="${esc(p.user)}">${esc(shortUser(p.user))}</td>
+      <td class="num ${heat(p.cpu)}">${p.cpu == null ? '—' : p.cpu.toFixed(1) + ' %'}</td>
+      <td class="num">${fmtBytes(p.mem)}</td>
+      <td class="num">${p.threads}</td>
+      <td>${p.started ? new Date(p.started * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
+      <td class="path" title="${esc(p.exe)}">${esc(p.exe || '')}</td></tr>`).join('')}</tbody></table>`
+  list.scrollTop = scroll
+}
+
+// ── Detail panel ────────────────────────────────────────────────────────────
+async function select(pid, { focusTab } = {}) {
+  state.selected = pid
+  if (focusTab) state.dtab = focusTab
+  $$('#list tr.sel').forEach((r) => r.classList.remove('sel'))
+  $(`#list tr[data-pid="${pid}"]`)?.classList.add('sel')
+  $('#detail').classList.remove('hidden')
+  state.detail = { loading: true, pid }
+  renderDetail()
+  await loadDetail()
+}
+
+async function loadDetail() {
+  const pid = state.selected
+  const sections = state.dtab === 'info' ? ['connections'] : [state.dtab]
+  try {
+    const d = await call('details', { pid, sections }, { timeout: 30000 })
+    if (state.selected !== pid) return
+    state.detail = { ...(state.detail && state.detail.pid === pid ? state.detail : {}), ...d, pid, loading: false }
+  } catch (e) {
+    if (state.selected !== pid) return
+    state.detail = { pid, loading: false, error: e.message, ended: e.code === 'NOT_FOUND' }
+  }
+  renderDetail()
+}
+
+function sectionHtml(sec, render) {
+  if (!sec) return '<div class="note"><span class="spinner"></span> Chargement…</div>'
+  if (sec.denied) return '<div class="note warn">Accès refusé : informations réservées à l\'administrateur ou au propriétaire du processus.</div>'
+  if (sec.error) return `<div class="note warn">${esc(sec.error)}</div>`
+  if (!sec.items.length) return '<div class="note">Aucun élément.</div>'
+  return render(sec.items)
+}
+
+function renderDetail() {
+  const box = $('#detail')
+  const d = state.detail
+  if (!d) { box.classList.add('hidden'); return }
+  const p = state.byPid.get(state.selected) || {}
+  const name = d.name || p.name || `PID ${state.selected}`
+  const conns = d.connections
+  let body = ''
+  if (d.loading && !d.name) body = '<div class="note"><span class="spinner"></span> Chargement…</div>'
+  else if (d.error && !d.name) body = `<div class="note warn">${esc(d.error)}</div>`
+  else if (state.dtab === 'info') {
+    body = `<dl class="kv">
+      <dt>PID</dt><dd>${state.selected}</dd>
+      <dt>Parent</dt><dd>${d.parents?.length ? d.parents.map((a, i) => `<span class="link" data-goto="${a.pid}">${esc(a.name)} (${a.pid})</span>`).join(' ← ') : '—'}</dd>
+      <dt>Enfants</dt><dd>${d.children?.length ? d.children.map((c) => `<span class="link" data-goto="${c.pid}">${esc(c.name)} (${c.pid})</span>`).join(', ') : '—'}</dd>
+      <dt>Utilisateur</dt><dd>${esc(d.user || '—')}</dd>
+      <dt>Démarré</dt><dd>${fmtTime(d.started)}</dd>
+      <dt>Temps CPU</dt><dd>${d.cpu_time != null ? d.cpu_time.toFixed(1) + ' s' : '—'}</dd>
+      <dt>Priorité</dt><dd>${esc(PRIO_LABEL[d.priority] || '—')}</dd>
+      <dt>Mémoire</dt><dd>${d.memory ? `${fmtBytes(d.memory.rss)} (privée ${fmtBytes(d.memory.private)}, pic ${fmtBytes(d.memory.peak)})` : '—'}</dd>
+      <dt>Threads / handles</dt><dd>${d.threads ?? '—'} / ${d.handles ?? '—'}</dd>
+      <dt>E/S disque</dt><dd>${d.io ? `lu ${fmtBytes(d.io.read)}, écrit ${fmtBytes(d.io.write)}` : '—'}</dd>
+      <dt>Exécutable</dt><dd class="mono">${d.exe ? `<span class="link" data-reveal="${esc(d.exe)}" title="Ouvrir dans l'Explorateur">${esc(d.exe)}</span>` : '—'}</dd>
+      <dt>Dossier</dt><dd class="mono">${esc(d.cwd || '—')}</dd>
+      <dt>Ligne de commande</dt><dd class="mono">${esc((d.cmdline || []).join(' ') || '—')}</dd>
+    </dl>`
+  } else if (state.dtab === 'connections') {
+    body = sectionHtml(conns, (items) => `<table class="small"><tr><th>Proto</th><th>Local</th><th>Distant</th><th>État</th></tr>
+      ${items.map((c) => `<tr><td>${c.proto}</td><td class="mono">${esc(c.local)}</td><td class="mono">${esc(c.remote || '—')}</td><td>${esc(c.status)}</td></tr>`).join('')}</table>`)
+  } else if (state.dtab === 'files') {
+    body = sectionHtml(d.files, (items) => `<table class="small">${items.map((f) => `<tr><td class="mono">${esc(f)}</td></tr>`).join('')}</table>`)
+  } else if (state.dtab === 'modules') {
+    body = sectionHtml(d.modules, (items) => `<table class="small"><tr><th>Module</th><th>Mémoire</th></tr>
+      ${items.map((m) => `<tr><td class="mono" title="${esc(m.path)}">${esc(m.path)}</td><td>${fmtBytes(m.rss)}</td></tr>`).join('')}</table>`)
+  }
+  const n = (sec) => (sec && !sec.denied ? `<span class="n">${sec.items.length}</span>` : '')
+  const prot = d.protected || p.protected
+  box.innerHTML = `
+    <div class="d-head"><div class="t"><b>${esc(name)}</b>
+      <div>PID ${state.selected}${d.ended ? ' · <span style="color:var(--err)">terminé</span>' : ''}${prot ? ' · 🛡 ' + esc(prot) : ''}</div></div>
+      <button class="ghost icon" data-close title="Fermer (Échap)">✕</button></div>
+    <div class="d-actions">
+      <button class="danger" data-kill ${d.ended || prot ? 'disabled' : ''} title="Terminer (Suppr)">Terminer</button>
+      <button class="danger" data-kill-tree ${d.ended || prot ? 'disabled' : ''} title="Terminer le processus et tous ses descendants">Terminer l'arbre</button>
+      <label style="display:flex;gap:4px;align-items:center;color:var(--muted)"><input type="checkbox" id="force" /> Forcer</label>
+      <span class="spacer"></span>
+      <select id="prio" title="Priorité" ${d.ended ? 'disabled' : ''}>${PRIORITIES.map(([k, l]) =>
+        `<option value="${k}" ${k === d.priority ? 'selected' : ''}>${l}</option>`).join('')}
+        ${d.priority === 'realtime' ? '<option value="realtime" selected disabled>Temps réel</option>' : ''}
+        ${!d.priority ? '<option value="" selected disabled>Priorité ?</option>' : ''}</select>
+    </div>
+    <div class="tabs">
+      <div class="tab ${state.dtab === 'info' ? 'active' : ''}" data-dtab="info">Général</div>
+      <div class="tab ${state.dtab === 'connections' ? 'active' : ''}" data-dtab="connections">Réseau${n(conns)}</div>
+      <div class="tab ${state.dtab === 'files' ? 'active' : ''}" data-dtab="files">Fichiers${n(d.files)}</div>
+      <div class="tab ${state.dtab === 'modules' ? 'active' : ''}" data-dtab="modules">Modules${n(d.modules)}</div>
+    </div>
+    <div class="d-body">${body}</div>`
+}
+
+async function killSelected(tree = false) {
+  const pid = state.selected
+  if (pid == null) return
+  const p = state.byPid.get(pid)
+  const d = state.detail || {}
+  if (p?.protected || d.protected) { toast(`Refusé : ce processus est ${p?.protected || d.protected}`, true); return }
+  const name = p?.name || d.name || ''
+  const force = $('#force')?.checked || false
+  let msg = `${force ? 'Tuer' : 'Terminer'} « ${name} » (PID ${pid}) ?`
+  if (tree) {
+    const count = countDescendants(pid)
+    msg = `${force ? 'Tuer' : 'Terminer'} « ${name} » (PID ${pid}) et ses ${count} processus descendant(s) ?`
+  }
+  if (!confirm(msg + '\n\nLes données non enregistrées de ce programme seront perdues.')) return
+  try {
+    const r = await call('kill', { pid, name, tree, force }, { timeout: 20000 })
+    toast(`« ${name} » terminé${r.count > 1 ? ` (${r.count} processus)` : ''}${r.denied?.length ? ` — ${r.denied.length} refusé(s)` : ''}`)
+    refresh()
+  } catch (e) {
+    if (e.code === 'STILL_ALIVE' && !force && confirm(`${e.message}\n\nTuer immédiatement ?`)) {
+      $('#force').checked = true
+      return killSelected(tree)
+    }
+    toast(e.message, true)
+  }
+}
+
+function countDescendants(pid) {
+  let n = 0
+  const stack = [pid]
+  while (stack.length) {
+    const cur = stack.pop()
+    for (const p of state.items) if (p.ppid === cur && p.pid !== cur) { n++; stack.push(p.pid) }
+    if (n > 5000) break
+  }
+  return n
+}
+
+$('#detail').addEventListener('click', async (e) => {
+  const t = e.target
+  if (t.closest('[data-close]')) { state.selected = null; state.detail = null; renderDetail(); renderList(); return }
+  if (t.closest('[data-kill]')) return killSelected(false)
+  if (t.closest('[data-kill-tree]')) return killSelected(true)
+  const tab = t.closest('[data-dtab]')
+  if (tab) { state.dtab = tab.dataset.dtab; renderDetail(); loadDetail(); return }
+  const go = t.closest('[data-goto]')
+  if (go) { select(+go.dataset.goto); return }
+  const rev = t.closest('[data-reveal]')
+  if (rev) { try { await call('reveal', { path: rev.dataset.reveal }) } catch (err) { toast(err.message, true) } }
+})
+$('#detail').addEventListener('change', async (e) => {
+  if (e.target.id !== 'prio') return
+  const pid = state.selected
+  const priority = e.target.value
+  if (priority === 'high' && !confirm('Une priorité haute peut ralentir les autres programmes. Continuer ?')) { renderDetail(); return }
+  try {
+    await call('set_priority', { pid, priority })
+    if (state.detail) state.detail.priority = priority
+    toast(`Priorité : ${PRIO_LABEL[priority]}`)
+  } catch (err) { toast(err.message, true); renderDetail() }
+})
+
+$('#list').addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-sort]')
+  if (th) {
+    const k = th.dataset.sort
+    const numeric = ['cpu', 'mem', 'threads', 'pid', 'started'].includes(k)
+    state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : numeric && k !== 'pid' ? -1 : 1 }
+    renderList()
+    return
+  }
+  const tr = e.target.closest('tr[data-pid]')
+  if (!tr) return
+  const pid = +tr.dataset.pid
+  if (e.target.closest('[data-tw]')) {
+    state.collapsed.has(pid) ? state.collapsed.delete(pid) : state.collapsed.add(pid)
+    renderList()
+    return
+  }
+  select(pid)
+})
+
+// ── Port lookup ─────────────────────────────────────────────────────────────
+async function lookupPort() {
+  const port = $('#port').value.trim()
+  if (!port) { $('#port').focus(); return }
+  let r
+  try { r = await call('port_lookup', { port }, { timeout: 20000 }) } catch (e) { toast(e.message, true); return }
+  const back = document.createElement('div')
+  back.className = 'backdrop'
+  back.innerHTML = `<div class="modal"><div class="modal-head"><span>Qui utilise le port ${r.port} ?</span>
+      <button class="ghost icon" data-x>✕</button></div>
+    <div class="modal-body">${r.items.length ? `<table class="small"><tr><th>Processus</th><th>PID</th><th>Proto</th><th>Local</th><th>Distant</th><th>État</th><th></th></tr>
+      ${r.items.map((c) => `<tr><td title="${esc(c.exe)}"><b>${esc(c.name)}</b></td><td>${c.pid ?? '—'}</td><td>${c.proto}</td>
+        <td class="mono">${esc(c.local)}</td><td class="mono">${esc(c.remote || '—')}</td>
+        <td>${esc(c.status)}${c.role === 'distant' ? ' <span style="color:var(--muted)">(port distant)</span>' : ''}</td>
+        <td>${c.pid ? `<button class="ghost" data-pick="${c.pid}">Voir</button>` : ''}</td></tr>`).join('')}</table>`
+      : `<div class="placeholder"><div class="big">🔌</div>Aucun processus n'utilise le port ${r.port}.</div>`}</div></div>`
+  document.body.appendChild(back)
+  const close = () => back.remove()
+  back.addEventListener('click', (e) => {
+    if (e.target === back || e.target.closest('[data-x]')) return close()
+    const pick = e.target.closest('[data-pick]')
+    if (pick) { close(); select(+pick.dataset.pick, { focusTab: 'connections' }) }
+  })
+  back.tabIndex = -1
+  back.focus()
+  back.addEventListener('keydown', (e) => { if (e.key === 'Escape') close() })
+}
+$('#btn-port').addEventListener('click', lookupPort)
+$('#port').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookupPort() })
+
+$('#btn-tree').addEventListener('click', () => {
+  state.tree = !state.tree
+  $('#btn-tree').classList.toggle('on', state.tree)
+  renderList()
+})
+$('#btn-refresh').addEventListener('click', refresh)
+$('#interval').addEventListener('change', schedule)
+$('#q').addEventListener('input', renderList)
+
+document.addEventListener('keydown', (e) => {
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')
+  if (e.key === 'F5') { e.preventDefault(); refresh() }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select() }
+  else if (document.querySelector('.backdrop')) return
+  else if (e.key === 'Escape' && state.selected != null) { state.selected = null; state.detail = null; renderDetail(); renderList() }
+  else if (e.key === 'Delete' && !typing) killSelected(e.shiftKey)
+  else if (!typing && e.key.toLowerCase() === 't') $('#btn-tree').click()
+  else if (!typing && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    const rows = $$('#list tr[data-pid]')
+    if (!rows.length) return
+    e.preventDefault()
+    let i = rows.findIndex((r) => +r.dataset.pid === state.selected)
+    i = Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+    rows[i].scrollIntoView({ block: 'nearest' })
+    select(+rows[i].dataset.pid)
+  }
+})
+
+refresh().then(schedule)
+</script>
+</body>
+</html>

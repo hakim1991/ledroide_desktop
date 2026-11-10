@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scanner réseau</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 14px 0; }
+  header h1 { font-size: 15px; font-weight: 600; }
+  .tabs { display: flex; gap: 4px; margin-left: 12px; }
+  .tabs button.active { background: var(--bg); border-color: var(--accent); color: #fff; }
+  .warning { margin: 10px 14px 0; padding: 7px 12px; border-radius: 7px; background: rgba(245,158,11,.08);
+             border: 1px solid rgba(245,158,11,.35); color: #fcd34d; font-size: 12px; }
+  main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 14px 12px; gap: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > span { color: var(--muted); font-size: 11.5px; }
+  .field.grow { flex: 1; min-width: 200px; }
+  .field input[type=number] { width: 95px; }
+  .check { display: flex; align-items: center; gap: 6px; cursor: pointer; padding-bottom: 6px; }
+  .actions { display: flex; gap: 6px; margin-left: auto; }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .hint code { font-family: var(--mono); color: var(--accent-h); cursor: pointer; }
+
+  .progress { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  .bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .stats { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+  .stats b { color: var(--text); }
+  .stats .o b { color: var(--ok); } .stats .c b { color: var(--err); } .stats .f b { color: var(--warn); }
+
+  .results { flex: 1; min-height: 0; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { position: sticky; top: 0; background: var(--surface2); text-align: left; font-weight: 600; color: var(--muted);
+       font-size: 11.5px; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+  th:hover { color: var(--text); }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  td.mono { font-size: 12px; }
+  .badge { font-size: 10.5px; padding: 1px 6px; border-radius: 8px; background: rgba(99,102,241,.16); color: var(--accent-h); margin-left: 6px; }
+  .badge.arp { background: rgba(56,189,248,.14); color: var(--info); }
+  .banner { color: #a5b4fc; font-family: var(--mono); font-size: 11.5px; word-break: break-all; }
+  .muted { color: var(--muted); }
+  .placeholder { color: var(--muted); height: 100%; min-height: 200px; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 6px; text-align: center; padding: 20px; }
+  .placeholder .big { font-size: 30px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📡 Scanner réseau</h1>
+  <div class="tabs">
+    <button data-tab="ports" class="active">Scan de ports</button>
+    <button data-tab="hosts">Découverte d'hôtes</button>
+  </div>
+</header>
+<div class="warning">⚠️ À utiliser uniquement sur des réseaux et des machines que vous administrez ou pour lesquels vous avez une autorisation explicite.</div>
+
+<main>
+  <!-- Ports -->
+  <section data-panel="ports" class="card">
+    <div class="form">
+      <label class="field grow"><span>Hôte (IP ou nom)</span><input id="p-host" class="mono" type="text" value="127.0.0.1" spellcheck="false" /></label>
+      <label class="field"><span>Ports</span>
+        <select id="p-preset">
+          <option value="common">Courants (113)</option>
+          <option value="web">Web</option>
+          <option value="well_known">1 – 1024</option>
+          <option value="all">Tous (1 – 65535)</option>
+          <option value="custom">Personnalisé…</option>
+        </select></label>
+      <label class="field grow hidden" id="p-custom-wrap"><span>Liste / plages</span><input id="p-ports" class="mono" type="text" placeholder="22,80,443,8000-8100" spellcheck="false" /></label>
+      <label class="field"><span>Simultanées</span><input id="p-conc" type="number" min="1" max="1000" value="200" /></label>
+      <label class="field"><span>Délai (ms)</span><input id="p-timeout" type="number" min="50" max="10000" value="800" /></label>
+      <label class="check"><input id="p-banner" type="checkbox" /> Bannière</label>
+      <div class="actions">
+        <button id="p-start" class="primary" title="Lancer (Ctrl+Entrée)">Scanner</button>
+        <button id="p-stop" class="danger hidden" title="Arrêter (Échap)">Arrêter</button>
+        <button id="p-csv" disabled>Export CSV</button>
+      </div>
+    </div>
+    <p class="hint">Sous Windows, un port fermé peut apparaître « sans réponse » si le délai est court. Exemples : <code data-ports="22,80,443">22,80,443</code> · <code data-ports="8000-8100">8000-8100</code> · <code data-ports="1-1024,3306,5432,8080">1-1024,3306,5432,8080</code></p>
+  </section>
+
+  <!-- Hosts -->
+  <section data-panel="hosts" class="card hidden">
+    <div class="form">
+      <label class="field grow"><span>Plage réseau (CIDR, /22 maximum)</span><input id="h-cidr" class="mono" type="text" placeholder="192.168.1.0/24" spellcheck="false" /></label>
+      <label class="field"><span>Délai ping (ms)</span><input id="h-timeout" type="number" min="100" max="5000" value="700" /></label>
+      <label class="check"><input id="h-dns" type="checkbox" checked /> DNS inverse</label>
+      <div class="actions">
+        <button id="h-start" class="primary" title="Lancer (Ctrl+Entrée)">Découvrir</button>
+        <button id="h-stop" class="danger hidden" title="Arrêter (Échap)">Arrêter</button>
+        <button id="h-csv" disabled>Export CSV</button>
+      </div>
+    </div>
+    <p class="hint" id="h-hint">Détection du réseau local…</p>
+  </section>
+
+  <div class="progress hidden" id="progress"><span class="spinner"></span><span id="prog-msg"></span><div class="bar"><div id="prog-bar"></div></div><span id="prog-pct"></span></div>
+  <div class="stats" id="stats"></div>
+  <div class="results" id="results"></div>
+</main>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'port-scanner'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const state = {
+  tab: 'ports',
+  ports: { running: false, jobId: null, rows: [], counts: null, meta: null, sort: ['port', 1] },
+  hosts: { running: false, jobId: null, rows: [], meta: null, sort: ['ip', 1] },
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2200)
+}
+
+function ipKey(ip) { return ip.split('.').reduce((a, n) => a * 256 + Number(n), 0) }
+
+function setTab(tab) {
+  state.tab = tab
+  $$('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab))
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab))
+  renderProgress(null)
+  render()
+}
+
+function renderProgress(p) {
+  const s = state[state.tab]
+  $('#progress').classList.toggle('hidden', !s.running)
+  if (p) {
+    const pct = Math.round(p.percent || 0)
+    $('#prog-bar').style.width = pct + '%'
+    $('#prog-pct').textContent = pct + ' %'
+    $('#prog-msg').textContent = p.message || ''
+  } else if (!s.running) {
+    $('#prog-bar').style.width = '0'
+  }
+}
+
+function sortRows(rows, [key, dir]) {
+  return rows.slice().sort((a, b) => {
+    let x = a[key], y = b[key]
+    if (key === 'ip') { x = ipKey(x); y = ipKey(y) }
+    if (x == null) x = typeof y === 'number' ? Infinity : ''
+    if (y == null) y = typeof x === 'number' ? Infinity : ''
+    return (x > y ? 1 : x < y ? -1 : 0) * dir
+  })
+}
+
+function th(key, label, s) {
+  const arrow = s.sort[0] === key ? (s.sort[1] > 0 ? ' ▲' : ' ▼') : ''
+  return `<th data-sort="${key}">${label}${arrow}</th>`
+}
+
+function render() {
+  const box = $('#results')
+  if (state.tab === 'ports') {
+    const s = state.ports
+    const c = s.counts
+    $('#stats').innerHTML = c ? `<span class="o">Ouverts <b>${c.open}</b></span><span class="c">Fermés <b>${c.closed}</b></span>
+      <span class="f">Sans réponse <b>${c.filtered}</b></span>${s.meta ? `<span>Cible <b class="mono">${esc(s.meta.host)}</b> (${esc(s.meta.ip)})</span><span>Durée <b>${s.meta.elapsed_s} s</b></span>` : ''}` : ''
+    $('#p-csv').disabled = !s.rows.length
+    if (!s.rows.length) {
+      box.innerHTML = `<div class="placeholder"><div class="big">🔎</div>${s.running ? '<div>Scan en cours… les ports ouverts apparaîtront ici.</div>'
+        : s.meta ? '<div>Aucun port ouvert trouvé.</div>' : '<div>Choisissez un hôte et des ports puis cliquez sur <b>Scanner</b></div><div><kbd>Ctrl</kbd> + <kbd>Entrée</kbd> pour lancer · <kbd>Échap</kbd> pour arrêter</div>'}</div>`
+      return
+    }
+    box.innerHTML = `<table><thead><tr>${th('port', 'Port', s)}${th('service', 'Service', s)}${th('rtt_ms', 'Connexion (ms)', s)}${th('banner', 'Bannière', s)}</tr></thead><tbody>
+      ${sortRows(s.rows, s.sort).map((r) => `<tr><td class="mono"><b>${r.port}</b>/tcp</td><td>${esc(r.service) || '<span class="muted">—</span>'}</td>
+        <td class="mono">${r.rtt_ms}</td><td class="banner">${esc(r.banner)}</td></tr>`).join('')}</tbody></table>`
+  } else {
+    const s = state.hosts
+    $('#stats').innerHTML = s.meta || s.running ? `<span class="o">Hôtes actifs <b>${s.rows.length}</b></span>${s.meta ? `<span>Adresses testées <b>${s.meta.scanned}</b></span><span>Durée <b>${s.meta.elapsed_s} s</b></span>` : ''}` : ''
+    $('#h-csv').disabled = !s.rows.length || s.running
+    if (!s.rows.length) {
+      box.innerHTML = `<div class="placeholder"><div class="big">🖧</div>${s.running ? '<div>Découverte en cours…</div>'
+        : s.meta ? '<div>Aucun hôte n\'a répondu.</div>' : '<div>Indiquez une plage CIDR puis cliquez sur <b>Découvrir</b></div><div class="muted">Ping de chaque adresse, puis lecture de la table ARP et résolution DNS inverse.</div>'}</div>`
+      return
+    }
+    box.innerHTML = `<table><thead><tr>${th('ip', 'Adresse IP', s)}${th('hostname', 'Nom', s)}${th('mac', 'Adresse MAC', s)}${th('vendor', 'Constructeur', s)}${th('rtt_ms', 'Ping (ms)', s)}</tr></thead><tbody>
+      ${sortRows(s.rows, s.sort).map((r) => `<tr><td class="mono">${esc(r.ip)}${r.self ? '<span class="badge">cette machine</span>' : ''}${r.via === 'arp' ? '<span class="badge arp" title="Ne répond pas au ping mais présent dans la table ARP">ARP</span>' : ''}</td>
+        <td>${r.hostname ? esc(r.hostname) : '<span class="muted">' + (r.hostname === undefined ? '…' : '—') + '</span>'}</td>
+        <td class="mono">${esc(r.mac) || '<span class="muted">—</span>'}</td><td>${esc(r.vendor) || '<span class="muted">—</span>'}</td>
+        <td class="mono">${r.rtt_ms ?? '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table>`
+  }
+}
+
+$('#results').addEventListener('click', (e) => {
+  const h = e.target.closest('th[data-sort]')
+  if (!h) return
+  const s = state[state.tab]
+  s.sort = [h.dataset.sort, s.sort[0] === h.dataset.sort ? -s.sort[1] : 1]
+  render()
+})
+
+function setRunning(kind, running) {
+  const pre = kind === 'ports' ? 'p' : 'h'
+  state[kind].running = running
+  $(`#${pre}-start`).classList.toggle('hidden', running)
+  $(`#${pre}-stop`).classList.toggle('hidden', !running)
+  if (state.tab === kind) renderProgress(null)
+}
+
+// ── Port scan ───────────────────────────────────────────────────────────────
+async function startPorts() {
+  const s = state.ports
+  if (s.running) return
+  const host = $('#p-host').value.trim()
+  if (!host) return toast('Indiquez un hôte', true)
+  const preset = $('#p-preset').value
+  const payload = { host, concurrency: Number($('#p-conc').value) || 200, timeout_ms: Number($('#p-timeout').value) || 800, banner: $('#p-banner').checked }
+  if (preset === 'custom') {
+    payload.ports = $('#p-ports').value
+    try { await call('parse_ports', { ports: payload.ports }) } catch (e) { return toast(e.message, true) }
+  } else payload.preset = preset
+  if (preset === 'all' && !confirm('Scanner les 65 535 ports peut prendre plusieurs minutes. Continuer ?')) return
+  s.rows = []; s.counts = { open: 0, closed: 0, filtered: 0 }; s.meta = null
+  setRunning('ports', true); render()
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'scan_ports', payload, {
+      onStart: (id) => (s.jobId = id),
+      onProgress: (p) => {
+        if (p.found && !s.rows.some((x) => x.port === p.found.port)) s.rows.push(p.found)
+        if (p.counts) s.counts = p.counts
+        if (state.tab === 'ports') { renderProgress(p); render() }
+      },
+    })
+    s.rows = r.open; s.counts = r.counts; s.meta = r
+    toast(`Scan terminé : ${r.counts.open} port(s) ouvert(s)`)
+  } catch (e) {
+    toast(e.code === 'JOB_CANCELLED' ? 'Scan arrêté' : e.message, e.code !== 'JOB_CANCELLED')
+  } finally {
+    s.jobId = null; setRunning('ports', false); render()
+  }
+}
+
+// ── Discovery ───────────────────────────────────────────────────────────────
+async function startHosts() {
+  const s = state.hosts
+  if (s.running) return
+  const cidr = $('#h-cidr').value.trim()
+  if (!cidr) return toast('Indiquez une plage CIDR', true)
+  s.rows = []; s.meta = null
+  setRunning('hosts', true); render()
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'discover', { cidr, timeout_ms: Number($('#h-timeout').value) || 700, resolve: $('#h-dns').checked }, {
+      onStart: (id) => (s.jobId = id),
+      onProgress: (p) => {
+        if (p.found && !s.rows.some((x) => x.ip === p.found.ip)) s.rows.push({ ...p.found, via: 'ping' })
+        if (state.tab === 'hosts') { renderProgress(p); render() }
+      },
+    })
+    s.rows = r.hosts; s.meta = r
+    toast(`Découverte terminée : ${r.hosts.length} hôte(s) actif(s)`)
+  } catch (e) {
+    toast(e.code === 'JOB_CANCELLED' ? 'Découverte arrêtée' : e.message, e.code !== 'JOB_CANCELLED')
+  } finally {
+    s.jobId = null; setRunning('hosts', false); render()
+  }
+}
+
+async function stop(kind) {
+  const id = state[kind].jobId
+  if (!id) return
+  try { await window.ledroide.cancel(MODULE_ID, id) } catch (e) { toast(e.message, true) }
+}
+
+// ── CSV ─────────────────────────────────────────────────────────────────────
+function csvCell(v) {
+  const s = String(v ?? '')
+  return /[",;\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+function download(name, text) {
+  const blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+function stamp() { return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') }
+function exportPorts() {
+  const s = state.ports
+  const host = s.meta?.host || $('#p-host').value.trim()
+  const lines = [['hote', 'ip', 'port', 'protocole', 'service', 'connexion_ms', 'banniere'].join(';')]
+  sortRows(s.rows, ['port', 1]).forEach((r) => lines.push([host, s.meta?.ip || '', r.port, 'tcp', r.service, r.rtt_ms, r.banner].map(csvCell).join(';')))
+  download(`ports-${host.replace(/[^\w.-]/g, '_')}-${stamp()}.csv`, lines.join('\r\n'))
+}
+function exportHosts() {
+  const lines = [['ip', 'nom', 'mac', 'constructeur', 'ping_ms', 'detection'].join(';')]
+  sortRows(state.hosts.rows, ['ip', 1]).forEach((r) => lines.push([r.ip, r.hostname, r.mac, r.vendor, r.rtt_ms ?? '', r.via].map(csvCell).join(';')))
+  download(`hotes-${stamp()}.csv`, lines.join('\r\n'))
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────
+$$('.tabs button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)))
+$('#p-preset').addEventListener('change', () => $('#p-custom-wrap').classList.toggle('hidden', $('#p-preset').value !== 'custom'))
+$$('code[data-ports]').forEach((c) => c.addEventListener('click', () => {
+  $('#p-preset').value = 'custom'; $('#p-custom-wrap').classList.remove('hidden'); $('#p-ports').value = c.dataset.ports; $('#p-ports').focus()
+}))
+$('#p-start').addEventListener('click', startPorts)
+$('#h-start').addEventListener('click', startHosts)
+$('#p-stop').addEventListener('click', () => stop('ports'))
+$('#h-stop').addEventListener('click', () => stop('hosts'))
+$('#p-csv').addEventListener('click', exportPorts)
+$('#h-csv').addEventListener('click', exportHosts)
+$$('#p-host, #p-ports').forEach((el) => el.addEventListener('keydown', (e) => { if (e.key === 'Enter') startPorts() }))
+$('#h-cidr').addEventListener('keydown', (e) => { if (e.key === 'Enter') startHosts() })
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); state.tab === 'ports' ? startPorts() : startHosts() }
+  if (e.key === 'Escape' && state[state.tab].running) stop(state.tab)
+})
+
+async function init() {
+  render()
+  try {
+    const r = await call('info', {}, { timeout: 20000 })
+    $('#p-conc').value = r.default_concurrency
+    const n = r.network
+    if (n?.cidr) $('#h-cidr').value = n.cidr
+    $('#h-hint').textContent = n?.ip
+      ? `Réseau local détecté : ${n.cidr} (adresse de cette machine : ${n.ip}${n.prefix && n.prefix < r.max_prefix ? `, masque /${n.prefix} réduit à /24` : ''}).`
+      : 'Réseau local non détecté : saisissez une plage manuellement.'
+  } catch (e) {
+    $('#h-hint').textContent = 'Réseau local non détecté : saisissez une plage manuellement.'
+    toast(e.message, true)
+  }
+}
+init()
+</script>
+</body>
+</html>

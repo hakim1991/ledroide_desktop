@@ -1,0 +1,32 @@
+{
+  "id": "cron-timestamp",
+  "name": "Cron & Timestamps",
+  "version": "1.0.0",
+  "description": "Convertit les timestamps Unix (s/ms/µs) et les dates ISO entre fuseaux horaires, calcule des durées, et explique en français les expressions cron avec leurs prochaines exécutions.",
+  "category": "Développement",
+  "tags": [
+    "cron",
+    "timestamp",
+    "date",
+    "fuseau horaire",
+    "durée",
+    "unix"
+  ],
+  "icon": "⏱️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "tzdata>=2024.1"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

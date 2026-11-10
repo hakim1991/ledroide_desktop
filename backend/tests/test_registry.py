@@ -3,7 +3,7 @@ import time
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
-from conftest import TOKEN
+from conftest import BASE_URL, TOKEN
 
 WS = "ws://127.0.0.1:8765/ws?token=test-token"
 
@@ -81,12 +81,56 @@ def test_uninstall_unknown_does_not_delete(client):
 
 def test_install_from_local_catalog_and_uninstall(client):
     assert client.post("/modules/gamma/install", headers=TOKEN).json()["status"] == "installed"
-    assert (client.modules_dir / "gamma" / "manifest.json").exists()
+    assert (client.user_modules_dir / "gamma" / "manifest.json").exists()
+    assert not (client.modules_dir / "gamma").exists()
     assert client.post("/modules/gamma/activate", headers=TOKEN).status_code == 200
     assert client.delete("/modules/gamma", headers=TOKEN).json()["status"] == "uninstalled"
-    assert not (client.modules_dir / "gamma").exists()
+    assert not (client.user_modules_dir / "gamma").exists()
     mods = {m["id"]: m for m in client.get("/modules", headers=TOKEN).json()}
     assert mods["gamma"]["status"] == "available"
+
+
+def test_install_many_reports_each_module(client):
+    client.delete("/modules/beta", headers=TOKEN)
+    r = client.post("/modules/install", headers=TOKEN, json={"ids": ["gamma", "beta", "gamma", "nope", "../x"]})
+    assert r.status_code == 200
+    body = r.json()
+    by_id = {res["id"]: res for res in body["results"]}
+    assert len(body["results"]) == 4
+    assert by_id["gamma"]["status"] == by_id["beta"]["status"] == "installed"
+    assert by_id["nope"]["code"] == "MODULE_NOT_FOUND"
+    assert by_id["../x"]["code"] == "INVALID_MODULE_ID"
+    assert (body["installed"], body["failed"]) == (2, 2)
+    assert (client.user_modules_dir / "gamma" / "manifest.json").exists()
+
+
+def test_install_many_requires_token_and_ids(client):
+    assert client.post("/modules/install", json={"ids": ["gamma"]}).status_code in (401, 403)
+    assert client.post("/modules/install", headers=TOKEN, json={"ids": []}).status_code == 422
+
+
+def test_uninstall_bundled_hides_without_deleting(client):
+    assert client.delete("/modules/beta", headers=TOKEN).json()["status"] == "uninstalled"
+    assert (client.modules_dir / "beta" / "manifest.json").exists()
+    mods = {m["id"]: m for m in client.get("/modules", headers=TOKEN).json()}
+    assert mods["beta"]["status"] == "available"
+    client.post("/system/reload", headers=TOKEN)
+    mods = {m["id"]: m for m in client.get("/modules", headers=TOKEN).json()}
+    assert mods["beta"]["status"] == "available"
+    assert client.post("/modules/beta/install", headers=TOKEN).json()["status"] == "installed"
+    assert client.post("/modules/beta/activate", headers=TOKEN).status_code == 200
+
+
+def test_user_installed_modules_survive_restart(client):
+    import importlib
+    import main
+    from fastapi.testclient import TestClient
+    client.post("/modules/gamma/install", headers=TOKEN)
+    client.post("/modules/gamma/activate", headers=TOKEN)
+    importlib.reload(main)
+    with TestClient(main.app, base_url=BASE_URL) as c2:
+        mods = {m["id"]: m for m in c2.get("/modules", headers=TOKEN).json()}
+    assert mods["gamma"]["status"] == "active"
 
 
 def test_config_defaults_and_persist(client):

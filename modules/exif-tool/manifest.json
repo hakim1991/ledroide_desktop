@@ -1,0 +1,41 @@
+{
+  "id": "exif-tool",
+  "name": "EXIF",
+  "version": "1.0.0",
+  "description": "Affiche les métadonnées EXIF des photos (appareil, objectif, exposition, date, GPS avec lien OpenStreetMap), supprime toutes les métadonnées ou seulement la position GPS dans une copie, traite un dossier par lot et modifie la date de prise de vue.",
+  "category": "Images & médias",
+  "tags": [
+    "image",
+    "exif",
+    "gps",
+    "photo",
+    "confidentialité"
+  ],
+  "icon": "📷",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "Pillow>=11,<13"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "max_upload_mb": {
+      "type": "integer",
+      "title": "Taille max. d'une image glissée-déposée (Mo)",
+      "default": 40,
+      "minimum": 1,
+      "maximum": 200
+    }
+  }
+}

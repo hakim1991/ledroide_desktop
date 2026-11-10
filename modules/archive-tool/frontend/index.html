@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Archives</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  input[type=range] { accent-color: var(--accent); padding: 0; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+
+  header { display: flex; align-items: center; gap: 6px; padding: 10px 14px 0; }
+  .tabs button { border-radius: 6px 6px 0 0; border-bottom: none; }
+  .tabs button.active { background: var(--surface); border-color: var(--border); color: #fff; }
+  .tabs { display: flex; gap: 4px; }
+  header .spacer { flex: 1; }
+  .deps { font-size: 11.5px; color: var(--muted); }
+  .deps .bad { color: var(--warn); }
+  main { flex: 1; min-height: 0; margin: 0 14px 14px; background: var(--surface); border: 1px solid var(--border);
+         border-radius: 0 8px 8px 8px; display: flex; flex-direction: column; overflow: hidden; }
+  .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px; gap: 10px; overflow: hidden; }
+
+  .bar-row { display: flex; gap: 6px; align-items: center; }
+  .bar-row input[type=text], .bar-row input[type=password] { flex: 1; min-width: 0; }
+  input.path { font-family: var(--mono); font-size: 12.5px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 2px 9px; font-size: 11.5px; color: var(--muted); }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip.warn { border-color: rgba(245,158,11,.5); color: var(--warn); }
+  .chip.err { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  .chip.lock { border-color: rgba(56,189,248,.45); color: var(--info); }
+
+  .split { flex: 1; min-height: 0; display: flex; gap: 10px; }
+  .tree-box { flex: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+  .tree-head { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .tree-head input { flex: 1; max-width: 260px; }
+  .tree { flex: 1; overflow: auto; font-size: 12.5px; }
+  .row { display: grid; grid-template-columns: 1fr 90px 90px 60px 130px; gap: 6px; align-items: center; padding: 2px 8px; border-bottom: 1px solid #17171a; }
+  .row:hover { background: var(--surface2); }
+  .row.head { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-size: 11.5px; z-index: 1; border-bottom: 1px solid var(--border); }
+  .row .nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .row .nm span.t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tw { width: 14px; color: var(--muted); cursor: pointer; flex-shrink: 0; text-align: center; user-select: none; }
+  .unsafe { color: #fca5a5; }
+  .side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
+  .card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  .card label.opt { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .card input[type=text] { width: 100%; }
+  .progress { display: flex; align-items: center; gap: 8px; }
+  .pbar { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .pbar div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .pmsg { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .report { font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .report .ok { color: var(--ok); } .report .warn { color: var(--warn); } .report .err { color: #fca5a5; }
+  .report ul { margin-left: 16px; font-family: var(--mono); font-size: 11px; color: var(--muted); max-height: 120px; overflow: auto; }
+  .placeholder { color: var(--muted); flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
+  .placeholder .big { font-size: 34px; }
+  .recents { display: flex; gap: 6px; flex-wrap: wrap; }
+  .recents .r { font-family: var(--mono); font-size: 11.5px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+                padding: 3px 8px; cursor: pointer; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recents .r:hover { border-color: var(--accent); }
+  .recents .r.gone { opacity: .45; text-decoration: line-through; }
+
+  .create { max-width: 760px; overflow-y: auto; }
+  .form-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px 12px; align-items: center; }
+  .form-grid > label.l { color: var(--muted); align-self: start; padding-top: 6px; }
+  #c-sources { width: 100%; height: 110px; resize: vertical; font-family: var(--mono); font-size: 12px; }
+  .lvl { display: flex; align-items: center; gap: 10px; }
+  .lvl input { flex: 1; max-width: 260px; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="tabs"><button data-tab="open" class="active">Ouvrir / extraire</button><button data-tab="create">Créer une archive</button></div>
+  <span class="spacer"></span>
+  <span class="deps" id="deps"></span>
+</header>
+<main>
+  <section class="pane" id="pane-open">
+    <div class="bar-row">
+      <input id="a-path" class="path" type="text" spellcheck="false" placeholder="C:\Users\moi\Downloads\archive.zip  (.zip .7z .tar .tar.gz .tgz .tar.bz2 .tar.xz)" />
+      <input id="a-pass" type="password" placeholder="Mot de passe" style="flex:0 0 170px" class="hidden" />
+      <button id="a-open" class="primary" title="Ouvrir (Entrée)">Ouvrir</button>
+    </div>
+    <div class="recents" id="recents"></div>
+    <div class="chips hidden" id="summary"></div>
+    <div class="split" id="split">
+      <div class="placeholder" id="a-empty"><div class="big">🗜️</div>
+        <div>Saisissez le chemin d'une archive pour afficher son contenu sans l'extraire.</div>
+        <div>Cochez des éléments pour n'extraire qu'une sélection.</div>
+        <div><kbd>Entrée</kbd> ouvrir · <kbd>Ctrl</kbd> + <kbd>E</kbd> extraire · <kbd>Échap</kbd> annuler la tâche</div></div>
+      <div class="tree-box hidden" id="tree-box">
+        <div class="tree-head">
+          <input id="t-filter" type="text" placeholder="Filtrer…" />
+          <button class="ghost" id="t-expand">Tout déplier</button><button class="ghost" id="t-collapse">Tout replier</button>
+          <span class="spacer" style="flex:1"></span><span class="muted" id="t-sel"></span>
+          <button class="ghost" id="t-clear">Désélectionner</button>
+        </div>
+        <div class="tree" id="tree"></div>
+      </div>
+      <div class="side hidden" id="side">
+        <div class="card">
+          <h3>Extraction</h3>
+          <label class="muted" for="x-dest">Dossier de destination</label>
+          <input id="x-dest" class="path" type="text" spellcheck="false" />
+          <label class="opt"><input type="checkbox" id="x-sub" checked /> Créer un sous-dossier au nom de l'archive</label>
+          <label class="opt"><input type="checkbox" id="x-over" /> Remplacer les fichiers existants</label>
+          <button class="primary" id="x-all">Extraire tout</button>
+          <button id="x-sel" disabled>Extraire la sélection</button>
+          <div class="progress hidden" id="x-prog"><div class="pbar"><div id="x-bar"></div></div><button class="danger icon" id="x-cancel" title="Annuler">✕</button></div>
+          <div class="pmsg" id="x-msg"></div>
+          <div class="report" id="x-report"></div>
+        </div>
+        <p class="hint">Protections : chemins sortant du dossier (<span class="mono">../</span>, absolus, lecteurs), liens symboliques dangereux et noms réservés Windows sont ignorés ; la taille décompressée est plafonnée (configuration du module).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="pane create hidden" id="pane-create">
+    <div class="form-grid">
+      <label class="l" for="c-sources">Fichiers et dossiers</label>
+      <div><textarea id="c-sources" spellcheck="false" placeholder="Un chemin absolu par ligne&#10;C:\Projets\site&#10;C:\Documents\rapport.pdf"></textarea>
+        <p class="hint">Les dossiers sont ajoutés avec leur contenu ; les liens symboliques sont ignorés.</p></div>
+      <label class="l" for="c-format">Format</label>
+      <select id="c-format">
+        <option value="zip">ZIP (.zip)</option><option value="7z">7z (.7z)</option><option value="tar">TAR (.tar, sans compression)</option>
+        <option value="tar.gz">TAR.GZ (.tar.gz)</option><option value="tar.bz2">TAR.BZ2 (.tar.bz2)</option><option value="tar.xz">TAR.XZ (.tar.xz)</option>
+      </select>
+      <label class="l" for="c-level">Niveau de compression</label>
+      <div class="lvl"><input id="c-level" type="range" min="0" max="9" value="6" /><span id="c-level-v" class="mono"></span></div>
+      <label class="l" for="c-pass">Mot de passe</label>
+      <div><input id="c-pass" type="password" style="width:260px" placeholder="optionnel" autocomplete="new-password" />
+        <p class="hint" id="c-pass-hint"></p></div>
+      <label class="l" for="c-out">Archive à créer</label>
+      <div><input id="c-out" class="path" type="text" spellcheck="false" style="width:100%" placeholder="C:\Users\moi\Desktop\sauvegarde.zip" />
+        <label class="opt" style="display:flex;gap:6px;margin-top:6px;cursor:pointer"><input type="checkbox" id="c-over" /> Remplacer si le fichier existe</label></div>
+      <span></span>
+      <div style="display:flex;gap:8px;align-items:center"><button class="primary" id="c-run">Créer l'archive</button>
+        <div class="progress hidden" id="c-prog" style="flex:1"><div class="pbar"><div id="c-bar"></div></div><button class="danger icon" id="c-cancel" title="Annuler">✕</button></div></div>
+      <span></span><div class="pmsg" id="c-msg"></div>
+      <span></span><div class="report" id="c-report"></div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'archive-tool'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const FMT_LABEL = { zip: 'ZIP', '7z': '7z', tar: 'TAR', 'tar.gz': 'TAR.GZ', 'tar.bz2': 'TAR.BZ2', 'tar.xz': 'TAR.XZ' }
+const EXT = { zip: '.zip', '7z': '.7z', tar: '.tar', 'tar.gz': '.tar.gz', 'tar.bz2': '.tar.bz2', 'tar.xz': '.tar.xz' }
+
+const state = { info: {}, archive: null, tree: null, open: new Set(), sel: new Set(), jobId: null, password: '' }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+function fmtSize(n) {
+  if (n == null) return ''
+  if (n < 1024) return `${n} o`
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} Ko`
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} Mo`
+  return `${(n / 1024 ** 3).toFixed(2)} Go`
+}
+const pct = (r) => r == null ? '—' : `${Math.round(r * 100)} %`
+const dirname = (p) => p.replace(/[\\/][^\\/]*$/, '')
+
+// ── Open & tree ────────────────────────────────────────────────────────────
+async function openArchive(path, password) {
+  path = (path ?? $('#a-path').value).trim().replace(/^"|"$/g, '')
+  if (!path) { toast("Indiquez le chemin d'une archive", true); return }
+  $('#a-path').value = path
+  $('#a-open').disabled = true; $('#a-open').innerHTML = '<span class="spinner"></span>'
+  try {
+    const res = await call('list', { path, password: password ?? ($('#a-pass').value || null) }, { timeout: 120000 })
+    state.archive = res
+    state.password = $('#a-pass').value
+    state.sel = new Set()
+    buildTree(res.entries)
+    state.open = new Set(state.tree.children.size <= 3 ? [...state.tree.children.values()].filter((n) => n.dir).map((n) => n.path) : [])
+    $('#x-dest').value = dirname(res.path)
+    $('#x-report').innerHTML = ''
+    if (!res.encrypted) $('#a-pass').classList.add('hidden')
+    render(); loadRecents()
+  } catch (e) {
+    if (e.code === 'PASSWORD_REQUIRED' || e.code === 'BAD_PASSWORD') {
+      $('#a-pass').classList.remove('hidden'); $('#a-pass').focus()
+    }
+    toast(e.message, true)
+  } finally { $('#a-open').disabled = false; $('#a-open').textContent = 'Ouvrir' }
+}
+
+function buildTree(entries) {
+  const root = { name: '', path: '', dir: true, children: new Map(), size: 0, csize: 0, count: 0 }
+  for (const e of entries) {
+    const parts = e.name.replace(/\\/g, '/').split('/').filter((p) => p && p !== '.')
+    if (!parts.length) continue
+    let node = root, acc = ''
+    parts.forEach((p, i) => {
+      acc = acc ? `${acc}/${p}` : p
+      const last = i === parts.length - 1
+      let child = node.children.get(p)
+      if (!child) {
+        child = { name: p, path: acc, dir: !last || e.dir, children: new Map(), size: 0, csize: 0, count: 0, raw: null }
+        node.children.set(p, child)
+      }
+      if (last) { child.raw = e; child.dir = child.dir || e.dir; if (!e.dir) { child.size = e.size; child.csize = e.csize } }
+      node = child
+    })
+  }
+  const agg = (n) => {
+    if (!n.children.size) { n.count = n.dir ? 0 : 1; return }
+    n.size = 0; n.csize = 0; n.count = 0; let hasC = true
+    for (const c of n.children.values()) {
+      agg(c); n.size += c.size; n.count += c.count
+      if (c.csize == null) hasC = false; else n.csize += c.csize
+    }
+    if (!hasC) n.csize = null
+  }
+  agg(root)
+  state.tree = root
+}
+
+function sortedChildren(n) {
+  return [...n.children.values()].sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name, 'fr', { numeric: true }))
+}
+
+function render() {
+  const a = state.archive
+  $('#a-empty').classList.toggle('hidden', !!a)
+  $('#tree-box').classList.toggle('hidden', !a)
+  $('#side').classList.toggle('hidden', !a)
+  $('#summary').classList.toggle('hidden', !a)
+  if (!a) return
+  $('#summary').innerHTML = `<span class="chip"><b>${esc(a.name)}</b></span><span class="chip"><b>${FMT_LABEL[a.format]}</b></span>
+    <span class="chip"><b>${a.files}</b> fichier(s) · <b>${a.dirs}</b> dossier(s)</span>
+    <span class="chip">Décompressé <b>${fmtSize(a.total_size)}</b></span><span class="chip">Archive <b>${fmtSize(a.archive_size)}</b></span>
+    <span class="chip">Gain <b>${pct(a.ratio)}</b></span>
+    ${a.encrypted ? '<span class="chip lock">🔒 Chiffrée</span>' : ''}
+    ${a.unsafe ? `<span class="chip err">⚠ ${a.unsafe} entrée(s) dangereuse(s) ignorée(s) à l'extraction</span>` : ''}
+    ${a.truncated ? '<span class="chip warn">Liste tronquée</span>' : ''}`
+  renderTree()
+}
+
+function renderTree() {
+  const f = $('#t-filter').value.trim().toLowerCase()
+  const rows = []
+  const showC = state.archive.format === 'zip'
+  const walk = (n, depth) => {
+    for (const c of sortedChildren(n)) {
+      if (f && !c.path.toLowerCase().includes(f) && !(c.dir && hasMatch(c, f))) continue
+      const open = f ? true : state.open.has(c.path)
+      const unsafe = c.raw?.unsafe
+      const ratio = showC && c.size ? 1 - (c.csize ?? 0) / c.size : null
+      rows.push(`<div class="row" data-p="${esc(c.path)}">
+        <div class="nm" style="padding-left:${depth * 16}px">
+          <span class="tw" data-tw>${c.dir ? (open ? '▾' : '▸') : ''}</span>
+          <input type="checkbox" data-chk ${isSelected(c.path) ? 'checked' : ''} />
+          <span>${c.dir ? '📁' : c.raw?.link ? '🔗' : '📄'}</span>
+          <span class="t ${unsafe ? 'unsafe' : ''}" title="${esc(c.raw?.name || c.path)}${unsafe ? ' — chemin dangereux, ignoré' : ''}">${esc(c.name)}${c.raw?.enc ? ' 🔒' : ''}</span>
+        </div>
+        <div class="num">${fmtSize(c.size)}</div><div class="num">${showC && c.csize != null ? fmtSize(c.csize) : ''}</div>
+        <div class="num">${ratio != null ? pct(ratio) : ''}</div>
+        <div class="num">${c.dir ? `${c.count} fich.` : c.raw?.mtime ? new Date(c.raw.mtime).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''}</div></div>`)
+      if (c.dir && open) walk(c, depth + 1)
+      if (rows.length > 5000) return
+    }
+  }
+  walk(state.tree, 0)
+  $('#tree').innerHTML = `<div class="row head"><div>Nom</div><div class="num">Taille</div><div class="num">${showC ? 'Compressé' : ''}</div><div class="num">${showC ? 'Gain' : ''}</div><div class="num">Date</div></div>` +
+    (rows.length ? rows.join('') : '<div class="placeholder" style="padding:30px">Aucun élément.</div>') +
+    (rows.length > 5000 ? '<p class="hint" style="padding:8px">Affichage limité : utilisez le filtre.</p>' : '')
+  $('#t-sel').textContent = state.sel.size ? `${state.sel.size} élément(s) sélectionné(s)` : ''
+  $('#x-sel').disabled = !state.sel.size
+  $('#x-sel').textContent = state.sel.size ? `Extraire la sélection (${state.sel.size})` : 'Extraire la sélection'
+}
+function hasMatch(n, f) {
+  for (const c of n.children.values()) if (c.path.toLowerCase().includes(f) || (c.dir && hasMatch(c, f))) return true
+  return false
+}
+function isSelected(path) {
+  for (const s of state.sel) if (path === s || path.startsWith(s + '/')) return true
+  return false
+}
+
+$('#tree').addEventListener('click', (e) => {
+  const row = e.target.closest('.row[data-p]'); if (!row) return
+  const p = row.dataset.p
+  if (e.target.matches('[data-chk]')) {
+    if (e.target.checked) {
+      for (const s of [...state.sel]) if (s.startsWith(p + '/')) state.sel.delete(s)
+      state.sel.add(p)
+    } else {
+      const parent = [...state.sel].find((s) => p.startsWith(s + '/'))
+      if (parent) {
+        state.sel.delete(parent)
+        let node = findNode(parent)
+        const keepSiblings = (n) => {
+          for (const c of n.children.values()) {
+            if (c.path === p) continue
+            if (p.startsWith(c.path + '/')) keepSiblings(c); else state.sel.add(c.path)
+          }
+        }
+        if (node) keepSiblings(node)
+      }
+      state.sel.delete(p)
+      for (const s of [...state.sel]) if (s.startsWith(p + '/')) state.sel.delete(s)
+    }
+    renderTree(); return
+  }
+  const node = findNode(p)
+  if (node?.dir && (e.target.closest('[data-tw]') || e.target.closest('.nm'))) {
+    if (state.open.has(p)) state.open.delete(p); else state.open.add(p)
+    renderTree()
+  }
+})
+function findNode(path) {
+  let n = state.tree
+  for (const part of path.split('/')) { n = n.children.get(part); if (!n) return null }
+  return n
+}
+
+// ── Extract ────────────────────────────────────────────────────────────────
+async function extract(selection) {
+  const a = state.archive
+  if (!a || state.jobId) return
+  const dest = $('#x-dest').value.trim()
+  if (!dest) { toast('Indiquez le dossier de destination', true); return }
+  if ($('#x-over').checked && !confirm('Les fichiers existants portant le même nom seront remplacés. Continuer ?')) return
+  const members = selection ? [...state.sel] : []
+  $('#x-report').innerHTML = ''
+  $('#x-prog').classList.remove('hidden'); $('#x-bar').style.width = '0'; $('#x-msg').textContent = 'Préparation…'
+  $('#x-all').disabled = true; $('#x-sel').disabled = true
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'extract',
+      { path: a.path, dest, password: state.password || $('#a-pass').value || null, members, subfolder: $('#x-sub').checked, overwrite: $('#x-over').checked },
+      { onStart: (id) => (state.jobId = id), onProgress: (p) => { if (p.percent != null) $('#x-bar').style.width = p.percent + '%'; if (p.message) { $('#x-msg').textContent = p.message; $('#x-msg').title = p.message } } })
+    const c = r.counts
+    const list = (arr, n) => arr.length ? `<ul>${arr.slice(0, 50).map((x) => `<li>${esc(x)}</li>`).join('')}${n > 50 ? `<li>… ${n - 50} de plus</li>` : ''}</ul>` : ''
+    $('#x-report').innerHTML = `<div class="ok">✓ ${r.written} fichier(s) extrait(s) (${fmtSize(r.bytes)})</div>
+      <div class="mono muted" style="font-size:11px;word-break:break-all">${esc(r.dest)}</div>
+      ${c.existing ? `<div class="warn">${c.existing} fichier(s) existant(s) non remplacé(s)</div>${list(r.skipped_existing, c.existing)}` : ''}
+      ${c.unsafe ? `<div class="err">⚠ ${c.unsafe} entrée(s) dangereuse(s) ignorée(s)</div>${list(r.skipped_unsafe, c.unsafe)}` : ''}
+      ${c.links ? `<div class="warn">${c.links} lien(s) symbolique(s) ignoré(s)</div>${list(r.skipped_links, c.links)}` : ''}`
+    $('#x-msg').textContent = ''
+    toast('Extraction terminée')
+  } catch (e) {
+    $('#x-msg').textContent = ''
+    if (e.code === 'JOB_CANCELLED') toast('Extraction annulée (fichiers déjà extraits conservés)')
+    else {
+      $('#x-report').innerHTML = `<div class="err">${esc(e.message)}</div>`
+      if (/mot de passe|protégée/i.test(e.message)) { $('#a-pass').classList.remove('hidden'); $('#a-pass').focus() }
+      toast(e.message, true)
+    }
+  } finally {
+    state.jobId = null
+    $('#x-prog').classList.add('hidden'); $('#x-all').disabled = false; renderTree()
+  }
+}
+
+// ── Create ─────────────────────────────────────────────────────────────────
+function refreshCreateUi() {
+  const fmt = $('#c-format').value
+  $('#c-level-v').textContent = `${$('#c-level').value}${$('#c-level').value === '0' ? ' (stockage)' : $('#c-level').value === '9' ? ' (max.)' : ''}`
+  const tar = fmt.startsWith('tar')
+  $('#c-pass').disabled = tar || (fmt === 'zip' && !state.info.pyzipper) || (fmt === '7z' && !state.info.py7zr)
+  $('#c-level').disabled = fmt === 'tar'
+  $('#c-pass-hint').textContent = tar ? 'TAR ne gère pas les mots de passe : utilisez ZIP ou 7z.'
+    : fmt === 'zip' ? (state.info.pyzipper ? 'ZIP chiffré AES-256 (WinZip AES) : ouvrable par 7-Zip, WinRAR… mais pas par l’explorateur Windows.' : 'pyzipper absent : ZIP sans mot de passe uniquement.')
+    : state.info.py7zr ? '7z chiffré AES-256, noms de fichiers compris.' : 'py7zr absent : format 7z indisponible.'
+  const out = $('#c-out').value.trim()
+  if (out) {
+    const base = out.replace(/(\.tar\.gz|\.tar\.bz2|\.tar\.xz|\.tgz|\.zip|\.7z|\.tar)$/i, '')
+    $('#c-out').value = base + EXT[fmt]
+  }
+}
+async function createArchive() {
+  if (state.jobId) return
+  const sources = $('#c-sources').value.split('\n').map((s) => s.trim().replace(/^"|"$/g, '')).filter(Boolean)
+  if (!sources.length) { toast('Ajoutez au moins un chemin', true); return }
+  let output = $('#c-out').value.trim()
+  if (!output) {
+    output = sources[0].replace(/[\\/]+$/, '') + EXT[$('#c-format').value]
+    $('#c-out').value = output
+  }
+  if ($('#c-over').checked && !confirm(`Remplacer « ${output} » s'il existe ?`)) return
+  $('#c-report').innerHTML = ''
+  $('#c-prog').classList.remove('hidden'); $('#c-bar').style.width = '0'; $('#c-run').disabled = true
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'create',
+      { sources, output, format: $('#c-format').value, level: +$('#c-level').value, password: $('#c-pass').disabled ? null : ($('#c-pass').value || null), overwrite: $('#c-over').checked },
+      { onStart: (id) => (state.jobId = id), onProgress: (p) => { if (p.percent != null) $('#c-bar').style.width = p.percent + '%'; if (p.message) $('#c-msg').textContent = p.message } })
+    $('#c-report').innerHTML = `<div class="ok">✓ Archive créée : ${r.entries} entrée(s), ${fmtSize(r.total_size)} → ${fmtSize(r.archive_size)} (gain ${pct(r.ratio)})${r.encrypted ? ' · 🔒 chiffrée' : ''}</div>
+      <div class="mono muted" style="font-size:11px;word-break:break-all">${esc(r.output)}</div>
+      <div><button class="ghost" id="c-openit">Ouvrir dans l'onglet « Ouvrir / extraire »</button></div>`
+    $('#c-openit').addEventListener('click', () => { switchTab('open'); openArchive(r.output, $('#c-pass').value || null) })
+    toast('Archive créée'); loadRecents()
+  } catch (e) {
+    if (e.code === 'JOB_CANCELLED') toast('Création annulée (fichier partiel supprimé)')
+    else { $('#c-report').innerHTML = `<div class="err">${esc(e.message)}</div>`; toast(e.message, true) }
+  } finally { state.jobId = null; $('#c-prog').classList.add('hidden'); $('#c-run').disabled = false; $('#c-msg').textContent = '' }
+}
+
+// ── Misc ───────────────────────────────────────────────────────────────────
+async function loadRecents() {
+  try {
+    const { items } = await call('recents')
+    $('#recents').innerHTML = items.slice(0, 8).map((r) => `<span class="r ${r.exists ? '' : 'gone'}" data-path="${esc(r.path)}" title="${esc(r.path)}">${esc(r.path.split(/[\\/]/).pop())}</span>`).join('')
+  } catch {}
+}
+$('#recents').addEventListener('click', (e) => {
+  const r = e.target.closest('.r'); if (!r) return
+  $('#a-pass').value = ''; $('#a-pass').classList.add('hidden')
+  openArchive(r.dataset.path)
+})
+function switchTab(t) {
+  $$('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === t))
+  $('#pane-open').classList.toggle('hidden', t !== 'open')
+  $('#pane-create').classList.toggle('hidden', t !== 'create')
+}
+$$('.tabs button').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)))
+$('#a-open').addEventListener('click', () => openArchive())
+$('#a-path').addEventListener('keydown', (e) => { if (e.key === 'Enter') { $('#a-pass').value = ''; $('#a-pass').classList.add('hidden'); openArchive() } })
+$('#a-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') openArchive() })
+$('#t-filter').addEventListener('input', () => state.archive && renderTree())
+$('#t-expand').addEventListener('click', () => {
+  const all = (n) => { for (const c of n.children.values()) if (c.dir) { state.open.add(c.path); all(c) } }
+  all(state.tree); renderTree()
+})
+$('#t-collapse').addEventListener('click', () => { state.open.clear(); renderTree() })
+$('#t-clear').addEventListener('click', () => { state.sel.clear(); renderTree() })
+$('#x-all').addEventListener('click', () => extract(false))
+$('#x-sel').addEventListener('click', () => extract(true))
+$('#c-run').addEventListener('click', createArchive)
+for (const id of ['#x-cancel', '#c-cancel']) $(id).addEventListener('click', () => state.jobId && window.ledroide.cancel(MODULE_ID, state.jobId).catch(() => {}))
+$('#c-format').addEventListener('change', refreshCreateUi)
+$('#c-level').addEventListener('input', refreshCreateUi)
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e' && state.archive) { e.preventDefault(); extract(state.sel.size > 0) }
+  if (e.key === 'Escape' && state.jobId) window.ledroide.cancel(MODULE_ID, state.jobId).catch(() => {})
+})
+
+;(async () => {
+  try {
+    state.info = await call('info')
+    const miss = []
+    if (!state.info.py7zr) miss.push('py7zr (7z)')
+    if (!state.info.pyzipper) miss.push('pyzipper (ZIP AES)')
+    $('#deps').innerHTML = miss.length ? `<span class="bad">Dépendances manquantes : ${esc(miss.join(', '))}</span>` : `Limite d'extraction : ${fmtSize(state.info.max_extract_mb * 1024 * 1024)}`
+  } catch (e) { toast(e.message, true) }
+  refreshCreateUi(); loadRecents(); render()
+})()
+</script>
+</body>
+</html>

@@ -18,7 +18,9 @@ Spécification complète : `SPECIFICATION.md`.
 - Port du backend Python : `LEDROIDE_BACKEND_PORT`, défaut `8765` ; si occupé, Electron choisit un port libre et le transmet (preload via `ipcRenderer.sendSync('ledroide:config')`).
 - Sécurité : Electron génère un jeton (`LEDROIDE_TOKEN`). Les routes de gestion (`/modules`, `/system/*`, config…) et `/ws?token=` l'exigent ; le renderer passe par `window.ledroide.api()` qui l'ajoute. `core/security.py` vérifie aussi `Host` (anti DNS-rebinding) et `Origin`. Les routes `/modules/{id}/api|frontend|icon` sont publiques pour l'origine du backend uniquement.
 - Les appels WebSocket sont traités en parallèle (une tâche par message) : un handler lent ne bloque pas les autres.
-- Données utilisateur : `LEDROIDE_DATA_DIR` (= `userData/data` sous Electron) contient `state.json`, `configs.json` et `modules/<id>/`. Ne jamais écrire dans le dossier d'installation.
+- Données utilisateur : `LEDROIDE_DATA_DIR` (= `userData/data` sous Electron) contient `state.json`, `configs.json` et `modules/<id>/` (données des modules). Ne jamais écrire dans le dossier d'installation : il est effacé à chaque mise à jour.
+- Modules : `modules/` (installation) = modules livrés, en lecture seule ; les modules installés depuis le catalogue vont dans `<data>/installed-modules/<id>/` (prioritaires). Désinstaller un module livré le masque seulement (`removed_bundled` dans `state.json`). Toujours résoudre le dossier d'un module via `registry.module_dir(id)`.
+- Bibliothèques pip : installées avec `--user` dans `PYTHONUSERBASE` = `<data>/python` (fixé par Electron), pas dans le Python embarqué.
 
 ### Modules
 - Un module = un dossier dans `modules/<id>/` avec un `manifest.json` obligatoire.
@@ -28,6 +30,7 @@ Spécification complète : `SPECIFICATION.md`.
 - Fichiers de données : `module.data_path("x.db")` ou `data_path(__file__, "x.db")` (migre l'ancien fichier situé à côté du code).
 - Manifest : `category` (une seule, ex. « Réseau ») et `tags` (liste, minuscules) pour les filtres de l'accueil et du Catalogue ; l'utilisateur peut les surcharger (bouton « Tags », stocké dans `module_meta.json` du dossier de données). `env` déclare les variables attendues : `["CLE"]` ou `[{"key", "description", "required", "secret"}]` → l'API renvoie `env_missing`.
 - Variables d'environnement : menu « Variables » (`GET/PUT /system/env`, fichier `env.json` en clair). Appliquées à `os.environ` à chaud ; côté module, `module.env("CLE")` ou `ledroide_sdk.env("CLE")`. Événement `__system__` / `env:changed` à chaque modification. Noms `LEDROIDE_*`, `PATH`, `PYTHONPATH`… refusés.
+- Bibliothèques Python : menu « Bibliothèques » (`core/packages.py`, `GET/POST /system/packages`, `/outdated`, `POST /{name}/upgrade`, `DELETE /{name}`). Les paquets du cœur (fastapi, uvicorn, pydantic… et leurs dépendances) sont « système » : ni suppression ni mise à jour, et figés par `--constraint` lors des installations. Tout appel pip passe par `run_pip` (verrou global) ; événements `__system__` / `packages:start|log|end`.
 - Un module qui ne se charge pas passe au statut `error` avec `last_error` (visible dans le Catalogue).
 - Le SDK est dans `backend/sdk/` (ajouté au `sys.path` par `backend/main.py`, ou `pip install -e backend/sdk`).
 - Dépendances Python : bornes de version majeure dans `manifest.json` (`"Pillow>=11,<12"`).

@@ -1,0 +1,49 @@
+{
+  "id": "archive-tool",
+  "name": "Archives",
+  "version": "1.0.0",
+  "description": "Crée, inspecte et extrait des archives ZIP (mot de passe AES), 7z (mot de passe), TAR, TAR.GZ, TAR.BZ2 et TAR.XZ : arborescence, tailles et taux de compression, extraction sélective, protections contre le path traversal et les bombes de décompression.",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "archive",
+    "zip",
+    "7z",
+    "tar",
+    "compression"
+  ],
+  "icon": "🗜️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "py7zr>=0.21,<2",
+      "pyzipper>=0.3,<1"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "max_extract_mb": {
+      "type": "integer",
+      "title": "Taille décompressée maximale par extraction (Mo)",
+      "default": 8192,
+      "minimum": 10,
+      "maximum": 1048576
+    },
+    "max_entries": {
+      "type": "integer",
+      "title": "Nombre maximal d'entrées listées",
+      "default": 50000,
+      "minimum": 1000,
+      "maximum": 1000000
+    }
+  }
+}

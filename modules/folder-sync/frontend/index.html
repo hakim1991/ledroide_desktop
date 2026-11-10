@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Synchro de dossiers</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+
+  #side { width: 250px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  .side-head { padding: 12px 12px 6px; display: flex; align-items: center; gap: 6px; color: var(--muted);
+               font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .side-head span { flex: 1; }
+  .side-list { overflow-y: auto; padding: 0 6px 6px; }
+  #profiles { max-height: 40%; }
+  #runs { flex: 1; }
+  .item { display: flex; align-items: center; gap: 7px; padding: 6px; border-radius: 6px; cursor: pointer; }
+  .item:hover { background: var(--surface2); }
+  .item.current { background: rgba(99,102,241,.14); }
+  .item .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .sub { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .del { visibility: hidden; padding: 0 5px; }
+  .item:hover .del { visibility: visible; }
+  .side-empty { color: var(--muted); text-align: center; padding: 14px 8px; font-size: 12px; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 12px 14px; gap: 10px; overflow: hidden; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .paths { display: grid; grid-template-columns: 70px 1fr auto; gap: 6px 8px; align-items: center; }
+  .paths label { color: var(--muted); }
+  .paths input { font-family: var(--mono); font-size: 12.5px; min-width: 0; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 6px 12px; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.active { background: var(--accent); color: #fff; }
+  .mode-help { color: var(--muted); font-size: 12px; flex: 1; min-width: 200px; }
+  .opts { display: flex; gap: 14px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .opts label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  details summary { cursor: pointer; color: var(--muted); user-select: none; }
+  details textarea { width: 100%; margin-top: 6px; height: 70px; resize: vertical; font-family: var(--mono); font-size: 12px; }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+  .hint code { font-family: var(--mono); color: var(--accent-h); }
+
+  .progress { display: flex; align-items: center; gap: 10px; }
+  .bar { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .progress .msg { color: var(--muted); font-size: 12px; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+  .stat:hover { border-color: #3f3f46; }
+  .stat.active { border-color: var(--accent); }
+  .stat .n { font-size: 20px; font-weight: 700; }
+  .stat .l { color: var(--muted); font-size: 11.5px; }
+  .c-new { color: var(--ok); } .c-mod { color: var(--warn); } .c-same { color: var(--muted); }
+  .c-tgt { color: var(--info); } .c-conf { color: var(--err); }
+
+  .results { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface);
+             border: 1px solid var(--border); border-radius: 8px; }
+  .res-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .res-head .title { font-weight: 600; }
+  .res-head .spacer { flex: 1; }
+  .res-body { flex: 1; overflow: auto; }
+  table.list { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.list th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; position: sticky; top: 0;
+                  background: var(--surface); border-bottom: 1px solid var(--border); }
+  table.list td { padding: 4px 8px; border-bottom: 1px solid #1d1d21; }
+  table.list td.path { font-family: var(--mono); word-break: break-all; }
+  table.list td.num { text-align: right; white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+  table.list tr.off td { opacity: .4; text-decoration: line-through; }
+  .badge { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 9px; white-space: nowrap; }
+  .b-copy { background: rgba(34,197,94,.14); color: var(--ok); }
+  .b-update { background: rgba(245,158,11,.14); color: var(--warn); }
+  .b-delete { background: rgba(239,68,68,.14); color: #fca5a5; }
+  .b-copy_back, .b-update_back { background: rgba(56,189,248,.14); color: var(--info); }
+  .b-ok { background: rgba(34,197,94,.14); color: var(--ok); } .b-error { background: rgba(239,68,68,.14); color: #fca5a5; }
+  .b-warn { background: rgba(245,158,11,.14); color: var(--warn); }
+  .warn-ico { color: var(--warn); cursor: help; }
+  .placeholder { color: var(--muted); height: 100%; min-height: 180px; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 6px; text-align: center; padding: 20px; }
+  .placeholder .big { font-size: 32px; }
+  .banner { padding: 8px 12px; border-radius: 6px; font-size: 12.5px; }
+  .banner.warn { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.35); color: #fcd34d; }
+  .banner.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(420px, 94vw); }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .modal-body { padding: 12px 14px; }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="side-head"><span>Profils</span><button id="profile-save" class="ghost icon" title="Enregistrer comme profil (Ctrl+S)">＋</button></div>
+  <div class="side-list" id="profiles"></div>
+  <div class="side-head"><span>Journal des exécutions</span><button id="runs-clear" class="ghost icon" title="Vider le journal">🗑</button></div>
+  <div class="side-list" id="runs"></div>
+</aside>
+
+<main id="main">
+  <section class="card">
+    <div class="paths">
+      <label for="source">Source</label>
+      <input id="source" type="text" spellcheck="false" placeholder="C:\Users\moi\Documents" />
+      <button id="swap" class="ghost icon" title="Inverser source et cible">⇅</button>
+      <label for="target">Cible</label>
+      <input id="target" type="text" spellcheck="false" placeholder="D:\Sauvegarde\Documents" />
+      <span></span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="seg" id="modes">
+        <button data-mode="copy" class="active">Copie</button>
+        <button data-mode="mirror">Miroir</button>
+        <button data-mode="bidirectional">Bidirectionnel</button>
+      </div>
+      <div class="mode-help" id="mode-help"></div>
+      <button id="btn-compare" class="primary" title="Comparer (Ctrl+Entrée)">Comparer</button>
+    </div>
+    <div class="opts">
+      <label title="Plus lent mais détecte les contenus différents à taille égale"><input type="checkbox" id="use-hash" /> Comparer le contenu (SHA-256)</label>
+      <details id="excl-box" style="flex:1;min-width:260px">
+        <summary>Exclusions (<span id="excl-count">0</span>)</summary>
+        <textarea id="excludes" spellcheck="false"></textarea>
+        <p class="hint">Un motif par ligne. <code>node_modules</code>, <code>*.tmp</code> s'appliquent au nom ; <code>build/cache</code> à un chemin relatif.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="card hidden" id="progress-card">
+    <div class="progress">
+      <span id="prog-label">Comparaison…</span>
+      <div class="bar"><div id="prog-bar"></div></div>
+      <span class="msg" id="prog-msg"></span>
+      <button id="btn-cancel" class="danger">Annuler</button>
+    </div>
+  </section>
+
+  <div id="banners"></div>
+  <div class="stats hidden" id="stats"></div>
+
+  <section class="results">
+    <div class="res-head" id="res-head">
+      <span class="title" id="res-title">Résultats</span>
+      <span class="spacer"></span>
+      <input id="filter" type="text" placeholder="Filtrer les chemins…" style="width:220px" />
+      <button id="btn-execute" class="primary hidden" title="Exécuter la synchronisation">Synchroniser</button>
+    </div>
+    <div class="res-body" id="res-body">
+      <div class="placeholder"><div class="big">🔁</div>
+        <div>Choisissez un dossier source et un dossier cible, puis cliquez sur <b>Comparer</b>.</div>
+        <div>Un aperçu des opérations est toujours affiché avant toute modification.</div>
+        <div><kbd>Ctrl</kbd> + <kbd>Entrée</kbd> comparer · <kbd>Ctrl</kbd> + <kbd>S</kbd> enregistrer le profil · <kbd>Échap</kbd> annuler</div></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'folder-sync'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const MODE_HELP = {
+  copy: 'Copie les fichiers nouveaux et modifiés de la source vers la cible. Rien n’est supprimé.',
+  mirror: 'Comme la copie, et envoie à la corbeille ce qui n’existe que dans la cible : la cible devient identique à la source.',
+  bidirectional: 'Propage les changements dans les deux sens ; le fichier le plus récent gagne. Les conflits sont listés et ignorés.',
+}
+const OP_LABEL = { copy: 'Copie →', update: 'Mise à jour →', delete: 'Corbeille', copy_back: '← Copie', update_back: '← Mise à jour' }
+const CATS = [
+  { key: 'ops', label: 'Opérations', cls: '' },
+  { key: 'new', label: 'Nouveaux', cls: 'c-new' },
+  { key: 'modified', label: 'Modifiés', cls: 'c-mod' },
+  { key: 'target_only', label: 'Seulement dans la cible', cls: 'c-tgt' },
+  { key: 'identical', label: 'Identiques', cls: 'c-same' },
+  { key: 'conflicts', label: 'Conflits', cls: 'c-conf' },
+]
+
+const state = { mode: 'copy', plan: null, view: 'ops', skip: new Set(), jobId: null, busy: false,
+                profiles: [], runs: [], profileId: null, run: null }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+function fmtSize(n) {
+  if (n == null) return ''
+  if (n < 1024) return `${n} o`
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} Ko`
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} Mo`
+  return `${(n / 1024 ** 3).toFixed(2)} Go`
+}
+const fmtDate = (t) => t ? new Date(t * 1000).toLocaleString('fr-FR') : ''
+
+function setMode(m) {
+  state.mode = m
+  $$('#modes button').forEach((b) => b.classList.toggle('active', b.dataset.mode === m))
+  $('#mode-help').textContent = MODE_HELP[m]
+}
+function excludes() { return $('#excludes').value.split('\n').map((s) => s.trim()).filter(Boolean) }
+function updateExclCount() { $('#excl-count').textContent = excludes().length }
+
+function setBusy(label) {
+  state.busy = !!label
+  $('#progress-card').classList.toggle('hidden', !label)
+  $('#btn-compare').disabled = !!label
+  $('#btn-execute').disabled = !!label
+  if (label) { $('#prog-label').textContent = label; $('#prog-bar').style.width = '0'; $('#prog-msg').textContent = '' }
+}
+function onProgress(p) {
+  if (p.percent != null) $('#prog-bar').style.width = `${Math.min(100, p.percent)}%`
+  if (p.message) { $('#prog-msg').textContent = p.message; $('#prog-msg').title = p.message }
+}
+
+// ── Compare ────────────────────────────────────────────────────────────────
+async function compare() {
+  if (state.busy) return
+  const source = $('#source').value.trim(), target = $('#target').value.trim()
+  if (!source || !target) { toast('Indiquez la source et la cible', true); return }
+  try { await call('validate', { source, target }) } catch (e) { toast(e.message, true); return }
+  setBusy('Comparaison…')
+  state.plan = null; state.run = null; state.skip = new Set()
+  try {
+    const res = await window.ledroide.run(MODULE_ID, 'compare',
+      { source, target, mode: state.mode, use_hash: $('#use-hash').checked, excludes: excludes() },
+      { onProgress, onStart: (id) => (state.jobId = id) })
+    state.plan = res
+    state.view = 'ops'
+    render()
+  } catch (e) {
+    if (e.code === 'JOB_CANCELLED') toast('Comparaison annulée')
+    else toast(e.message, true)
+    render()
+  } finally { state.jobId = null; setBusy(null) }
+}
+
+// ── Execute ────────────────────────────────────────────────────────────────
+async function execute() {
+  const p = state.plan
+  if (!p || state.busy) return
+  const ops = p.ops.filter((o) => !state.skip.has(o.rel))
+  if (!ops.length) { toast('Aucune opération à exécuter'); return }
+  const n = (k) => ops.filter((o) => o.op === k).length
+  const dels = n('delete')
+  if (dels && !p.send2trash) { toast('send2trash est absent : installez les dépendances du module pour le mode miroir.', true); return }
+  const lines = [`Synchroniser maintenant (${{ copy: 'copie', mirror: 'miroir', bidirectional: 'bidirectionnel' }[p.mode]}) ?`, '',
+    `Source : ${p.source}`, `Cible : ${p.target}`, '']
+  if (n('copy')) lines.push(`• ${n('copy')} fichier(s) copié(s) vers la cible`)
+  if (n('update')) lines.push(`• ${n('update')} fichier(s) remplacé(s) dans la cible`)
+  if (n('copy_back')) lines.push(`• ${n('copy_back')} fichier(s) copié(s) vers la source`)
+  if (n('update_back')) lines.push(`• ${n('update_back')} fichier(s) remplacé(s) dans la source`)
+  if (dels) lines.push(`• ${dels} fichier(s) envoyé(s) à la corbeille`)
+  const newer = ops.filter((o) => o.warning).length
+  if (newer) lines.push('', `⚠ ${newer} fichier(s) de la cible sont plus récents et seront écrasés.`)
+  if (!confirm(lines.join('\n'))) return
+  setBusy('Synchronisation…')
+  try {
+    const run = await window.ledroide.run(MODULE_ID, 'execute',
+      { plan_id: p.plan_id, skip: [...state.skip], profile: state.profiles.find((x) => x._id === state.profileId)?.name || '' },
+      { onProgress, onStart: (id) => (state.jobId = id) })
+    state.plan = null
+    state.run = run
+    if (run.cancelled) toast(`Annulé : ${run.done} opération(s) effectuée(s)`, true)
+    else if (run.failed) toast(`${run.done} réussie(s), ${run.failed} en erreur`, true)
+    else toast(`Synchronisation terminée : ${run.done} opération(s)`)
+    render(); loadRuns()
+  } catch (e) {
+    toast(e.message, true)
+  } finally { state.jobId = null; setBusy(null) }
+}
+
+async function cancelJob() {
+  if (!state.jobId) return
+  try { await window.ledroide.cancel(MODULE_ID, state.jobId) } catch (e) { toast(e.message, true) }
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const body = $('#res-body'), p = state.plan
+  $('#banners').innerHTML = ''
+  $('#btn-execute').classList.add('hidden')
+  if (state.run) return renderRun(state.run)
+  $('#stats').classList.toggle('hidden', !p)
+  if (!p) {
+    $('#res-title').textContent = 'Résultats'
+    body.innerHTML = `<div class="placeholder"><div class="big">🔁</div><div>Aucune comparaison en cours.</div></div>`
+    return
+  }
+  const c = p.counts
+  $('#stats').innerHTML = CATS.slice(1).map((k) => `<div class="stat ${state.view === k.key ? 'active' : ''}" data-view="${k.key}">
+    <div class="n ${k.cls}">${c[k.key]}</div><div class="l">${k.label}</div></div>`).join('')
+  const banners = []
+  if (p.truncated) banners.push('<div class="banner warn">Listes tronquées à 5 000 éléments (toutes les opérations seront exécutées).</div>')
+  if (c.scan_errors) banners.push(`<div class="banner warn">${c.scan_errors} élément(s) illisible(s) ignoré(s) pendant l'analyse.</div>`)
+  if (!p.send2trash) banners.push('<div class="banner err">send2trash est absent : les suppressions du mode miroir sont impossibles (aucune suppression définitive n’est faite). Installez les dépendances du module.</div>')
+  $('#banners').innerHTML = banners.join('')
+
+  const f = $('#filter').value.trim().toLowerCase()
+  const match = (r) => !f || r.rel.toLowerCase().includes(f)
+  const cat = CATS.find((k) => k.key === state.view)
+  $('#res-title').innerHTML = state.view === 'ops'
+    ? `Aperçu : ${c.ops} opération(s) · ${fmtSize(p.bytes)} à copier`
+    : `${esc(cat.label)} (${c[state.view]})${state.view !== 'ops' ? ' · <a href="#" id="back-ops" style="color:var(--accent-h)">voir les opérations</a>' : ''}`
+  $('#btn-execute').classList.toggle('hidden', !c.ops)
+  $('#btn-execute').textContent = state.skip.size ? `Synchroniser (${c.ops - state.skip.size})` : 'Synchroniser'
+
+  if (state.view === 'ops') {
+    const rows = p.ops.filter(match)
+    if (!p.ops.length) {
+      body.innerHTML = `<div class="placeholder"><div class="big">✅</div><div>Les dossiers sont déjà synchronisés.</div>
+        ${c.conflicts ? `<div>${c.conflicts} conflit(s) à résoudre manuellement.</div>` : ''}</div>`
+      return
+    }
+    body.innerHTML = `<table class="list"><thead><tr><th style="width:28px"><input type="checkbox" id="chk-all" ${state.skip.size ? '' : 'checked'} title="Tout cocher / décocher" /></th>
+      <th style="width:130px">Action</th><th>Chemin</th><th style="text-align:right">Taille</th></tr></thead><tbody>${rows.slice(0, 3000).map((o) => `
+      <tr class="${state.skip.has(o.rel) ? 'off' : ''}"><td><input type="checkbox" data-rel="${esc(o.rel)}" ${state.skip.has(o.rel) ? '' : 'checked'} /></td>
+      <td><span class="badge b-${o.op}">${OP_LABEL[o.op]}</span>${o.warning ? ` <span class="warn-ico" title="${esc(o.warning)}">⚠</span>` : ''}</td>
+      <td class="path">${esc(o.rel)}</td><td class="num">${fmtSize(o.size)}</td></tr>`).join('')}</tbody></table>
+      ${rows.length > 3000 ? `<p class="hint" style="padding:8px">${rows.length - 3000} ligne(s) non affichée(s) — utilisez le filtre.</p>` : ''}`
+    return
+  }
+  const rows = (p[state.view] || []).filter(match)
+  if (!rows.length) { body.innerHTML = `<div class="placeholder"><div>Aucun élément${f ? ' pour ce filtre' : ''}.</div></div>`; return }
+  const showBoth = ['modified', 'conflicts', 'identical'].includes(state.view)
+  body.innerHTML = `<table class="list"><thead><tr><th>Chemin</th>
+    ${state.view !== 'target_only' ? '<th style="text-align:right">Taille source</th><th style="text-align:right">Date source</th>' : ''}
+    ${showBoth || state.view === 'target_only' ? '<th style="text-align:right">Taille cible</th><th style="text-align:right">Date cible</th>' : ''}
+    ${state.view === 'conflicts' ? '<th>Raison</th>' : ''}</tr></thead><tbody>${rows.slice(0, 3000).map((r) => `<tr>
+    <td class="path">${esc(r.rel)}</td>
+    ${state.view !== 'target_only' ? `<td class="num">${fmtSize(r.size)}</td><td class="num">${fmtDate(r.src_mtime)}</td>` : ''}
+    ${showBoth ? `<td class="num">${fmtSize(r.tgt_size)}</td><td class="num">${fmtDate(r.tgt_mtime)}</td>` : ''}
+    ${state.view === 'target_only' ? `<td class="num">${fmtSize(r.size)}</td><td class="num">${fmtDate(r.tgt_mtime)}</td>` : ''}
+    ${state.view === 'conflicts' ? `<td>${esc(r.reason)}</td>` : ''}</tr>`).join('')}</tbody></table>
+    ${state.view === 'identical' && c.identical > rows.length && !f ? `<p class="hint" style="padding:8px">Seuls les 500 premiers fichiers identiques sont listés.</p>` : ''}`
+}
+
+function renderRun(run) {
+  $('#stats').classList.add('hidden')
+  const f = $('#filter').value.trim().toLowerCase()
+  $('#res-title').innerHTML = `Journal du ${new Date(run.at).toLocaleString('fr-FR')} · ${run.done} réussie(s)` +
+    (run.failed ? ` · <span style="color:#fca5a5">${run.failed} erreur(s)</span>` : '') + (run.cancelled ? ' · <span style="color:var(--warn)">annulée</span>' : '') +
+    ` · ${run.duration_s ?? '?'} s`
+  $('#banners').innerHTML = `<div class="banner ${run.failed ? 'err' : run.cancelled ? 'warn' : ''}" style="${run.failed || run.cancelled ? '' : 'border:1px solid var(--border)'}">
+    <span class="mono">${esc(run.source)}</span> → <span class="mono">${esc(run.target)}</span> (${esc({ copy: 'copie', mirror: 'miroir', bidirectional: 'bidirectionnel' }[run.mode] || run.mode)})</div>`
+  const rows = (run.journal || []).filter((j) => !f || j.rel.toLowerCase().includes(f))
+  if (!rows.length) { $('#res-body').innerHTML = '<div class="placeholder"><div>Journal vide.</div></div>'; return }
+  rows.sort((a, b) => (a.level === 'error' ? 0 : 1) - (b.level === 'error' ? 0 : 1))
+  $('#res-body').innerHTML = `<table class="list"><thead><tr><th style="width:70px">État</th><th style="width:130px">Action</th><th>Chemin</th><th>Détail</th></tr></thead><tbody>
+    ${rows.map((j) => `<tr><td><span class="badge b-${j.level}">${{ ok: 'OK', error: 'Erreur', warn: 'Info' }[j.level]}</span></td>
+    <td>${OP_LABEL[j.op] ? `<span class="badge b-${j.op}">${OP_LABEL[j.op]}</span>` : ''}</td>
+    <td class="path">${esc(j.rel)}</td><td style="color:${j.level === 'error' ? '#fca5a5' : 'var(--muted)'}">${esc(j.msg)}</td></tr>`).join('')}</tbody></table>`
+}
+
+function askText(title, value = '') {
+  return new Promise((resolve) => {
+    const back = document.createElement('div')
+    back.className = 'backdrop'
+    back.innerHTML = `<div class="modal"><div class="modal-head">${esc(title)}</div>
+      <div class="modal-body"><input type="text" style="width:100%" value="${esc(value)}" /></div>
+      <div class="modal-foot"><button data-x>Annuler</button><button class="primary" data-ok>Valider</button></div></div>`
+    document.body.appendChild(back)
+    const input = back.querySelector('input')
+    const done = (v) => { back.remove(); resolve(v) }
+    input.focus(); input.select()
+    back.addEventListener('click', (e) => { if (e.target === back || e.target.closest('[data-x]')) done(null); if (e.target.closest('[data-ok]')) done(input.value) })
+    input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') done(input.value); if (e.key === 'Escape') done(null) })
+  })
+}
+
+// ── Profiles & runs ────────────────────────────────────────────────────────
+async function loadProfiles() {
+  try { state.profiles = (await call('profiles_list')).items } catch (e) { toast(e.message, true) }
+  renderProfiles()
+}
+function renderProfiles() {
+  $('#profiles').innerHTML = state.profiles.map((p) => `<div class="item ${p._id === state.profileId ? 'current' : ''}" data-id="${esc(p._id)}" title="${esc(p.source)} → ${esc(p.target)}">
+    <span class="lbl">${esc(p.name)}<div class="sub">${esc({ copy: 'Copie', mirror: 'Miroir', bidirectional: 'Bidirectionnel' }[p.mode])} · ${esc(p.target)}</div></span>
+    <button class="ghost icon del" data-del title="Supprimer">✕</button></div>`).join('')
+    || '<div class="side-empty">Aucun profil.<br>Configurez une synchro puis « ＋ ».</div>'
+}
+async function saveProfile() {
+  const cur = state.profiles.find((p) => p._id === state.profileId)
+  const name = await askText('Nom du profil', cur?.name || '')
+  if (!name || !name.trim()) return
+  const id = cur && cur.name === name.trim() ? cur._id : null
+  try {
+    const d = await call('profile_save', { id, name, source: $('#source').value, target: $('#target').value,
+      mode: state.mode, use_hash: $('#use-hash').checked, excludes: excludes() })
+    state.profileId = d._id
+    toast('Profil enregistré'); loadProfiles()
+  } catch (e) { toast(e.message, true) }
+}
+function applyProfile(p) {
+  state.profileId = p._id
+  $('#source').value = p.source; $('#target').value = p.target
+  $('#use-hash').checked = !!p.use_hash
+  $('#excludes').value = (p.excludes || []).join('\n'); updateExclCount()
+  setMode(p.mode)
+  state.plan = null; state.run = null
+  renderProfiles(); render()
+}
+$('#profiles').addEventListener('click', async (e) => {
+  const it = e.target.closest('.item'); if (!it) return
+  const p = state.profiles.find((x) => x._id === it.dataset.id)
+  if (e.target.closest('[data-del]')) {
+    if (!confirm(`Supprimer le profil « ${p.name} » ?`)) return
+    await call('profile_delete', { id: p._id })
+    if (state.profileId === p._id) state.profileId = null
+    loadProfiles()
+  } else applyProfile(p)
+})
+
+async function loadRuns() {
+  try { state.runs = (await call('runs_list')).items } catch (e) { toast(e.message, true) }
+  $('#runs').innerHTML = state.runs.map((r) => `<div class="item" data-id="${esc(r._id)}" title="${esc(r.source)} → ${esc(r.target)}">
+    <span class="lbl">${r.failed ? '⚠️' : r.cancelled ? '⏹' : '✅'} ${esc(r.profile || r.target.split(/[\\/]/).filter(Boolean).pop() || r.target)}
+    <div class="sub">${new Date(r.at).toLocaleString('fr-FR')} · ${r.done} op.${r.failed ? ` · ${r.failed} err.` : ''}</div></span></div>`).join('')
+    || '<div class="side-empty">Aucune exécution.</div>'
+}
+$('#runs').addEventListener('click', async (e) => {
+  const it = e.target.closest('.item'); if (!it) return
+  try { state.run = await call('run_get', { id: it.dataset.id }); state.plan = null; $('#filter').value = ''; render() }
+  catch (err) { toast(err.message, true) }
+})
+$('#runs-clear').addEventListener('click', async () => {
+  if (!state.runs.length || !confirm('Vider le journal des exécutions ?')) return
+  await call('runs_clear'); loadRuns()
+})
+
+// ── Wiring ─────────────────────────────────────────────────────────────────
+$('#modes').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return
+  setMode(b.dataset.mode)
+  if (state.plan) { state.plan = null; render(); toast('Mode changé : relancez la comparaison') }
+})
+$('#swap').addEventListener('click', () => {
+  const s = $('#source').value; $('#source').value = $('#target').value; $('#target').value = s
+  if (state.plan) { state.plan = null; render() }
+})
+$('#btn-compare').addEventListener('click', compare)
+$('#btn-execute').addEventListener('click', execute)
+$('#btn-cancel').addEventListener('click', cancelJob)
+$('#profile-save').addEventListener('click', saveProfile)
+$('#excludes').addEventListener('input', updateExclCount)
+$('#filter').addEventListener('input', render)
+$('#stats').addEventListener('click', (e) => {
+  const s = e.target.closest('.stat'); if (!s) return
+  state.view = state.view === s.dataset.view ? 'ops' : s.dataset.view
+  render()
+})
+$('#res-head').addEventListener('click', (e) => { if (e.target.id === 'back-ops') { e.preventDefault(); state.view = 'ops'; render() } })
+$('#res-body').addEventListener('change', (e) => {
+  const el = e.target
+  if (el.id === 'chk-all') {
+    state.skip = el.checked ? new Set() : new Set(state.plan.ops.map((o) => o.rel))
+  } else if (el.dataset.rel != null) {
+    if (el.checked) state.skip.delete(el.dataset.rel); else state.skip.add(el.dataset.rel)
+  } else return
+  render()
+})
+for (const id of ['#source', '#target']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') compare() })
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); compare() }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveProfile() }
+  if (e.key === 'Escape' && state.jobId) cancelJob()
+})
+
+;(async () => {
+  setMode('copy')
+  try {
+    const d = await call('defaults')
+    $('#excludes').value = d.excludes.join('\n')
+    if (!d.send2trash) $('#banners').innerHTML = '<div class="banner warn">send2trash n’est pas installé : le mode miroir ne pourra pas supprimer (installez les dépendances du module).</div>'
+  } catch (e) { toast(e.message, true) }
+  updateExclCount()
+  loadProfiles(); loadRuns()
+})()
+</script>
+</body>
+</html>

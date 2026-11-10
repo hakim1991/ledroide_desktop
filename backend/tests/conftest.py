@@ -90,6 +90,7 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(settings, "MODULES_DIR", modules)
     monkeypatch.setattr(settings, "AVAILABLE_DIR", available)
+    monkeypatch.setattr(settings, "USER_MODULES_DIR", tmp_path / "installed-modules")
     for f in (settings.STATE_FILE, settings.CONFIGS_FILE):
         f.unlink(missing_ok=True)
 
@@ -99,4 +100,5 @@ def client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     with TestClient(main.app, base_url=BASE_URL) as c:
         c.modules_dir = modules
+        c.user_modules_dir = tmp_path / "installed-modules"
         yield c

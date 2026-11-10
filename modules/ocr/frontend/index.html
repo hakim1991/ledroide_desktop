@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OCR</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.sel { background: rgba(99,102,241,.18); border-color: var(--accent); color: #fff; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  input[type=range] { accent-color: var(--accent); padding: 0; border: none; background: transparent; }
+  .hidden { display: none !important; }
+  a.link { color: var(--accent-h); cursor: pointer; text-decoration: underline; }
+  code, .mono { font-family: var(--mono); }
+  code { color: var(--accent-h); font-size: 12px; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; }
+  .pill { padding: 2px 9px; border-radius: 10px; font-size: 11.5px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+  .pill.ok { color: var(--ok); border-color: rgba(34,197,94,.35); }
+  .pill.bad { color: var(--err); border-color: rgba(239,68,68,.35); }
+  .spacer { flex: 1; }
+
+  #app { flex: 1; min-height: 0; display: flex; }
+  #side { width: 300px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--surface);
+          overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 12px; }
+  .sec h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 6px;
+            display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  .sec h3 .spacer { flex: 1; }
+  #drop { border: 1.5px dashed #3f3f46; border-radius: 8px; padding: 14px 10px; text-align: center; color: var(--muted);
+          cursor: pointer; transition: .12s; }
+  #drop:hover, #drop.over { border-color: var(--accent); color: var(--text); background: rgba(99,102,241,.06); }
+  #drop .big { font-size: 24px; }
+  .pathrow { display: flex; gap: 6px; margin-top: 6px; }
+  .pathrow input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+  .fileinfo { margin-top: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px;
+              display: flex; gap: 8px; align-items: center; }
+  .fileinfo .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .fileinfo .s { color: var(--muted); font-size: 11.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { padding: 3px 9px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface2); cursor: pointer;
+          user-select: none; font-size: 12px; }
+  .chip.on { background: rgba(99,102,241,.2); border-color: var(--accent); color: #fff; }
+  .chip small { color: var(--muted); font-family: var(--mono); margin-left: 4px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .row label.l { width: 92px; color: var(--muted); flex-shrink: 0; }
+  .row input[type=range] { flex: 1; min-width: 0; }
+  .row .v { width: 38px; text-align: right; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; margin-bottom: 8px; }
+  .checks label, label.cb { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .rot { display: flex; gap: 4px; }
+  .rot button { flex: 1; padding: 4px 0; }
+  select.full, input.full { width: 100%; }
+  .warnbox { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35); color: #fcd34d; border-radius: 6px;
+             padding: 8px 10px; font-size: 12px; line-height: 1.45; }
+  #run { width: 100%; padding: 8px; font-size: 13.5px; }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 5px; line-height: 1.4; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .tabs { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .tab { padding: 4px 11px; border-radius: 5px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .pager { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .panel { flex: 1; min-height: 0; overflow: auto; position: relative; }
+  #view-preview { padding: 14px; display: flex; justify-content: center; align-items: flex-start;
+                  background: repeating-conic-gradient(#141417 0 25%, #17171a 0 50%) 0 0 / 18px 18px; }
+  .stage { position: relative; display: inline-block; line-height: 0; box-shadow: 0 4px 24px rgba(0,0,0,.5); }
+  .stage img { max-width: 100%; display: block; }
+  .stage.fit img { max-height: calc(100vh - 140px); }
+  .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .stage rect { fill: transparent; stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .stage rect.hi { stroke: rgba(34,197,94,.85); } .stage rect.mid { stroke: rgba(245,158,11,.9); } .stage rect.lo { stroke: rgba(239,68,68,.9); }
+  .stage rect:hover { fill: rgba(99,102,241,.25); }
+  .loading-over { position: absolute; top: 10px; right: 14px; background: var(--surface2); border: 1px solid var(--border);
+                  border-radius: 6px; padding: 4px 9px; font-size: 12px; color: var(--muted); }
+  #view-text { display: flex; flex-direction: column; padding: 10px; gap: 8px; }
+  #text { flex: 1; min-height: 0; resize: none; font-family: var(--mono); font-size: 13px; line-height: 1.55; padding: 10px 12px; }
+  .stats { display: flex; gap: 14px; color: var(--muted); font-size: 12px; align-items: center; flex-wrap: wrap; }
+  .stats b { color: var(--text); font-weight: 600; }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 8px; text-align: center; padding: 20px; }
+  .placeholder .big { font-size: 40px; }
+
+  #progress { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+  .bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .25s; }
+  #prog-msg { color: var(--muted); font-size: 12px; min-width: 180px; }
+
+  #help { flex: 1; overflow-y: auto; padding: 30px 20px; }
+  .help-card { max-width: 720px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; }
+  .help-card h2 { font-size: 18px; margin-bottom: 6px; display: flex; gap: 10px; align-items: center; }
+  .help-card p { color: #c4c4cc; line-height: 1.55; margin: 8px 0; }
+  .help-card ol { margin: 12px 0 12px 22px; line-height: 1.7; color: #c4c4cc; }
+  .help-card li b { color: var(--text); }
+  .help-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .searched { margin-top: 14px; font-size: 11.5px; color: var(--muted); }
+  .searched code { display: block; color: var(--muted); }
+
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(560px, 94vw); }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .modal-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">🔍 OCR</span>
+  <span id="tess-pill" class="pill">Détection de Tesseract…</span>
+  <span class="spacer"></span>
+  <button id="btn-paste" title="Coller une image depuis le presse-papier (Ctrl+V)">📋 Coller</button>
+  <button id="btn-open" title="Ouvrir une image ou un PDF (Ctrl+O)">📂 Ouvrir…</button>
+  <button id="btn-settings" class="ghost" title="Emplacement de Tesseract">⚙</button>
+  <input id="file-input" type="file" class="hidden" accept="image/*,.pdf,.tif,.tiff" />
+</header>
+
+<div id="help" class="hidden">
+  <div class="help-card">
+    <h2>🧩 Tesseract n'est pas installé</h2>
+    <p>Ce module utilise <b>Tesseract OCR</b>, un logiciel libre à installer séparément (environ 80 Mo). Une fois installé, revenez ici et cliquez sur <b>Revérifier</b>.</p>
+    <ol>
+      <li>Téléchargez l'installateur Windows maintenu par l'université de Mannheim (<b>UB-Mannheim</b>) : <a class="link" data-help="installer">github.com/UB-Mannheim/tesseract/wiki</a> — fichier <code>tesseract-ocr-w64-setup-….exe</code>.</li>
+      <li>Pendant l'installation, dépliez <b>Additional language data</b> et cochez <b>French</b> (pack <code>fra</code>), ainsi que les autres langues utiles.</li>
+      <li>Gardez le dossier proposé (<code>C:\Program Files\Tesseract-OCR</code>) : il est détecté automatiquement. Sinon, indiquez le chemin de <code>tesseract.exe</code> ci-dessous.</li>
+    </ol>
+    <div class="pathrow"><input id="help-path" type="text" placeholder="C:\Program Files\Tesseract-OCR\tesseract.exe" spellcheck="false" /><button id="help-save">Utiliser ce chemin</button></div>
+    <div class="help-actions">
+      <button class="primary" id="help-recheck">↻ Revérifier</button>
+      <button data-help="installer">Ouvrir la page de téléchargement</button>
+    </div>
+    <div class="searched" id="help-searched"></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <aside id="side">
+    <div class="sec">
+      <h3>Source</h3>
+      <div id="drop"><div class="big">🖼️</div><div><b>Déposez</b> une image ou un PDF, <b>cliquez</b> pour choisir<br>ou collez avec <kbd>Ctrl</kbd>+<kbd>V</kbd></div></div>
+      <div class="pathrow"><input id="path" type="text" placeholder="…ou chemin d'un fichier local" spellcheck="false" /><button id="path-go" title="Charger ce chemin">→</button></div>
+      <div id="fileinfo" class="fileinfo hidden"><span id="fi-icon">🖼️</span><div style="flex:1;min-width:0"><div class="n" id="fi-name"></div><div class="s" id="fi-meta"></div></div><button class="ghost" id="fi-clear" title="Retirer">✕</button></div>
+    </div>
+
+    <div class="sec hidden" id="sec-pages">
+      <h3>Pages</h3>
+      <input id="pages" class="full" type="text" placeholder="Toutes (ex. 1-3,5)" spellcheck="false" />
+      <label class="cb" style="margin-top:6px"><input type="checkbox" id="use-layer" /> Utiliser le texte natif du PDF s'il existe</label>
+    </div>
+
+    <div class="sec">
+      <h3>Langues</h3>
+      <div class="chips" id="langs"></div>
+      <div id="fra-warn" class="warnbox hidden" style="margin-top:8px">Le pack <b>français</b> (<code>fra</code>) n'est pas installé : relancez l'installateur Tesseract et cochez <i>French</i>, ou copiez <code>fra.traineddata</code> dans le <a class="link" id="open-tessdata">dossier tessdata</a> (<a class="link" data-help="tessdata">télécharger</a>).</div>
+    </div>
+
+    <div class="sec">
+      <h3>Mise en page</h3>
+      <select id="psm" class="full">
+        <option value="3">Automatique (page complète)</option>
+        <option value="4">Une colonne de texte</option>
+        <option value="6">Un bloc de texte uniforme</option>
+        <option value="11">Texte épars (le plus possible)</option>
+        <option value="12">Texte épars + orientation</option>
+        <option value="7">Une seule ligne</option>
+        <option value="8">Un seul mot</option>
+        <option value="1">Automatique + orientation (OSD)</option>
+      </select>
+    </div>
+
+    <div class="sec">
+      <h3>Prétraitement <span class="spacer"></span><button class="ghost" id="pp-reset" style="padding:1px 6px;font-size:11px">Réinitialiser</button></h3>
+      <div class="checks">
+        <label><input type="checkbox" data-pp="grayscale" /> Niveaux de gris</label>
+        <label><input type="checkbox" data-pp="autocontrast" /> Contraste auto</label>
+        <label><input type="checkbox" data-pp="denoise" /> Débruitage</label>
+        <label><input type="checkbox" data-pp="sharpen" /> Netteté</label>
+        <label><input type="checkbox" data-pp="invert" /> Inverser</label>
+      </div>
+      <div class="row"><label class="l">Contraste</label><input type="range" data-pp="contrast" min="0.5" max="3" step="0.1" value="1" /><span class="v" data-v="contrast">1.0</span></div>
+      <div class="row"><label class="l">Luminosité</label><input type="range" data-pp="brightness" min="0.5" max="2" step="0.05" value="1" /><span class="v" data-v="brightness">1.0</span></div>
+      <div class="row"><label class="l">Binarisation</label>
+        <select id="bin-mode" style="flex:1"><option value="none">Aucune</option><option value="otsu">Automatique (Otsu)</option><option value="manual">Seuil manuel</option></select></div>
+      <div class="row hidden" id="row-threshold"><label class="l">Seuil</label><input type="range" id="threshold" min="0" max="255" step="1" value="150" /><span class="v" id="threshold-v">150</span></div>
+      <div class="row"><label class="l">Agrandir</label>
+        <select data-pp="scale" style="flex:1"><option value="1">×1 (taille réelle)</option><option value="1.5">×1,5</option><option value="2">×2 (petit texte)</option><option value="3">×3</option></select></div>
+      <div class="row"><label class="l">Rotation</label><div class="rot" id="rot"><button data-rot="0" class="sel">0°</button><button data-rot="90">90°</button><button data-rot="180">180°</button><button data-rot="270">270°</button></div></div>
+      <div class="row"><label class="l">Redresser</label><input type="range" data-pp="angle" min="-15" max="15" step="0.5" value="0" /><span class="v" data-v="angle">0°</span></div>
+      <button id="btn-osd" style="width:100%;margin-top:2px" title="Détecter l'orientation du texte (pack osd)">🧭 Détecter l'orientation</button>
+    </div>
+
+    <div class="sec">
+      <h3>Options</h3>
+      <label class="cb"><input type="checkbox" id="opt-boxes" checked /> Afficher les boîtes des mots</label>
+    </div>
+
+    <button id="run" class="primary" disabled title="Lancer l'OCR (Ctrl+Entrée)">Lancer l'OCR</button>
+    <p class="hint" style="margin-top:-6px;text-align:center"><kbd>Ctrl</kbd>+<kbd>Entrée</kbd> lancer · <kbd>Ctrl</kbd>+<kbd>V</kbd> coller · <kbd>Ctrl</kbd>+<kbd>O</kbd> ouvrir</p>
+  </aside>
+
+  <main id="main">
+    <div class="tabs">
+      <div class="tab active" data-tab="preview">Aperçu</div>
+      <div class="tab" data-tab="text">Texte <span id="tab-text-n" style="color:var(--accent-h);font-size:11px"></span></div>
+      <span class="spacer"></span>
+      <div class="pager hidden" id="pager"><button class="ghost" id="pg-prev">◀</button><span id="pg-label"></span><button class="ghost" id="pg-next">▶</button></div>
+      <button class="ghost" id="btn-fit" title="Ajuster / taille réelle">⤢</button>
+    </div>
+    <div class="panel" id="view-preview">
+      <div class="placeholder" id="ph"><div class="big">🔍</div><div>Ouvrez, déposez ou collez une image ou un PDF scanné</div>
+        <div style="font-size:12px">Le texte reconnu apparaîtra dans l'onglet <b>Texte</b>, les mots détectés sont encadrés sur l'aperçu.</div></div>
+      <div class="stage fit hidden" id="stage"><img id="pv-img" alt="" /><svg id="pv-svg" preserveAspectRatio="none"></svg></div>
+      <div class="loading-over hidden" id="pv-loading"><span class="spinner"></span> Aperçu…</div>
+    </div>
+    <div class="panel hidden" id="view-text">
+      <div class="stats" id="stats"></div>
+      <textarea id="text" spellcheck="false" placeholder="Aucun texte pour l'instant. Lancez l'OCR."></textarea>
+      <div style="display:flex;gap:6px">
+        <select id="text-scope"><option value="all">Toutes les pages</option></select>
+        <span class="spacer"></span>
+        <button id="btn-copy" title="Copier le texte (Ctrl+Maj+C)">Copier</button>
+        <button id="btn-download">Télécharger .txt</button>
+      </div>
+    </div>
+    <div id="progress" class="hidden"><span class="spinner"></span><span id="prog-msg">OCR…</span><div class="bar"><div id="prog-bar"></div></div><button id="btn-cancel">Annuler</button></div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'ocr'
+const CHUNK = 768 * 1024
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const fmtSize = (n) => n < 1024 ? `${n} o` : n < 1048576 ? `${(n / 1024).toFixed(1)} Ko` : `${(n / 1048576).toFixed(1)} Mo`
+
+const state = {
+  status: null, file: null, source: null, page: 0, langs: [], rotate: 0,
+  result: null, resultPP: null, jobId: null, running: false, fit: true,
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+
+// ── Status / help ───────────────────────────────────────────────────────────
+async function loadStatus(refresh = false) {
+  try {
+    const st = await call('status', { refresh }, { timeout: 30000 })
+    state.status = st
+    renderStatus()
+  } catch (e) { toast(e.message, true) }
+}
+
+function renderStatus() {
+  const st = state.status
+  const pill = $('#tess-pill')
+  $('#help').classList.toggle('hidden', st.installed)
+  $('#app').classList.toggle('hidden', !st.installed)
+  if (!st.installed) {
+    pill.className = 'pill bad'; pill.textContent = 'Tesseract absent'
+    $('#help-path').value = st.configured_path || ''
+    $('#help-searched').innerHTML = 'Emplacements vérifiés :' + st.searched.map((p) => `<code>${esc(p)}</code>`).join('')
+    return
+  }
+  pill.className = 'pill ok'
+  pill.textContent = `Tesseract ${st.tesseract.version} · ${st.langs.filter((l) => l.code !== 'osd').length} langue(s)`
+  pill.title = st.tesseract.path
+  const missingDeps = Object.entries(st.deps).filter(([, ok]) => !ok).map(([n]) => n)
+  if (missingDeps.length) toast(`Paquet(s) Python manquant(s) : ${missingDeps.join(', ')} — réactivez le module.`, true)
+  if (!state.langs.length) state.langs = st.default_langs.length ? st.default_langs.slice() : st.langs.filter((l) => l.code !== 'osd').slice(0, 1).map((l) => l.code)
+  state.langs = state.langs.filter((c) => st.langs.some((l) => l.code === c))
+  renderLangs()
+  $('#fra-warn').classList.toggle('hidden', st.has_fra)
+  $('#btn-osd').disabled = !st.langs.some((l) => l.code === 'osd')
+}
+
+function renderLangs() {
+  const langs = state.status.langs.filter((l) => l.code !== 'osd')
+  $('#langs').innerHTML = langs.length ? langs.map((l) =>
+    `<span class="chip ${state.langs.includes(l.code) ? 'on' : ''}" data-lang="${esc(l.code)}">${esc(l.name)}<small>${esc(l.code)}</small></span>`).join('')
+    : '<span class="hint">Aucune langue installée</span>'
+  updateRunBtn()
+}
+
+$('#langs').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-lang]'); if (!c) return
+  const code = c.dataset.lang
+  state.langs = state.langs.includes(code) ? state.langs.filter((x) => x !== code) : [...state.langs, code]
+  renderLangs()
+})
+
+$$('[data-help]').forEach((el) => el.addEventListener('click', async (e) => {
+  e.preventDefault()
+  try { await call('open_help', { what: el.dataset.help }); toast('Ouvert dans le navigateur') } catch (err) { toast(err.message, true) }
+}))
+$('#open-tessdata').addEventListener('click', async () => {
+  try { await call('open_tessdata') } catch (e) { toast(e.message, true) }
+})
+$('#help-recheck').addEventListener('click', async () => { await loadStatus(true); if (state.status?.installed) toast('Tesseract détecté ✔') })
+$('#help-save').addEventListener('click', () => savePath($('#help-path').value))
+
+async function savePath(path) {
+  try {
+    state.status = await call('set_tesseract_path', { path: path.trim() }, { timeout: 30000 })
+    renderStatus()
+    toast(state.status.installed ? 'Tesseract détecté ✔' : 'Chemin enregistré')
+    return true
+  } catch (e) { toast(e.message, true); return false }
+}
+
+$('#btn-settings').addEventListener('click', () => {
+  const st = state.status || {}
+  const bd = document.createElement('div')
+  bd.className = 'backdrop'
+  bd.innerHTML = `<div class="modal"><div class="modal-head">Emplacement de Tesseract</div>
+    <div class="modal-body">
+      <div>Détecté : <code>${esc(st.tesseract?.path || 'aucun')}</code></div>
+      ${st.tesseract?.tessdata ? `<div>Dossier des langues : <code>${esc(st.tesseract.tessdata)}</code></div>` : ''}
+      <label style="color:var(--muted);margin-top:6px">Chemin forcé de <code>tesseract.exe</code> (vide = détection automatique)</label>
+      <input id="m-path" type="text" class="mono" value="${esc(st.configured_path || '')}" placeholder="C:\\Program Files\\Tesseract-OCR\\tesseract.exe" spellcheck="false" />
+    </div>
+    <div class="modal-foot"><button data-x>Annuler</button><button class="primary" data-ok>Enregistrer</button></div></div>`
+  document.body.appendChild(bd)
+  const close = () => bd.remove()
+  bd.addEventListener('click', (e) => { if (e.target === bd || e.target.closest('[data-x]')) close() })
+  bd.querySelector('[data-ok]').addEventListener('click', async () => { if (await savePath(bd.querySelector('#m-path').value)) close() })
+  bd.querySelector('#m-path').focus()
+})
+
+// ── Source loading ──────────────────────────────────────────────────────────
+function b64(buf) {
+  const bytes = new Uint8Array(buf); let s = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+  return btoa(s)
+}
+
+async function uploadFile(file, name) {
+  const begin = await call('upload_begin', { name: name || file.name || 'image.png', size: file.size })
+  for (let off = 0; off < file.size; off += CHUNK) {
+    const part = await file.slice(off, off + CHUNK).arrayBuffer()
+    await call('upload_chunk', { upload_id: begin.upload_id, offset: off, data: b64(part) }, { timeout: 60000 })
+    setLoadMsg(`Envoi… ${Math.min(100, Math.round((off + CHUNK) / file.size * 100))} %`)
+  }
+  return call('upload_end', { upload_id: begin.upload_id }, { timeout: 60000 })
+}
+
+function setLoadMsg(msg) {
+  const el = $('#pv-loading')
+  el.classList.toggle('hidden', !msg)
+  if (msg) el.innerHTML = `<span class="spinner"></span> ${esc(msg)}`
+}
+
+async function loadFile(file, name) {
+  if (!file) return
+  if (state.running) return toast('Un OCR est en cours', true)
+  try {
+    setLoadMsg('Chargement…')
+    let info
+    if (file.path) info = await call('open_path', { path: file.path }, { timeout: 30000 })
+    else info = await uploadFile(file, name)
+    await setSource(info)
+  } catch (e) { toast(e.message, true) } finally { setLoadMsg('') }
+}
+
+async function loadPath(path) {
+  path = path.trim(); if (!path) return
+  try {
+    setLoadMsg('Chargement…')
+    const info = await call('open_path', { path }, { timeout: 30000 })
+    await setSource(info)
+  } catch (e) { toast(e.message, true) } finally { setLoadMsg('') }
+}
+
+async function setSource(info) {
+  if (state.source?.file_id) call('upload_discard', { file_id: state.source.file_id }).catch(() => {})
+  state.file = info
+  state.source = info.file_id ? { file_id: info.file_id } : { path: info.path }
+  state.page = 0
+  state.result = null
+  $('#fileinfo').classList.remove('hidden')
+  $('#fi-icon').textContent = info.kind === 'pdf' ? '📄' : '🖼️'
+  $('#fi-name').textContent = info.name
+  $('#fi-name').title = info.path || info.name
+  const dims = info.kind === 'pdf' ? `${info.pages} page(s)${info.text_layer ? ' · contient du texte' : ''}` : `${info.width}×${info.height}${info.pages > 1 ? ` · ${info.pages} pages` : ''}`
+  $('#fi-meta').textContent = `${dims} · ${fmtSize(info.size)}`
+  $('#sec-pages').classList.toggle('hidden', info.pages <= 1)
+  $('#use-layer').closest('label').classList.toggle('hidden', info.kind !== 'pdf')
+  $('#use-layer').checked = !!info.text_layer
+  $('#pages').value = ''
+  renderResult()
+  updateRunBtn()
+  await refreshPreview()
+}
+
+$('#fi-clear').addEventListener('click', () => {
+  if (state.source?.file_id) call('upload_discard', { file_id: state.source.file_id }).catch(() => {})
+  state.file = state.source = state.result = null
+  $('#fileinfo').classList.add('hidden'); $('#sec-pages').classList.add('hidden')
+  $('#stage').classList.add('hidden'); $('#ph').classList.remove('hidden'); $('#pager').classList.add('hidden')
+  renderResult(); updateRunBtn()
+})
+
+const drop = $('#drop')
+drop.addEventListener('click', () => $('#file-input').click())
+$('#btn-open').addEventListener('click', () => $('#file-input').click())
+$('#file-input').addEventListener('change', (e) => { loadFile(e.target.files[0]); e.target.value = '' })
+;['dragenter', 'dragover'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over') }))
+;['dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); if (t === 'drop' || !e.relatedTarget) drop.classList.remove('over') }))
+document.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f) loadFile(f) })
+$('#path-go').addEventListener('click', () => loadPath($('#path').value))
+$('#path').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadPath($('#path').value) })
+
+document.addEventListener('paste', (e) => {
+  if (e.target.matches?.('input[type=text], textarea')) return
+  const items = [...(e.clipboardData?.items || [])]
+  const img = items.find((i) => i.kind === 'file' && i.type.startsWith('image/'))
+  if (img) { e.preventDefault(); loadFile(img.getAsFile(), 'presse-papier.png'); return }
+  const fileItem = items.find((i) => i.kind === 'file')
+  if (fileItem) { e.preventDefault(); loadFile(fileItem.getAsFile()); return }
+  const text = e.clipboardData?.getData('text/plain')
+  if (text && /^"?([a-zA-Z]:\\|\\\\)/.test(text.trim())) { e.preventDefault(); $('#path').value = text.trim().replace(/^"|"$/g, ''); loadPath($('#path').value) }
+})
+
+$('#btn-paste').addEventListener('click', async () => {
+  try {
+    if (!navigator.clipboard?.read) throw new Error()
+    const items = await navigator.clipboard.read()
+    for (const it of items) {
+      const type = it.types.find((t) => t.startsWith('image/'))
+      if (type) { const blob = await it.getType(type); return loadFile(new File([blob], 'presse-papier.png', { type }), 'presse-papier.png') }
+    }
+    toast('Le presse-papier ne contient pas d\'image', true)
+  } catch { toast('Accès direct au presse-papier refusé : utilisez Ctrl+V dans la fenêtre', true) }
+})
+
+// ── Preprocessing ───────────────────────────────────────────────────────────
+function getPP() {
+  const pp = { rotate: state.rotate }
+  $$('[data-pp]').forEach((el) => {
+    const k = el.dataset.pp
+    pp[k] = el.type === 'checkbox' ? el.checked : parseFloat(el.value)
+  })
+  const mode = $('#bin-mode').value
+  pp.threshold = mode === 'none' ? null : mode === 'otsu' ? 'otsu' : parseInt($('#threshold').value, 10)
+  return pp
+}
+
+let ppTimer
+function ppChanged() {
+  $$('[data-v]').forEach((el) => {
+    const v = parseFloat($(`[data-pp="${el.dataset.v}"]`).value)
+    el.textContent = el.dataset.v === 'angle' ? `${v}°` : v.toFixed(1)
+  })
+  $('#threshold-v').textContent = $('#threshold').value
+  $('#row-threshold').classList.toggle('hidden', $('#bin-mode').value !== 'manual')
+  clearTimeout(ppTimer)
+  ppTimer = setTimeout(refreshPreview, 300)
+}
+$$('[data-pp]').forEach((el) => el.addEventListener('input', ppChanged))
+$('#bin-mode').addEventListener('change', ppChanged)
+$('#threshold').addEventListener('input', ppChanged)
+$('#rot').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-rot]'); if (!b) return
+  setRotate(+b.dataset.rot)
+})
+function setRotate(r) {
+  state.rotate = r
+  $$('#rot button').forEach((x) => x.classList.toggle('sel', +x.dataset.rot === r))
+  ppChanged()
+}
+$('#pp-reset').addEventListener('click', () => {
+  $$('[data-pp]').forEach((el) => { if (el.type === 'checkbox') el.checked = false; else el.value = el.dataset.pp === 'angle' ? 0 : 1 })
+  $('#bin-mode').value = 'none'
+  setRotate(0)
+})
+
+$('#btn-osd').addEventListener('click', async () => {
+  if (!state.source) return toast('Chargez d\'abord une image', true)
+  const btn = $('#btn-osd'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Analyse…'
+  try {
+    const r = await call('detect_orientation', { source: state.source, page: state.page }, { timeout: 90000 })
+    setRotate(r.rotate)
+    toast(`Orientation détectée : rotation de ${r.rotate}°`)
+  } catch (e) { toast(e.message, true) } finally { btn.disabled = false; btn.innerHTML = '🧭 Détecter l\'orientation' }
+})
+
+let previewSeq = 0
+async function refreshPreview() {
+  if (!state.source) return
+  const seq = ++previewSeq
+  setLoadMsg('Aperçu…')
+  try {
+    const r = await call('preview', { source: state.source, page: state.page, preprocess: getPP() }, { timeout: 60000 })
+    if (seq !== previewSeq) return
+    state.preview = r
+    $('#ph').classList.add('hidden'); $('#stage').classList.remove('hidden')
+    $('#pv-img').src = r.image
+    $('#pv-svg').setAttribute('viewBox', `0 0 ${r.width} ${r.height}`)
+    renderPager(); renderBoxes()
+  } catch (e) { if (seq === previewSeq) toast(e.message, true) } finally { if (seq === previewSeq) setLoadMsg('') }
+}
+
+function renderPager() {
+  const n = state.file?.pages || 1
+  $('#pager').classList.toggle('hidden', n <= 1)
+  $('#pg-label').textContent = `Page ${state.page + 1} / ${n}`
+  $('#pg-prev').disabled = state.page <= 0
+  $('#pg-next').disabled = state.page >= n - 1
+}
+$('#pg-prev').addEventListener('click', () => { if (state.page > 0) { state.page--; refreshPreview() } })
+$('#pg-next').addEventListener('click', () => { if (state.page < (state.file?.pages || 1) - 1) { state.page++; refreshPreview() } })
+$('#btn-fit').addEventListener('click', () => { state.fit = !state.fit; $('#stage').classList.toggle('fit', state.fit) })
+
+function renderBoxes() {
+  const svg = $('#pv-svg')
+  const pageRes = state.result?.pages.find((p) => p.page === state.page + 1)
+  const same = state.resultPP === JSON.stringify(getPP())
+  if (!pageRes || !pageRes.words?.length || !$('#opt-boxes').checked || !same) { svg.innerHTML = ''; return }
+  svg.innerHTML = pageRes.words.map((w) =>
+    `<rect class="${w.c >= 80 ? 'hi' : w.c >= 50 ? 'mid' : 'lo'}" x="${w.x}" y="${w.y}" width="${w.w}" height="${w.h}"><title>${esc(w.t)} — ${w.c} %</title></rect>`).join('')
+}
+$('#opt-boxes').addEventListener('change', renderBoxes)
+
+// ── OCR ─────────────────────────────────────────────────────────────────────
+function updateRunBtn() {
+  $('#run').disabled = !state.source || state.running || !state.langs.length
+  $('#run').title = !state.source ? 'Chargez une image ou un PDF' : !state.langs.length ? 'Choisissez au moins une langue' : 'Lancer l\'OCR (Ctrl+Entrée)'
+}
+
+async function runOcr() {
+  if ($('#run').disabled) return
+  state.running = true; updateRunBtn()
+  const pp = getPP()
+  $('#progress').classList.remove('hidden'); $('#prog-bar').style.width = '0%'; $('#prog-msg').textContent = 'Démarrage…'
+  try {
+    const res = await window.ledroide.run(MODULE_ID, 'ocr', {
+      source: state.source, langs: state.langs, psm: +$('#psm').value, pages: $('#pages').value,
+      preprocess: pp, boxes: $('#opt-boxes').checked, use_text_layer: $('#use-layer').checked,
+    }, {
+      onStart: (id) => { state.jobId = id },
+      onProgress: (p) => { $('#prog-bar').style.width = `${p.percent || 0}%`; $('#prog-msg').textContent = p.message || '' },
+    })
+    state.result = res
+    state.resultPP = JSON.stringify(pp)
+    renderResult()
+    renderBoxes()
+    const words = res.pages.reduce((a, p) => a + (p.word_count || 0), 0)
+    toast(res.text.trim() ? `Texte extrait : ${words} mot(s) en ${res.elapsed_s} s` : 'Aucun texte reconnu — essayez le prétraitement', !res.text.trim())
+    if (res.text.trim()) switchTab('text')
+  } catch (e) {
+    toast(e.code === 'JOB_CANCELLED' ? 'OCR annulé' : e.message, e.code !== 'JOB_CANCELLED')
+  } finally {
+    state.running = false; state.jobId = null; updateRunBtn()
+    $('#progress').classList.add('hidden')
+  }
+}
+$('#run').addEventListener('click', runOcr)
+$('#btn-cancel').addEventListener('click', () => { if (state.jobId) window.ledroide.cancel(MODULE_ID, state.jobId).catch(() => {}) })
+
+function renderResult() {
+  const r = state.result
+  const scope = $('#text-scope')
+  if (!r) {
+    $('#text').value = ''; $('#stats').innerHTML = ''; $('#tab-text-n').textContent = ''
+    scope.innerHTML = '<option value="all">Toutes les pages</option>'; scope.classList.add('hidden')
+    return
+  }
+  scope.innerHTML = '<option value="all">Toutes les pages</option>' + r.pages.map((p) => `<option value="${p.page}">Page ${p.page}</option>`).join('')
+  scope.classList.toggle('hidden', r.pages.length <= 1)
+  showScope()
+  const words = r.pages.reduce((a, p) => a + (p.word_count || 0), 0)
+  const confs = r.pages.filter((p) => p.confidence != null)
+  const conf = confs.length ? (confs.reduce((a, p) => a + p.confidence, 0) / confs.length).toFixed(0) : null
+  const native = r.pages.filter((p) => p.source === 'pdf').length
+  $('#tab-text-n').textContent = r.text.length ? `${r.text.length}` : ''
+  $('#stats').innerHTML = [
+    `<span><b>${r.pages.length}</b> page(s)</span>`,
+    `<span><b>${words}</b> mot(s)</span>`,
+    conf != null ? `<span>Confiance moyenne <b style="color:${conf >= 80 ? 'var(--ok)' : conf >= 50 ? 'var(--warn)' : 'var(--err)'}">${conf} %</b></span>` : '',
+    native ? `<span>${native} page(s) depuis le texte natif du PDF</span>` : '',
+    `<span>Langue(s) <b class="mono">${esc(r.lang)}</b></span>`,
+    `<span>${r.elapsed_s} s</span>`,
+  ].join('')
+}
+function showScope() {
+  const r = state.result; if (!r) return
+  const v = $('#text-scope').value
+  $('#text').value = v === 'all' ? r.text : (r.pages.find((p) => String(p.page) === v)?.text || '')
+}
+$('#text-scope').addEventListener('change', showScope)
+
+async function copyText() {
+  const t = $('#text').value
+  if (!t) return toast('Rien à copier', true)
+  try { await navigator.clipboard.writeText(t); toast('Texte copié') }
+  catch { $('#text').select(); document.execCommand('copy'); toast('Texte copié') }
+}
+$('#btn-copy').addEventListener('click', copyText)
+$('#btn-download').addEventListener('click', () => {
+  const t = $('#text').value
+  if (!t) return toast('Rien à télécharger', true)
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([t], { type: 'text/plain;charset=utf-8' }))
+  a.download = (state.result?.name || 'ocr').replace(/\.[^.]+$/, '') + '.txt'
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+})
+
+function switchTab(name) {
+  $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name))
+  $('#view-preview').classList.toggle('hidden', name !== 'preview')
+  $('#view-text').classList.toggle('hidden', name !== 'text')
+}
+$$('.tab').forEach((t) => t.addEventListener('click', () => switchTab(t.dataset.tab)))
+
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); runOcr() }
+  else if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('#file-input').click() }
+  else if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); copyText() }
+  else if (e.key === 'Escape') document.querySelector('.backdrop')?.remove()
+})
+
+loadStatus()
+</script>
+</body>
+</html>

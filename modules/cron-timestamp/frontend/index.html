@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cron & Timestamps</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.mini { padding: 1px 7px; font-size: 11.5px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input.bad { border-color: var(--err); }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .topbar .title { font-weight: 600; font-size: 14px; }
+  .topbar .spacer { flex: 1; }
+  .modes { display: flex; gap: 4px; }
+  .modes button.active { background: var(--bg); border-color: var(--accent); color: #fff; }
+  .main { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; align-items: start; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin-bottom: 10px;
+             display: flex; align-items: center; gap: 6px; }
+  .card h3 .sp { flex: 1; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row + .row { margin-top: 8px; }
+  .row label { color: var(--muted); }
+  .grow { flex: 1; min-width: 120px; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .hint code, code { font-family: var(--mono); color: var(--accent-h); }
+
+  .clock-big { font-family: var(--mono); font-size: 30px; font-weight: 600; letter-spacing: .02em; }
+  .clock-sub { color: var(--muted); margin-top: 2px; }
+  table.kv { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  table.kv td { padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.kv td.k { color: var(--muted); width: 34%; white-space: nowrap; }
+  table.kv td.v { font-family: var(--mono); word-break: break-all; }
+  table.kv td.c { width: 1%; white-space: nowrap; text-align: right; }
+  .warn-line { color: var(--warn); font-size: 12px; margin-top: 8px; }
+  .error-box { color: #fca5a5; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: 6px; padding: 9px 11px; margin-top: 8px; white-space: pre-wrap; }
+  .pill { padding: 2px 8px; border-radius: 10px; font-size: 11.5px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+  .pill.acc { color: var(--accent-h); border-color: rgba(99,102,241,.4); background: rgba(99,102,241,.1); }
+  .rel-f { color: #86efac; } .rel-p { color: #fcd34d; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 2px 4px 2px 9px; font-size: 12px; }
+  .chip button { padding: 0 6px; border: none; background: transparent; color: var(--muted); }
+  .chip button:hover { color: var(--err); background: transparent; }
+  .big-num { font-size: 22px; font-weight: 600; font-family: var(--mono); }
+  .dur-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
+  .dur-grid div { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+  .dur-grid b { display: block; font-family: var(--mono); font-size: 15px; }
+  .dur-grid span { color: var(--muted); font-size: 11.5px; }
+
+  /* Cron */
+  #cron-expr { font-family: var(--mono); font-size: 20px; padding: 8px 12px; width: 100%; letter-spacing: .04em; }
+  .cron-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 6px; }
+  .cron-labels div { text-align: center; font-size: 11.5px; color: var(--muted); padding: 4px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); }
+  .cron-labels div b { display: block; font-family: var(--mono); color: var(--text); font-size: 12.5px; word-break: break-all; }
+  .cron-labels div.bad { border-color: var(--err); background: rgba(239,68,68,.1); color: #fca5a5; }
+  .desc { font-size: 17px; font-weight: 600; margin-top: 12px; color: #c7d2fe; line-height: 1.4; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .presets button { font-size: 12px; }
+  .presets button code { color: var(--muted); margin-left: 4px; }
+  ol.runs { list-style: none; counter-reset: r; }
+  ol.runs li { counter-increment: r; display: flex; gap: 10px; padding: 6px 4px; border-bottom: 1px solid var(--border); align-items: baseline; }
+  ol.runs li::before { content: counter(r); color: var(--muted); font-family: var(--mono); width: 22px; text-align: right; flex-shrink: 0; }
+  ol.runs .d { flex: 1; } ol.runs .o { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
+  .empty { color: var(--muted); padding: 18px; text-align: center; }
+  table.help { border-collapse: collapse; width: 100%; font-size: 12px; }
+  table.help td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  table.help td:first-child { font-family: var(--mono); color: var(--accent-h); width: 110px; }
+  .fields-tbl td.v { font-size: 11.5px; }
+
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="title">⏱️ Cron & Timestamps</div>
+  <div class="spacer"></div>
+  <div class="modes" id="modes">
+    <button data-mode="ts" class="active" title="Alt+1">Timestamps</button>
+    <button data-mode="cron" title="Alt+2">Cron</button>
+  </div>
+</div>
+
+<datalist id="zones"></datalist>
+
+<div class="main" data-panel="ts">
+  <div class="grid">
+    <div class="card">
+      <h3>Maintenant <span class="sp"></span>
+        <button class="ghost mini" id="now-pause" title="Figer / reprendre">⏸</button></h3>
+      <div class="clock-big" id="now-s">—</div>
+      <div class="clock-sub" id="now-local">—</div>
+      <table class="kv">
+        <tr><td class="k">Millisecondes</td><td class="v" id="now-ms"></td><td class="c"><button class="mini" data-copy="now-ms">Copier</button></td></tr>
+        <tr><td class="k">ISO 8601 (UTC)</td><td class="v" id="now-iso"></td><td class="c"><button class="mini" data-copy="now-iso">Copier</button></td></tr>
+        <tr><td class="k">Fuseau local</td><td class="v" id="now-tz"></td><td class="c"></td></tr>
+      </table>
+      <div class="row" style="margin-top:10px"><button id="now-use">Convertir maintenant ↓</button></div>
+    </div>
+
+    <div class="card">
+      <h3>Conversion</h3>
+      <div class="row">
+        <input id="ts-input" class="grow mono" type="text" spellcheck="false"
+               placeholder="1700000000 · 1700000000123 · 2024-05-17T14:30:00Z · 17/05/2024 14:30" />
+        <select id="ts-unit" title="Unité du timestamp">
+          <option value="auto">Auto</option><option value="s">s</option><option value="ms">ms</option>
+          <option value="us">µs</option><option value="ns">ns</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="ts-tz">Fuseau source</label>
+        <input id="ts-tz" list="zones" class="grow" spellcheck="false" />
+        <span class="hint">utilisé pour les dates sans fuseau</span>
+      </div>
+      <div id="ts-result"><div class="empty">Saisissez un timestamp Unix ou une date.</div></div>
+    </div>
+
+    <div class="card">
+      <h3>Fuseaux horaires</h3>
+      <div class="row">
+        <input id="tz-add" list="zones" class="grow" placeholder="Ajouter un fuseau (ex. America/New_York)…" spellcheck="false" />
+        <button id="tz-add-btn">Ajouter</button>
+      </div>
+      <div class="chips" id="tz-chips"></div>
+      <div id="tz-result"><div class="empty">Les conversions s'affichent pour la date saisie ci-dessus.</div></div>
+    </div>
+
+    <div class="card">
+      <h3>Durée entre deux dates</h3>
+      <div class="row"><label style="width:40px">Début</label><input id="dur-a" class="grow mono" spellcheck="false" placeholder="2024-01-01 09:00" />
+        <button class="mini" data-now="dur-a">maintenant</button></div>
+      <div class="row"><label style="width:40px">Fin</label><input id="dur-b" class="grow mono" spellcheck="false" placeholder="2024-12-25 18:00 ou 1735146000" />
+        <button class="mini" data-now="dur-b">maintenant</button></div>
+      <div class="row"><label for="dur-tz">Fuseau</label><input id="dur-tz" list="zones" class="grow" spellcheck="false" />
+        <button class="ghost mini" id="dur-swap" title="Inverser">⇅ inverser</button></div>
+      <div id="dur-result"><div class="empty">Saisissez deux dates ou timestamps.</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="main hidden" data-panel="cron">
+  <div class="grid">
+    <div class="card" style="grid-column: 1 / -1">
+      <input id="cron-expr" type="text" spellcheck="false" placeholder="*/15 9-17 * * 1-5" value="0 9 * * 1-5" />
+      <div class="cron-labels" id="cron-labels"></div>
+      <div class="desc" id="cron-desc"></div>
+      <div id="cron-err"></div>
+      <div class="row" style="margin-top:12px">
+        <label for="cron-tz">Fuseau</label><input id="cron-tz" list="zones" spellcheck="false" style="width:220px" />
+        <label for="cron-count">Exécutions</label>
+        <select id="cron-count"><option>5</option><option selected>10</option><option>20</option><option>50</option></select>
+        <span class="grow"></span>
+        <button id="cron-copy">Copier l'expression</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Prochaines exécutions</h3>
+      <div id="cron-runs"><div class="empty">—</div></div>
+    </div>
+    <div class="card">
+      <h3>Modèles</h3>
+      <div class="presets" id="presets"></div>
+      <h3 style="margin-top:14px">Syntaxe</h3>
+      <table class="help">
+        <tr><td>* * * * *</td><td>minute (0-59) · heure (0-23) · jour du mois (1-31) · mois (1-12 ou JAN-DEC) · jour de semaine (0-7 ou SUN-SAT, 0 et 7 = dimanche)</td></tr>
+        <tr><td>*</td><td>toutes les valeurs</td></tr>
+        <tr><td>1,15,30</td><td>liste</td></tr>
+        <tr><td>1-5</td><td>plage incluse</td></tr>
+        <tr><td>*/15 · 0-30/10</td><td>pas (toutes les 15 · de 0 à 30 par 10)</td></tr>
+        <tr><td>@daily…</td><td>@yearly, @annually, @monthly, @weekly, @daily, @midnight, @hourly</td></tr>
+        <tr><td>jour + semaine</td><td>si les deux sont restreints (ni l'un ni l'autre ne commence par *), la tâche s'exécute quand <b>l'un OU l'autre</b> correspond (comportement cron standard)</td></tr>
+      </table>
+      <h3 style="margin-top:14px">Valeurs développées</h3>
+      <table class="kv fields-tbl" id="cron-fields"></table>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'cron-timestamp'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const LOCAL_TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } })()
+const FIELD_NAMES = ['minute', 'heure', 'jour du mois', 'mois', 'jour sem.']
+const PRESETS = [
+  ['Chaque minute', '* * * * *'], ['Toutes les 5 min', '*/5 * * * *'], ['Toutes les 15 min', '*/15 * * * *'],
+  ['Chaque heure', '0 * * * *'], ['Toutes les 6 h', '0 */6 * * *'], ['Chaque jour à minuit', '@daily'],
+  ['Jours ouvrés 9 h', '0 9 * * 1-5'], ['Heures de bureau /30 min', '*/30 9-17 * * MON-FRI'],
+  ['Chaque lundi 8 h', '0 8 * * MON'], ['Le 1er du mois', '0 0 1 * *'], ['Le 1er et le 15 à midi', '0 12 1,15 * *'],
+  ['Chaque trimestre', '0 0 1 1,4,7,10 *'], ['Chaque année', '@yearly'], ['Week-end 10 h', '0 10 * * SAT,SUN'],
+]
+const LS_KEY = 'cron-timestamp:prefs'
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2200)
+}
+async function copy(text, label = 'Copié') {
+  try { await navigator.clipboard.writeText(text); toast(label) } catch { toast('Copie impossible', true) }
+}
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms) } }
+
+const prefs = (() => {
+  const def = { mode: 'ts', tz: LOCAL_TZ, targets: ['UTC', 'Europe/Paris', 'America/New_York', 'Asia/Tokyo'], cronTz: LOCAL_TZ, cron: '0 9 * * 1-5' }
+  try { return { ...def, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') } } catch { return def }
+})()
+function savePrefs() { try { localStorage.setItem(LS_KEY, JSON.stringify(prefs)) } catch { /* storage unavailable */ } }
+
+const rtf = new Intl.RelativeTimeFormat('fr', { numeric: 'auto' })
+function humanDelta(seconds) {
+  const abs = Math.abs(seconds)
+  const units = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]]
+  for (const [u, s] of units) if (abs >= s || u === 'second') return rtf.format(Math.round(seconds / s), u)
+}
+const relSpan = (s) => `<span class="${s >= 0 ? 'rel-f' : 'rel-p'}">${esc(humanDelta(s))}</span>`
+const fmt = (n, d = 2) => Number(n).toLocaleString('fr-FR', { maximumFractionDigits: d })
+const copyBtn = (v) => `<button class="mini" data-val="${esc(v)}">Copier</button>`
+function wireCopy(root) { root.querySelectorAll('[data-val]').forEach((b) => (b.onclick = () => copy(b.dataset.val))) }
+
+// ── Modes ───────────────────────────────────────────────────────────────────
+function setMode(mode) {
+  prefs.mode = mode; savePrefs()
+  $$('#modes button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode))
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== mode))
+  if (mode === 'cron') $('#cron-expr').focus()
+}
+$$('#modes button').forEach((b) => (b.onclick = () => setMode(b.dataset.mode)))
+
+// ── Live clock ──────────────────────────────────────────────────────────────
+let paused = false
+function tick() {
+  if (paused) return
+  const now = new Date()
+  $('#now-s').textContent = Math.floor(now.getTime() / 1000)
+  $('#now-ms').textContent = now.getTime()
+  $('#now-iso').textContent = now.toISOString()
+  $('#now-local').textContent = now.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'medium' })
+}
+$('#now-tz').textContent = LOCAL_TZ
+setInterval(tick, 250); tick()
+$('#now-pause').onclick = () => { paused = !paused; $('#now-pause').textContent = paused ? '▶' : '⏸' }
+$$('[data-copy]').forEach((b) => (b.onclick = () => copy($('#' + b.dataset.copy).textContent)))
+$('#now-use').onclick = () => { $('#ts-input').value = String(Math.floor(Date.now() / 1000)); convert() }
+
+// ── Conversion ──────────────────────────────────────────────────────────────
+let convSeq = 0
+async function convert() {
+  const value = $('#ts-input').value.trim()
+  const seq = ++convSeq
+  $('#ts-input').classList.remove('bad')
+  if (!value) {
+    $('#ts-result').innerHTML = '<div class="empty">Saisissez un timestamp Unix ou une date.</div>'
+    $('#tz-result').innerHTML = '<div class="empty">Les conversions s\'affichent pour la date saisie ci-dessus.</div>'
+    return
+  }
+  prefs.tz = $('#ts-tz').value.trim() || LOCAL_TZ; savePrefs()
+  try {
+    const r = await call('convert', { value, unit: $('#ts-unit').value, tz: prefs.tz, targets: prefs.targets })
+    if (seq !== convSeq) return
+    renderConvert(r)
+  } catch (e) {
+    if (seq !== convSeq) return
+    $('#ts-input').classList.add('bad')
+    $('#ts-result').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+    $('#tz-result').innerHTML = ''
+  }
+}
+function renderConvert(r) {
+  const inp = r.input
+  const kind = inp.kind === 'timestamp' ? `Timestamp en ${inp.unit_label}${inp.auto ? ' (détecté)' : ''}`
+    : inp.kind === 'now' ? 'Maintenant' : inp.kind === 'rfc2822' ? 'Date RFC 2822' : inp.kind === 'fr' ? 'Date JJ/MM/AAAA' : 'Date ISO 8601'
+  const ep = r.epoch, d = r.details
+  $('#ts-result').innerHTML = `
+    <div class="row" style="margin-top:10px"><span class="pill acc">${esc(kind)}</span>
+      ${inp.naive ? `<span class="pill">sans fuseau → ${esc(inp.assumed_tz)}</span>` : ''}
+      <span class="pill">${relSpan(r.delta_s)}</span></div>
+    ${inp.warning ? `<div class="warn-line">⚠ ${esc(inp.warning)}</div>` : ''}
+    <table class="kv">
+      <tr><td class="k">Unix (s)</td><td class="v">${esc(ep.s)}</td><td class="c">${copyBtn(ep.s)}</td></tr>
+      <tr><td class="k">Unix (ms)</td><td class="v">${esc(ep.ms)}</td><td class="c">${copyBtn(ep.ms)}</td></tr>
+      <tr><td class="k">Unix (µs)</td><td class="v">${esc(ep.us)}</td><td class="c">${copyBtn(ep.us)}</td></tr>
+      <tr><td class="k">Unix (ns)</td><td class="v">${esc(ep.ns)}</td><td class="c">${copyBtn(ep.ns)}</td></tr>
+      <tr><td class="k">ISO 8601 UTC</td><td class="v">${esc(r.utc.iso)}</td><td class="c">${copyBtn(r.utc.iso)}</td></tr>
+      <tr><td class="k">RFC 2822</td><td class="v">${esc(r.utc.rfc2822)}</td><td class="c">${copyBtn(r.utc.rfc2822)}</td></tr>
+      <tr><td class="k">${esc(r.source.tz)}</td><td class="v">${esc(r.source.iso)}<div class="hint">${esc(r.source.display)} · ${esc(r.source.offset)} ${esc(r.source.abbrev)}${r.source.dst ? ' · heure d\'été' : ''}</div></td><td class="c">${copyBtn(r.source.iso)}</td></tr>
+      <tr><td class="k">Détails</td><td class="v" colspan="2" style="font-family:system-ui">${esc(d.weekday)} · semaine ISO ${d.iso_week} · jour ${d.day_of_year} de l'année${d.leap_year ? ' · année bissextile' : ''}</td></tr>
+    </table>`
+  wireCopy($('#ts-result'))
+  renderTargets(r.targets)
+}
+function renderTargets(targets) {
+  if (!targets.length) { $('#tz-result').innerHTML = '<div class="empty">Ajoutez des fuseaux à comparer.</div>'; return }
+  $('#tz-result').innerHTML = `<table class="kv">${targets.map((t) => t.error
+    ? `<tr><td class="k">${esc(t.tz)}</td><td class="v" colspan="2" style="color:#fca5a5">${esc(t.error)}</td></tr>`
+    : `<tr><td class="k">${esc(t.tz)}<div class="hint">${esc(t.offset)} ${esc(t.abbrev)}${t.dst ? ' · été' : ''}</div></td>
+       <td class="v">${esc(t.display)}<div class="hint mono">${esc(t.iso)}</div></td><td class="c">${copyBtn(t.iso)}</td></tr>`).join('')}</table>`
+  wireCopy($('#tz-result'))
+}
+function renderChips() {
+  $('#tz-chips').innerHTML = prefs.targets.map((z, i) => `<span class="chip">${esc(z)}<button data-rm="${i}" title="Retirer">✕</button></span>`).join('')
+  $$('#tz-chips [data-rm]').forEach((b) => (b.onclick = () => { prefs.targets.splice(+b.dataset.rm, 1); savePrefs(); renderChips(); convert() }))
+}
+function addZone() {
+  const z = $('#tz-add').value.trim()
+  if (!z) return
+  if (prefs.targets.includes(z)) { toast('Fuseau déjà présent', true); return }
+  prefs.targets.push(z); savePrefs(); $('#tz-add').value = ''; renderChips(); convert()
+}
+$('#tz-add-btn').onclick = addZone
+$('#tz-add').addEventListener('keydown', (e) => { if (e.key === 'Enter') addZone() })
+const convertLater = debounce(convert, 200)
+$('#ts-input').addEventListener('input', convertLater)
+$('#ts-unit').onchange = convert
+$('#ts-tz').addEventListener('change', convert)
+
+// ── Duration ────────────────────────────────────────────────────────────────
+let durSeq = 0
+async function duration() {
+  const a = $('#dur-a').value.trim(), b = $('#dur-b').value.trim()
+  const seq = ++durSeq
+  if (!a || !b) { $('#dur-result').innerHTML = '<div class="empty">Saisissez deux dates ou timestamps.</div>'; return }
+  try {
+    const r = await call('duration', { start: a, end: b, tz: $('#dur-tz').value.trim() || LOCAL_TZ })
+    if (seq !== durSeq) return
+    const c = r.calendar, k = r.breakdown
+    const parts = [[c.years, 'an', 'ans'], [c.months, 'mois', 'mois'], [c.days, 'jour', 'jours'], [c.hours, 'heure', 'heures'],
+      [c.minutes, 'minute', 'minutes'], [c.seconds, 'seconde', 'secondes']].filter(([n]) => n).map(([n, s, p]) => `${n} ${n > 1 ? p : s}`)
+    $('#dur-result').innerHTML = `
+      <div style="margin-top:12px" class="big-num">${r.sign < 0 ? '− ' : ''}${esc(parts.join(' ') || '0 seconde')}</div>
+      <div class="hint">${r.sign < 0 ? 'La fin précède le début. ' : ''}Soit ${k.days} j ${k.hours} h ${k.minutes} min ${k.seconds} s en durée exacte.</div>
+      <div class="dur-grid">
+        <div><b>${fmt(r.totals.weeks)}</b><span>semaines</span></div>
+        <div><b>${fmt(r.totals.days)}</b><span>jours</span></div>
+        <div><b>${fmt(r.totals.hours)}</b><span>heures</span></div>
+        <div><b>${fmt(r.totals.minutes)}</b><span>minutes</span></div>
+        <div><b>${fmt(r.totals.seconds, 3)}</b><span>secondes</span></div>
+        <div><b>${r.business_days}</b><span>jours ouvrés (lun-ven)</span></div>
+      </div>
+      <div class="hint" style="margin-top:8px">${esc(r.start.display)} → ${esc(r.end.display)} (${esc(r.start.tz)})</div>`
+  } catch (e) {
+    if (seq !== durSeq) return
+    $('#dur-result').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+  }
+}
+const durationLater = debounce(duration, 250)
+for (const id of ['#dur-a', '#dur-b']) $(id).addEventListener('input', durationLater)
+$('#dur-tz').addEventListener('change', duration)
+$$('[data-now]').forEach((b) => (b.onclick = () => { $('#' + b.dataset.now).value = new Date().toISOString(); duration() }))
+$('#dur-swap').onclick = () => { const a = $('#dur-a').value; $('#dur-a').value = $('#dur-b').value; $('#dur-b').value = a; duration() }
+
+// ── Cron ────────────────────────────────────────────────────────────────────
+let cronSeq = 0
+function renderLabels(expr, badIdx) {
+  let parts = expr.trim().split(/\s+/)
+  if (expr.trim().startsWith('@') || parts.length !== 5) parts = ['', '', '', '', '']
+  $('#cron-labels').innerHTML = FIELD_NAMES.map((n, i) =>
+    `<div class="${badIdx === i ? 'bad' : ''}"><b>${esc(parts[i] || '·')}</b>${n}</div>`).join('')
+}
+async function cron() {
+  const expr = $('#cron-expr').value
+  const seq = ++cronSeq
+  prefs.cron = expr; prefs.cronTz = $('#cron-tz').value.trim() || LOCAL_TZ; savePrefs()
+  renderLabels(expr, null)
+  try {
+    const r = await call('cron', { expression: expr, tz: prefs.cronTz, count: +$('#cron-count').value }, { timeout: 15000 })
+    if (seq !== cronSeq) return
+    if (!r.valid) {
+      $('#cron-expr').classList.add('bad')
+      renderLabels(expr, r.field_index)
+      $('#cron-desc').textContent = ''
+      $('#cron-err').innerHTML = `<div class="error-box">${esc(r.message)}</div>`
+      $('#cron-runs').innerHTML = '<div class="empty">Expression invalide.</div>'
+      $('#cron-fields').innerHTML = ''
+      return
+    }
+    $('#cron-expr').classList.remove('bad')
+    $('#cron-err').innerHTML = r.alias ? `<div class="hint" style="margin-top:6px">${esc(r.alias)} = <code>${esc(r.normalized)}</code></div>` : ''
+    if (r.alias) $('#cron-labels').innerHTML = FIELD_NAMES.map((n, i) => `<div><b>${esc(r.normalized.split(' ')[i])}</b>${n}</div>`).join('')
+    $('#cron-desc').textContent = r.description + (r.dom_dow_or ? ' (jour du mois OU jour de semaine)' : '')
+    $('#cron-runs').innerHTML = r.never
+      ? '<div class="empty">⚠ Aucune exécution dans les 30 prochaines années (date impossible, ex. 30 février).</div>'
+      : `<ol class="runs">${r.runs.map((x) => `<li><span class="d">${esc(x.display)}</span>${relSpan(x.delta_s)}<span class="o">${esc(x.offset)}</span>
+          <button class="mini" data-val="${esc(x.iso)}" title="Copier ISO">ISO</button></li>`).join('')}</ol>`
+    wireCopy($('#cron-runs'))
+    const labels = { minute: 'Minutes', hour: 'Heures', dom: 'Jours du mois', month: 'Mois', dow: 'Jours de semaine (0 = dim.)' }
+    $('#cron-fields').innerHTML = Object.entries(r.fields).map(([k, v]) => `<tr><td class="k">${labels[k]}</td><td class="v">${esc(compact(v))}</td></tr>`).join('')
+  } catch (e) {
+    if (seq !== cronSeq) return
+    $('#cron-err').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+    $('#cron-runs').innerHTML = ''
+  }
+}
+function compact(values) {
+  const out = []
+  for (let i = 0; i < values.length; i++) {
+    let j = i
+    while (j + 1 < values.length && values[j + 1] === values[j] + 1) j++
+    out.push(j - i >= 2 ? `${values[i]}-${values[j]}` : j > i ? `${values[i]},${values[j]}` : `${values[i]}`)
+    i = j
+  }
+  return out.join(',')
+}
+const cronLater = debounce(cron, 200)
+$('#cron-expr').addEventListener('input', cronLater)
+$('#cron-tz').addEventListener('change', cron)
+$('#cron-count').onchange = cron
+$('#cron-copy').onclick = () => copy($('#cron-expr').value.trim(), 'Expression copiée')
+$('#presets').innerHTML = PRESETS.map(([l, e]) => `<button data-expr="${esc(e)}">${esc(l)}<code>${esc(e)}</code></button>`).join('')
+$$('#presets [data-expr]').forEach((b) => (b.onclick = () => { $('#cron-expr').value = b.dataset.expr; cron() }))
+
+document.addEventListener('keydown', (e) => {
+  if (e.altKey && (e.key === '1' || e.key === '2')) { e.preventDefault(); setMode(e.key === '1' ? 'ts' : 'cron') }
+})
+
+async function init() {
+  $('#ts-tz').value = prefs.tz
+  $('#dur-tz').value = prefs.tz
+  $('#cron-tz').value = prefs.cronTz
+  $('#cron-expr').value = prefs.cron
+  renderChips()
+  setMode(prefs.mode)
+  try {
+    const r = await call('timezones')
+    $('#zones').innerHTML = r.zones.map((z) => `<option value="${esc(z)}"></option>`).join('')
+    if (!r.tzdata) toast('Base des fuseaux (tzdata) absente : seul UTC fonctionne. Réactivez le module pour l\'installer.', true)
+  } catch (e) { toast(e.message, true) }
+  $('#ts-input').value = String(Math.floor(Date.now() / 1000))
+  convert(); cron()
+}
+init()
+</script>
+</body>
+</html>

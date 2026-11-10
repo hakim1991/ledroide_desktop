@@ -1,0 +1,46 @@
+{
+  "id": "task-scheduler",
+  "name": "Planificateur de tâches",
+  "version": "1.0.0",
+  "description": "Planifiez des commandes (cmd, PowerShell, Python) ou des actions système (extinction, redémarrage, veille, verrouillage) : une fois, toutes les N minutes, chaque jour ou selon une expression cron. Historique des exécutions.",
+  "category": "Productivité",
+  "tags": [
+    "planification",
+    "automatisation",
+    "cron",
+    "scripts"
+  ],
+  "icon": "🗓️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "process"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "history_per_task": {
+      "type": "integer",
+      "title": "Exécutions conservées par tâche",
+      "default": 50,
+      "minimum": 5,
+      "maximum": 1000
+    },
+    "output_max_kb": {
+      "type": "integer",
+      "title": "Taille max. de la sortie conservée (Ko)",
+      "default": 16,
+      "minimum": 1,
+      "maximum": 512
+    }
+  }
+}

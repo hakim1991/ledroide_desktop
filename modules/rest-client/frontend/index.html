@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>REST Client</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  .mono { font-family: var(--mono); }
+
+  /* ── Sidebar ── */
+  #side { width: 260px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  #side.collapsed { display: none; }
+  .side-tabs { display: flex; gap: 4px; padding: 10px 10px 6px; }
+  .side-tabs button { flex: 1; }
+  .side-tabs button.active { background: var(--bg); border-color: var(--accent); color: #fff; }
+  .side-search { padding: 0 10px 8px; display: flex; gap: 6px; }
+  .side-search input { flex: 1; min-width: 0; }
+  #side-list { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .folder { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 10px 6px 4px; }
+  .item { display: flex; align-items: center; gap: 7px; padding: 6px; border-radius: 6px; cursor: pointer; }
+  .item:hover { background: var(--surface2); }
+  .item.current { background: rgba(99,102,241,.14); }
+  .item .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .sub { color: var(--muted); font-size: 11px; }
+  .item .del { visibility: hidden; padding: 0 5px; }
+  .item:hover .del { visibility: visible; }
+  .side-empty { color: var(--muted); text-align: center; padding: 24px 8px; font-size: 12px; }
+  .m { font-family: var(--mono); font-size: 10.5px; font-weight: 700; width: 46px; flex-shrink: 0; }
+  .m-GET { color: var(--ok); } .m-POST { color: var(--warn); } .m-PUT { color: var(--info); }
+  .m-PATCH { color: #c084fc; } .m-DELETE { color: var(--err); } .m-HEAD, .m-OPTIONS { color: var(--muted); }
+  .st { font-family: var(--mono); font-size: 11px; }
+  .st-2 { color: var(--ok); } .st-3 { color: var(--info); } .st-4 { color: var(--warn); } .st-5, .st-x { color: var(--err); }
+
+  /* ── Main ── */
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px 12px; gap: 8px; }
+  .topbar { display: flex; align-items: center; gap: 8px; }
+  .topbar .title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .title small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .urlbar { display: flex; gap: 6px; }
+  #method { font-family: var(--mono); font-weight: 700; width: 105px; }
+  #url { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
+  #send { min-width: 86px; }
+
+  .split { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .pane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex;
+          flex-direction: column; min-height: 0; }
+  #req-pane { flex: 0 0 auto; height: 38%; min-height: 120px; }
+  #res-pane { flex: 1; }
+  .resizer { height: 6px; margin: -4px 0; cursor: row-resize; flex-shrink: 0; }
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 5px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+  .tab { padding: 4px 10px; border-radius: 5px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .tab .n { color: var(--accent-h); font-size: 11px; margin-left: 3px; }
+  .tabs .spacer { flex: 1; }
+  .pane-body { flex: 1; min-height: 0; overflow: auto; padding: 8px; }
+  .hidden { display: none !important; }
+
+  table.kv { width: 100%; border-collapse: collapse; }
+  table.kv td { padding: 2px 3px; }
+  table.kv td.chk { width: 26px; text-align: center; }
+  table.kv td.act { width: 30px; }
+  table.kv input[type=text] { width: 100%; font-family: var(--mono); font-size: 12px; }
+  table.kv tr.off input[type=text] { opacity: .45; }
+  .row-tools { display: flex; gap: 6px; margin-top: 6px; }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .hint code { font-family: var(--mono); color: var(--accent-h); }
+
+  .body-types { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .body-types label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  textarea.code { width: 100%; height: calc(100% - 34px); min-height: 80px; resize: none; font-family: var(--mono);
+                  font-size: 12.5px; line-height: 1.5; tab-size: 2; white-space: pre; }
+  .form-grid { display: grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items: center; max-width: 620px; }
+  .form-grid label { color: var(--muted); }
+  .form-grid input, .form-grid select { width: 100%; }
+  .opts { display: flex; flex-direction: column; gap: 10px; max-width: 520px; }
+  .opts label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .opts input[type=number] { width: 90px; }
+
+  /* ── Response ── */
+  .meta { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); }
+  .meta b { color: var(--text); font-weight: 600; }
+  .pill { padding: 2px 8px; border-radius: 10px; font-weight: 700; font-family: var(--mono); font-size: 11.5px; }
+  .pill.st-2 { background: rgba(34,197,94,.14); } .pill.st-3 { background: rgba(56,189,248,.14); }
+  .pill.st-4 { background: rgba(245,158,11,.14); } .pill.st-5, .pill.st-x { background: rgba(239,68,68,.14); }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 6px; text-align: center; }
+  .placeholder .big { font-size: 30px; }
+  .error-box { color: #fca5a5; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: 6px;
+               padding: 10px 12px; white-space: pre-wrap; }
+  pre.out { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .j-key { color: #93c5fd; } .j-str { color: #86efac; } .j-num { color: #fbbf24; } .j-bool { color: #c084fc; } .j-null { color: #f472b6; }
+  table.hdr { border-collapse: collapse; width: 100%; font-size: 12px; }
+  table.hdr td { padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: top; font-family: var(--mono); word-break: break-all; }
+  table.hdr td:first-child { color: #93c5fd; width: 32%; }
+  .sec-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 10px 0 4px; }
+  .sec-title:first-child { margin-top: 0; }
+  img.preview { max-width: 100%; max-height: 100%; background: repeating-conic-gradient(#222 0 25%, #2a2a2a 0 50%) 0 0 / 16px 16px; }
+  .warn-line { color: var(--warn); font-size: 12px; margin-bottom: 6px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Modal / toast ── */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(640px, 94vw);
+           max-height: 86vh; display: flex; flex-direction: column; }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; align-items: center; }
+  .modal-head span { flex: 1; }
+  .modal-body { padding: 12px 14px; overflow: auto; flex: 1; }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .env-layout { display: grid; grid-template-columns: 170px 1fr; gap: 12px; min-height: 260px; }
+  .env-list .item { padding: 6px 8px; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="side-tabs">
+    <button data-side="saved" class="active">Enregistrées</button>
+    <button data-side="history">Historique</button>
+  </div>
+  <div class="side-search">
+    <input id="side-filter" type="text" placeholder="Filtrer…" />
+    <button id="history-clear" class="ghost icon hidden" title="Vider l'historique">🗑</button>
+  </div>
+  <div id="side-list"></div>
+</aside>
+
+<main id="main">
+  <div class="topbar">
+    <button id="toggle-side" class="ghost icon" title="Afficher / masquer le panneau">☰</button>
+    <div class="title" id="req-title">Nouvelle requête</div>
+    <select id="env-select" title="Environnement actif"></select>
+    <button id="env-manage" title="Gérer les environnements et variables">Variables</button>
+    <button id="btn-new" title="Nouvelle requête">＋ Nouveau</button>
+    <button id="btn-curl" title="Copier la requête au format cURL">cURL</button>
+    <button id="btn-save" title="Enregistrer (Ctrl+S)">Enregistrer</button>
+  </div>
+
+  <div class="urlbar">
+    <select id="method"></select>
+    <input id="url" type="text" spellcheck="false" placeholder="https://api.exemple.com/v1/ressource?page=1  —  {{base_url}}/users" />
+    <button id="send" class="primary" title="Envoyer (Ctrl+Entrée)">Envoyer</button>
+  </div>
+
+  <div class="split" id="split">
+    <section class="pane" id="req-pane">
+      <div class="tabs" id="req-tabs">
+        <div class="tab active" data-tab="params">Paramètres<span class="n" id="n-params"></span></div>
+        <div class="tab" data-tab="headers">En-têtes<span class="n" id="n-headers"></span></div>
+        <div class="tab" data-tab="body">Corps<span class="n" id="n-body"></span></div>
+        <div class="tab" data-tab="auth">Auth<span class="n" id="n-auth"></span></div>
+        <div class="tab" data-tab="options">Options</div>
+      </div>
+      <div class="pane-body" data-panel="params"><div id="params-kv"></div>
+        <p class="hint">Les paramètres sont synchronisés avec l'URL. Variables : <code>{{nom}}</code></p></div>
+      <div class="pane-body hidden" data-panel="headers"><div id="headers-kv"></div></div>
+      <div class="pane-body hidden" data-panel="body">
+        <div class="body-types" id="body-types">
+          <label><input type="radio" name="bt" value="none" checked /> Aucun</label>
+          <label><input type="radio" name="bt" value="json" /> JSON</label>
+          <label><input type="radio" name="bt" value="text" /> Texte</label>
+          <label><input type="radio" name="bt" value="xml" /> XML</label>
+          <label><input type="radio" name="bt" value="urlencoded" /> Formulaire (x-www-form-urlencoded)</label>
+          <span style="flex:1"></span>
+          <button id="btn-beautify" class="ghost hidden">Formater le JSON</button>
+        </div>
+        <textarea id="body" class="code hidden" spellcheck="false"></textarea>
+        <div id="form-kv" class="hidden"></div>
+        <p id="body-none" class="hint">Cette requête n'envoie pas de corps.</p>
+      </div>
+      <div class="pane-body hidden" data-panel="auth">
+        <div class="form-grid">
+          <label for="auth-type">Type</label>
+          <select id="auth-type">
+            <option value="none">Aucune</option>
+            <option value="bearer">Bearer Token</option>
+            <option value="basic">Basic Auth</option>
+            <option value="apikey">Clé d'API</option>
+          </select>
+          <label data-auth="bearer">Jeton</label><input data-auth="bearer" id="auth-token" type="text" class="mono" placeholder="{{token}}" />
+          <label data-auth="basic">Utilisateur</label><input data-auth="basic" id="auth-user" type="text" />
+          <label data-auth="basic">Mot de passe</label><input data-auth="basic" id="auth-pass" type="password" />
+          <label data-auth="apikey">Nom</label><input data-auth="apikey" id="auth-key" type="text" class="mono" placeholder="X-API-Key" />
+          <label data-auth="apikey">Valeur</label><input data-auth="apikey" id="auth-value" type="text" class="mono" />
+          <label data-auth="apikey">Ajouter dans</label>
+          <select data-auth="apikey" id="auth-loc"><option value="header">En-tête</option><option value="query">Paramètre d'URL</option></select>
+        </div>
+        <p class="hint">Un en-tête <code>Authorization</code> défini manuellement est prioritaire.</p>
+      </div>
+      <div class="pane-body hidden" data-panel="options">
+        <div class="opts">
+          <label><input type="checkbox" id="opt-redirects" checked /> Suivre les redirections</label>
+          <label><input type="checkbox" id="opt-ssl" checked /> Vérifier le certificat SSL</label>
+          <label>Délai maximum <input type="number" id="opt-timeout" min="1" max="600" value="30" /> secondes</label>
+          <label><input type="checkbox" id="opt-history" checked /> Enregistrer dans l'historique</label>
+        </div>
+      </div>
+    </section>
+
+    <div class="resizer" id="resizer"></div>
+
+    <section class="pane" id="res-pane">
+      <div class="tabs" id="res-tabs">
+        <div class="tab active" data-tab="rbody">Réponse</div>
+        <div class="tab" data-tab="rheaders">En-têtes<span class="n" id="n-rheaders"></span></div>
+        <div class="tab" data-tab="rinfo">Détails</div>
+        <span class="spacer"></span>
+        <div class="meta" id="res-meta"></div>
+        <select id="res-view" class="hidden" style="margin-left:8px"><option value="pretty">Formaté</option><option value="raw">Brut</option></select>
+        <button id="res-copy" class="ghost hidden" style="margin-left:4px">Copier</button>
+        <button id="res-download" class="ghost hidden">Télécharger</button>
+      </div>
+      <div class="pane-body" data-rpanel="rbody" id="res-body">
+        <div class="placeholder"><div class="big">🛰️</div><div>Saisissez une URL puis cliquez sur <b>Envoyer</b></div>
+          <div><kbd>Ctrl</kbd> + <kbd>Entrée</kbd> pour envoyer · <kbd>Ctrl</kbd> + <kbd>S</kbd> pour enregistrer</div></div>
+      </div>
+      <div class="pane-body hidden" data-rpanel="rheaders" id="res-headers"></div>
+      <div class="pane-body hidden" data-rpanel="rinfo" id="res-info"></div>
+    </section>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'rest-client'
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const uid = () => Math.random().toString(36).slice(2, 10)
+
+let state = {
+  current: null,          // { id, name, folder } of the saved request being edited
+  params: [], headers: [], form: [],
+  envs: { active: null, items: [] },
+  saved: [], history: [],
+  side: 'saved',
+  lastResponse: null,
+  sending: false,
+}
+
+// ── Toast ───────────────────────────────────────────────────────────────────
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2200)
+}
+
+// ── Key/value editor ────────────────────────────────────────────────────────
+function kvEditor(container, getRows, setRows, { keyPh = 'Clé', valPh = 'Valeur', onChange } = {}) {
+  function render() {
+    const rows = getRows()
+    container.innerHTML = `<table class="kv"><tbody>${rows.map((r, i) => `
+      <tr class="${r.enabled ? '' : 'off'}" data-i="${i}">
+        <td class="chk"><input type="checkbox" data-f="enabled" ${r.enabled ? 'checked' : ''} /></td>
+        <td><input type="text" data-f="key" value="${esc(r.key)}" placeholder="${keyPh}" spellcheck="false" /></td>
+        <td><input type="text" data-f="value" value="${esc(r.value)}" placeholder="${valPh}" spellcheck="false" /></td>
+        <td class="act"><button class="ghost icon" data-del title="Supprimer">✕</button></td>
+      </tr>`).join('')}
+      <tr class="new"><td class="chk"></td>
+        <td><input type="text" data-new="key" placeholder="${keyPh}" spellcheck="false" /></td>
+        <td><input type="text" data-new="value" placeholder="${valPh}" spellcheck="false" /></td><td></td></tr>
+    </tbody></table>`
+  }
+  container.addEventListener('input', (e) => {
+    const el = e.target
+    if (el.dataset.new) {
+      const rows = [...getRows(), { key: '', value: '', enabled: true, [el.dataset.new]: el.value }]
+      setRows(rows)
+      render()
+      const inp = container.querySelector(`tr[data-i="${rows.length - 1}"] input[data-f="${el.dataset.new}"]`)
+      inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length)
+      onChange?.()
+      return
+    }
+    const tr = el.closest('tr[data-i]')
+    if (!tr) return
+    const rows = getRows().slice()
+    const i = +tr.dataset.i
+    rows[i] = { ...rows[i], [el.dataset.f]: el.type === 'checkbox' ? el.checked : el.value }
+    setRows(rows)
+    if (el.type === 'checkbox') tr.classList.toggle('off', !el.checked)
+    onChange?.()
+  })
+  container.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-del]')) return
+    const i = +e.target.closest('tr').dataset.i
+    setRows(getRows().filter((_, j) => j !== i))
+    render()
+    onChange?.()
+  })
+  return { render }
+}
+
+// ── URL ⇄ params sync (raw text: {{vars}} must survive untouched) ────────────
+function splitUrl(url) {
+  const hash = url.indexOf('#')
+  const noHash = hash >= 0 ? url.slice(0, hash) : url
+  const q = noHash.indexOf('?')
+  return { base: q >= 0 ? noHash.slice(0, q) : noHash, query: q >= 0 ? noHash.slice(q + 1) : '', hash: hash >= 0 ? url.slice(hash) : '' }
+}
+function parseQuery(query) {
+  if (!query) return []
+  return query.split('&').filter((p) => p !== '').map((p) => {
+    const eq = p.indexOf('=')
+    const dec = (s) => { try { return decodeURIComponent(s.replace(/\+/g, ' ')) } catch { return s } }
+    return { key: dec(eq >= 0 ? p.slice(0, eq) : p), value: eq >= 0 ? dec(p.slice(eq + 1)) : '', enabled: true }
+  })
+}
+const encPart = (s) => encodeURIComponent(s).replace(/%7B/gi, '{').replace(/%7D/gi, '}')
+function buildUrl() {
+  const { base, hash } = splitUrl($('#url').value)
+  const q = state.params.filter((p) => p.enabled && p.key !== '')
+    .map((p) => encPart(p.key) + (p.value !== '' ? '=' + encPart(p.value) : '')).join('&')
+  return base + (q ? '?' + q : '') + hash
+}
+function urlToParams() {
+  const disabled = state.params.filter((p) => !p.enabled)
+  state.params = [...parseQuery(splitUrl($('#url').value).query), ...disabled]
+  paramsKv.render()
+  updateCounts()
+}
+function paramsToUrl() { $('#url').value = buildUrl(); updateCounts() }
+
+const paramsKv  = kvEditor($('#params-kv'), () => state.params, (r) => (state.params = r), { onChange: paramsToUrl })
+const headersKv = kvEditor($('#headers-kv'), () => state.headers, (r) => (state.headers = r), { keyPh: 'En-tête', onChange: updateCounts })
+const formKv    = kvEditor($('#form-kv'), () => state.form, (r) => (state.form = r), { keyPh: 'Champ', onChange: updateCounts })
+
+// ── Request model ───────────────────────────────────────────────────────────
+const bodyType = () => $('input[name=bt]:checked').value
+
+function readRequest() {
+  return {
+    method: $('#method').value,
+    url: $('#url').value.trim(),
+    headers: state.headers.map(({ key, value, enabled }) => ({ key, value, enabled })),
+    body_type: bodyType(),
+    body: $('#body').value,
+    form: state.form.map(({ key, value, enabled }) => ({ key, value, enabled })),
+    auth: {
+      type: $('#auth-type').value, token: $('#auth-token').value,
+      username: $('#auth-user').value, password: $('#auth-pass').value,
+      key: $('#auth-key').value, value: $('#auth-value').value, location: $('#auth-loc').value,
+    },
+    timeout: Math.min(600, Math.max(1, Number($('#opt-timeout').value) || 30)),
+    follow_redirects: $('#opt-redirects').checked,
+    verify_ssl: $('#opt-ssl').checked,
+  }
+}
+
+function loadRequest(r, meta = null) {
+  r = r || {}
+  $('#method').value = METHODS.includes(r.method) ? r.method : 'GET'
+  $('#method').className = `m-${$('#method').value}`
+  $('#url').value = r.url || ''
+  state.params = parseQuery(splitUrl(r.url || '').query)
+  state.headers = (r.headers || []).map((h) => ({ enabled: true, ...h }))
+  state.form = (r.form || []).map((h) => ({ enabled: true, ...h }))
+  $(`input[name=bt][value="${r.body_type || 'none'}"]`).checked = true
+  $('#body').value = r.body || ''
+  const a = r.auth || {}
+  $('#auth-type').value = a.type || 'none'
+  $('#auth-token').value = a.token || ''
+  $('#auth-user').value = a.username || ''
+  $('#auth-pass').value = a.password || ''
+  $('#auth-key').value = a.key || ''
+  $('#auth-value').value = a.value || ''
+  $('#auth-loc').value = a.location || 'header'
+  $('#opt-timeout').value = r.timeout || 30
+  $('#opt-redirects').checked = r.follow_redirects !== false
+  $('#opt-ssl').checked = r.verify_ssl !== false
+  state.current = meta
+  paramsKv.render(); headersKv.render(); formKv.render()
+  refreshBodyUi(); refreshAuthUi(); updateCounts(); updateTitle(); renderSide()
+}
+
+function updateTitle() {
+  const c = state.current
+  $('#req-title').innerHTML = c ? `${esc(c.name)}${c.folder ? `<small>${esc(c.folder)}</small>` : ''}` : 'Nouvelle requête'
+}
+
+function updateCounts() {
+  const n = (rows) => rows.filter((r) => r.enabled && r.key).length || ''
+  $('#n-params').textContent = n(state.params)
+  $('#n-headers').textContent = n(state.headers)
+  const bt = bodyType()
+  $('#n-body').textContent = bt === 'none' ? '' : bt === 'urlencoded' ? 'form' : bt
+  $('#n-auth').textContent = $('#auth-type').value === 'none' ? '' : '●'
+}
+
+function refreshBodyUi() {
+  const bt = bodyType()
+  $('#body').classList.toggle('hidden', bt === 'none' || bt === 'urlencoded')
+  $('#form-kv').classList.toggle('hidden', bt !== 'urlencoded')
+  $('#body-none').classList.toggle('hidden', bt !== 'none')
+  $('#btn-beautify').classList.toggle('hidden', bt !== 'json')
+  $('#body').placeholder = bt === 'json' ? '{\n  "nom": "{{utilisateur}}"\n}' : bt === 'xml' ? '<racine></racine>' : ''
+  updateCounts()
+}
+
+function refreshAuthUi() {
+  const t = $('#auth-type').value
+  $$('[data-auth]').forEach((el) => el.classList.toggle('hidden', el.dataset.auth !== t))
+  updateCounts()
+}
+
+// ── Variables ───────────────────────────────────────────────────────────────
+function activeVars() {
+  const env = state.envs.items.find((e) => e.id === state.envs.active)
+  const vars = {}
+  for (const v of env?.vars || []) if (v.enabled !== false && v.key) vars[v.key] = v.value
+  return vars
+}
+
+function substitute(req) {
+  const vars = activeVars()
+  const missing = new Set()
+  const sub = (s) => typeof s !== 'string' ? s : s.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (m, k) => {
+    if (k in vars) return vars[k]
+    missing.add(k)
+    return m
+  })
+  const walk = (v) => Array.isArray(v) ? v.map(walk)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]))
+    : sub(v)
+  return { req: walk(req), missing: [...missing] }
+}
+
+function renderEnvSelect() {
+  const sel = $('#env-select')
+  sel.innerHTML = `<option value="">Aucun environnement</option>` +
+    state.envs.items.map((e) => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('')
+  sel.value = state.envs.active || ''
+}
+
+async function loadEnvs() {
+  try {
+    const d = await call('env_get')
+    state.envs = { active: d.active, items: d.items || [] }
+  } catch (e) { toast(e.message, true) }
+  renderEnvSelect()
+}
+
+async function saveEnvs() {
+  const d = await call('env_save', state.envs)
+  state.envs = { active: d.active, items: d.items }
+  renderEnvSelect()
+}
+
+function openEnvModal() {
+  let items = JSON.parse(JSON.stringify(state.envs.items))
+  let sel = items[0]?.id ?? null
+  const back = document.createElement('div')
+  back.className = 'backdrop'
+  back.innerHTML = `<div class="modal">
+    <div class="modal-head"><span>Environnements & variables</span><button class="ghost icon" data-close>✕</button></div>
+    <div class="modal-body"><div class="env-layout">
+      <div><div class="env-list" id="env-list"></div><button id="env-add" style="margin-top:8px;width:100%">＋ Environnement</button></div>
+      <div id="env-edit"></div>
+    </div>
+    <p class="hint">Utilisez <code>{{nom}}</code> dans l'URL, les paramètres, les en-têtes, le corps et l'authentification.</p></div>
+    <div class="modal-foot"><button data-close>Annuler</button><button class="primary" id="env-ok">Enregistrer</button></div>
+  </div>`
+  document.body.appendChild(back)
+  const close = () => back.remove()
+  back.addEventListener('click', (e) => { if (e.target === back || e.target.closest('[data-close]')) close() })
+
+  let kv
+  function render() {
+    back.querySelector('#env-list').innerHTML = items.map((e) =>
+      `<div class="item ${e.id === sel ? 'current' : ''}" data-id="${esc(e.id)}"><span class="lbl">${esc(e.name)}</span>
+       <span class="sub">${e.vars.length}</span><button class="ghost icon del" data-del-env title="Supprimer">✕</button></div>`).join('')
+      || '<div class="side-empty">Aucun environnement</div>'
+    const env = items.find((e) => e.id === sel)
+    const edit = back.querySelector('#env-edit')
+    if (!env) { edit.innerHTML = '<div class="side-empty">Créez un environnement (ex. « Local », « Production »).</div>'; return }
+    edit.innerHTML = `<input id="env-name" type="text" value="${esc(env.name)}" style="width:100%;margin-bottom:8px" placeholder="Nom" /><div id="env-kv"></div>`
+    edit.querySelector('#env-name').addEventListener('input', (e) => {
+      env.name = e.target.value
+      back.querySelector(`#env-list .item[data-id="${CSS.escape(env.id)}"] .lbl`).textContent = env.name
+    })
+    kv = kvEditor(edit.querySelector('#env-kv'), () => env.vars, (r) => (env.vars = r), { keyPh: 'Variable' })
+    kv.render()
+  }
+  back.querySelector('#env-list').addEventListener('click', (e) => {
+    const it = e.target.closest('.item')
+    if (!it) return
+    if (e.target.closest('[data-del-env]')) {
+      items = items.filter((x) => x.id !== it.dataset.id)
+      if (sel === it.dataset.id) sel = items[0]?.id ?? null
+    } else sel = it.dataset.id
+    render()
+  })
+  back.querySelector('#env-add').addEventListener('click', () => {
+    const env = { id: uid(), name: `Environnement ${items.length + 1}`, vars: [] }
+    items.push(env); sel = env.id; render()
+    back.querySelector('#env-name').select()
+  })
+  back.querySelector('#env-ok').addEventListener('click', async () => {
+    items = items.filter((e) => e.name.trim())
+    const active = items.some((e) => e.id === state.envs.active) ? state.envs.active : (items.length === 1 ? items[0].id : null)
+    state.envs = { active, items }
+    try { await saveEnvs(); close(); toast('Variables enregistrées') } catch (e) { toast(e.message, true) }
+  })
+  render()
+}
+
+// ── Send ────────────────────────────────────────────────────────────────────
+async function send() {
+  if (state.sending) return
+  const raw = readRequest()
+  if (!raw.url) { toast('Saisissez une URL', true); $('#url').focus(); return }
+  const { req, missing } = substitute(raw)
+  if (missing.length) toast(`Variable(s) non définie(s) : ${missing.join(', ')}`, true)
+
+  state.sending = true
+  $('#send').innerHTML = '<span class="spinner"></span>'
+  $('#send').disabled = true
+  $('#res-meta').innerHTML = '<span>Envoi…</span>'
+  try {
+    const res = await call('send', { request: req, history: $('#opt-history').checked }, { timeout: (req.timeout + 15) * 1000 })
+    state.lastResponse = res
+    renderResponse(res)
+  } catch (e) {
+    state.lastResponse = null
+    renderError(e)
+  } finally {
+    state.sending = false
+    $('#send').textContent = 'Envoyer'
+    $('#send').disabled = false
+    if ($('#opt-history').checked) loadHistory()
+  }
+}
+
+function fmtSize(n) {
+  if (n < 1024) return `${n} o`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} Ko`
+  return `${(n / 1024 / 1024).toFixed(2)} Mo`
+}
+const stClass = (s) => (s >= 200 && s < 600 ? `st-${String(s)[0]}` : 'st-x')
+
+function highlightJson(text) {
+  return esc(text).replace(
+    /(&quot;(?:\\u[\da-fA-F]{4}|\\[^u]|(?!&quot;)[^\\])*?&quot;)(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g,
+    (m, str, colon, bool) => str ? `<span class="${colon ? 'j-key' : 'j-str'}">${str}</span>${colon || ''}`
+      : bool ? `<span class="j-bool">${m}</span>` : m === 'null' ? `<span class="j-null">${m}</span>` : `<span class="j-num">${m}</span>`)
+}
+
+function prettyBody(res) {
+  const ct = (res.content_type || '').toLowerCase()
+  const body = res.body || ''
+  if (ct.includes('json') || /^\s*[{[]/.test(body)) {
+    try { return { html: highlightJson(JSON.stringify(JSON.parse(body), null, 2)), json: true } } catch {}
+  }
+  if (ct.includes('xml') || ct.includes('html')) {
+    try {
+      let depth = 0
+      const out = body.replace(/>\s*</g, '>\n<').split('\n').map((line) => {
+        if (/^<\/[^>]+>/.test(line)) depth = Math.max(0, depth - 1)
+        const s = '  '.repeat(depth) + line
+        if (/^<[^!?/][^>]*[^/]>$/.test(line) && !/^<[^>]+>.*<\/[^>]+>$/.test(line)) depth++
+        return s
+      }).join('\n')
+      return { html: esc(out), json: false }
+    } catch {}
+  }
+  return { html: esc(body), json: false }
+}
+
+function renderResponse(res) {
+  const sc = stClass(res.status)
+  $('#res-meta').innerHTML = `<span class="pill ${sc}">${res.status} ${esc(res.reason)}</span>
+    <span>Durée <b>${res.elapsed_ms < 1000 ? res.elapsed_ms + ' ms' : (res.elapsed_ms / 1000).toFixed(2) + ' s'}</b></span>
+    <span>Taille <b>${fmtSize(res.size)}</b></span>`
+  $('#n-rheaders').textContent = res.headers.length
+  for (const id of ['#res-copy', '#res-download']) $(id).classList.remove('hidden')
+
+  const box = $('#res-body')
+  const warn = res.truncated ? `<p class="warn-line">⚠ Réponse tronquée (limite de lecture atteinte, voir la configuration du module).</p>` : ''
+  const isImage = (res.content_type || '').toLowerCase().startsWith('image/')
+  $('#res-view').classList.toggle('hidden', res.binary || !res.body)
+  if (res.binary) {
+    box.innerHTML = warn + (isImage
+      ? `<img class="preview" src="data:${esc(res.content_type.split(';')[0])};base64,${res.body_base64}" alt="" />`
+      : `<div class="placeholder"><div class="big">📦</div><div>Contenu binaire (${esc(res.content_type || 'type inconnu')}, ${fmtSize(res.size)})</div><div>Utilisez « Télécharger » pour l'enregistrer.</div></div>`)
+  } else if (!res.body) {
+    box.innerHTML = warn + `<div class="placeholder"><div>Réponse vide</div></div>`
+  } else if ($('#res-view').value === 'raw') {
+    box.innerHTML = warn + `<pre class="out">${esc(res.body)}</pre>`
+  } else {
+    box.innerHTML = warn + `<pre class="out">${prettyBody(res).html}</pre>`
+  }
+
+  $('#res-headers').innerHTML = `<table class="hdr">${res.headers.map(([k, v]) =>
+    `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`
+
+  const r = res.request
+  $('#res-info').innerHTML = `
+    <div class="sec-title">Requête envoyée</div>
+    <table class="hdr"><tr><td>Méthode</td><td>${esc(r.method)}</td></tr><tr><td>URL</td><td>${esc(r.url)}</td></tr>
+    ${res.final_url !== r.url ? `<tr><td>URL finale</td><td>${esc(res.final_url)}</td></tr>` : ''}
+    <tr><td>Corps envoyé</td><td>${fmtSize(r.body_size)}</td></tr>
+    <tr><td>Premier octet</td><td>${res.ttfb_ms} ms</td></tr><tr><td>Total</td><td>${res.elapsed_ms} ms</td></tr></table>
+    ${res.redirects.length ? `<div class="sec-title">Redirections</div><table class="hdr">${res.redirects.map((x) =>
+      `<tr><td>${x.status}</td><td>${esc(x.url)}</td></tr>`).join('')}</table>` : ''}
+    <div class="sec-title">En-têtes envoyés</div>
+    <table class="hdr">${r.headers.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(/^authorization$/i.test(k) ? v.replace(/^(\w+\s+).*/, '$1••••••') : v)}</td></tr>`).join('')}</table>`
+}
+
+function renderError(e) {
+  $('#res-meta').innerHTML = `<span class="pill st-x">Échec</span>`
+  $('#n-rheaders').textContent = ''
+  for (const id of ['#res-copy', '#res-download', '#res-view']) $(id).classList.add('hidden')
+  $('#res-body').innerHTML = `<div class="error-box">${esc(e.message)}${e.code ? `\n\nCode : ${esc(e.code)}` : ''}</div>`
+  $('#res-headers').innerHTML = ''
+  $('#res-info').innerHTML = ''
+  switchTab('res', 'rbody')
+}
+
+// ── Sidebar ─────────────────────────────────────────────────────────────────
+async function loadSaved() {
+  try { state.saved = (await call('saved_list')).items } catch (e) { toast(e.message, true) }
+  renderSide()
+}
+async function loadHistory() {
+  try { state.history = (await call('history_list')).items } catch (e) { toast(e.message, true) }
+  renderSide()
+}
+
+function relTime(iso) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000
+  if (s < 60) return "à l'instant"
+  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`
+  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`
+  return new Date(iso).toLocaleDateString('fr-FR')
+}
+
+function renderSide() {
+  const f = $('#side-filter').value.trim().toLowerCase()
+  const list = $('#side-list')
+  $('#history-clear').classList.toggle('hidden', state.side !== 'history' || !state.history.length)
+  if (state.side === 'saved') {
+    const items = state.saved.filter((s) => !f || `${s.name} ${s.folder} ${s.request.url}`.toLowerCase().includes(f))
+    if (!items.length) { list.innerHTML = `<div class="side-empty">${state.saved.length ? 'Aucun résultat' : 'Aucune requête enregistrée.<br>Utilisez « Enregistrer » ou Ctrl+S.'}</div>`; return }
+    let folder = null, html = ''
+    for (const s of items) {
+      if ((s.folder || '') !== folder) { folder = s.folder || ''; if (folder || html) html += `<div class="folder">${esc(folder || 'Sans dossier')}</div>` }
+      html += `<div class="item ${state.current?.id === s._id ? 'current' : ''}" data-saved="${esc(s._id)}" title="${esc(s.request.url)}">
+        <span class="m m-${esc(s.request.method)}">${esc(s.request.method)}</span><span class="lbl">${esc(s.name)}</span>
+        <button class="ghost icon del" data-del title="Supprimer">✕</button></div>`
+    }
+    list.innerHTML = html
+  } else {
+    const items = state.history.filter((h) => !f || h.request.url.toLowerCase().includes(f))
+    if (!items.length) { list.innerHTML = `<div class="side-empty">${state.history.length ? 'Aucun résultat' : 'Historique vide'}</div>`; return }
+    list.innerHTML = items.map((h) => `<div class="item" data-hist="${esc(h._id)}" title="${esc(h.error || h.request.url)}">
+      <span class="m m-${esc(h.request.method)}">${esc(h.request.method)}</span>
+      <span class="lbl">${esc(h.request.url.replace(/^https?:\/\//, ''))}<div class="sub">
+        ${h.error ? '<span class="st st-x">ERR</span>' : `<span class="st ${stClass(h.status)}">${h.status}</span> · ${h.elapsed_ms} ms`} · ${relTime(h.at)}</div></span>
+      <button class="ghost icon del" data-del title="Supprimer">✕</button></div>`).join('')
+  }
+}
+
+$('#side-list').addEventListener('click', async (e) => {
+  const it = e.target.closest('.item')
+  if (!it) return
+  const del = e.target.closest('[data-del]')
+  if (it.dataset.saved) {
+    const s = state.saved.find((x) => x._id === it.dataset.saved)
+    if (del) {
+      if (!confirm(`Supprimer « ${s.name} » ?`)) return
+      await call('saved_delete', { id: s._id })
+      if (state.current?.id === s._id) { state.current = null; updateTitle() }
+      loadSaved()
+    } else loadRequest(s.request, { id: s._id, name: s.name, folder: s.folder })
+  } else {
+    const h = state.history.find((x) => x._id === it.dataset.hist)
+    if (del) { await call('history_delete', { id: h._id }); loadHistory() }
+    else loadRequest(h.request, null)
+  }
+})
+
+// ── Save ────────────────────────────────────────────────────────────────────
+function openSaveModal() {
+  const c = state.current
+  const folders = [...new Set(state.saved.map((s) => s.folder).filter(Boolean))]
+  const guess = (() => { try { const u = new URL(splitUrl($('#url').value).base); return `${$('#method').value} ${u.pathname}` } catch { return '' } })()
+  const back = document.createElement('div')
+  back.className = 'backdrop'
+  back.innerHTML = `<div class="modal" style="width:min(440px,94vw)">
+    <div class="modal-head"><span>Enregistrer la requête</span><button class="ghost icon" data-close>✕</button></div>
+    <div class="modal-body"><div class="form-grid" style="grid-template-columns:80px 1fr">
+      <label>Nom</label><input id="sv-name" type="text" value="${esc(c?.name || guess)}" />
+      <label>Dossier</label><input id="sv-folder" type="text" list="sv-folders" value="${esc(c?.folder || '')}" placeholder="optionnel" />
+      <datalist id="sv-folders">${folders.map((f) => `<option value="${esc(f)}">`).join('')}</datalist>
+    </div></div>
+    <div class="modal-foot"><button data-close>Annuler</button>
+      ${c ? '<button id="sv-copy">Enregistrer une copie</button>' : ''}
+      <button class="primary" id="sv-ok">${c ? 'Mettre à jour' : 'Enregistrer'}</button></div></div>`
+  document.body.appendChild(back)
+  const close = () => back.remove()
+  back.addEventListener('click', (e) => { if (e.target === back || e.target.closest('[data-close]')) close() })
+  const nameInput = back.querySelector('#sv-name')
+  nameInput.focus(); nameInput.select()
+  async function save(asCopy) {
+    const name = nameInput.value.trim()
+    if (!name) { nameInput.focus(); return }
+    try {
+      const d = await call('saved_save', { id: asCopy ? null : c?.id, name, folder: back.querySelector('#sv-folder').value, request: readRequest() })
+      state.current = { id: d._id, name: d.name, folder: d.folder }
+      updateTitle(); close(); toast('Requête enregistrée'); loadSaved()
+    } catch (e) { toast(e.message, true) }
+  }
+  back.querySelector('#sv-ok').addEventListener('click', () => save(false))
+  back.querySelector('#sv-copy')?.addEventListener('click', () => save(true))
+  back.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(false); if (e.key === 'Escape') close() })
+}
+
+// ── cURL ────────────────────────────────────────────────────────────────────
+function toCurl() {
+  const { req } = substitute(readRequest())
+  const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`
+  const parts = [`curl -X ${req.method} ${q(req.url)}`]
+  const a = req.auth
+  if (a.type === 'bearer' && a.token) parts.push(`-H ${q('Authorization: Bearer ' + a.token)}`)
+  if (a.type === 'basic') parts.push(`-u ${q(a.username + ':' + a.password)}`)
+  if (a.type === 'apikey' && a.key && a.location === 'header') parts.push(`-H ${q(a.key + ': ' + a.value)}`)
+  for (const h of req.headers) if (h.enabled && h.key) parts.push(`-H ${q(h.key + ': ' + h.value)}`)
+  if (req.body_type === 'urlencoded') {
+    for (const f of req.form) if (f.enabled && f.key) parts.push(`--data-urlencode ${q(f.key + '=' + f.value)}`)
+  } else if (req.body_type !== 'none' && req.body) {
+    if (req.body_type === 'json' && !req.headers.some((h) => h.enabled && /^content-type$/i.test(h.key))) parts.push(`-H 'Content-Type: application/json'`)
+    parts.push(`--data-raw ${q(req.body)}`)
+  }
+  if (!req.verify_ssl) parts.push('-k')
+  if (req.follow_redirects) parts.push('-L')
+  return parts.join(' \\\n  ')
+}
+
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text) }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); ta.remove()
+  }
+  toast(msg)
+}
+
+// ── Tabs & layout ───────────────────────────────────────────────────────────
+function switchTab(group, name) {
+  if (group === 'req') {
+    $$('#req-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name))
+    $$('#req-pane [data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== name))
+  } else {
+    $$('#res-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name))
+    $$('#res-pane [data-rpanel]').forEach((p) => p.classList.toggle('hidden', p.dataset.rpanel !== name))
+  }
+}
+$('#req-tabs').addEventListener('click', (e) => { const t = e.target.closest('.tab'); if (t) switchTab('req', t.dataset.tab) })
+$('#res-tabs').addEventListener('click', (e) => { const t = e.target.closest('.tab'); if (t) switchTab('res', t.dataset.tab) })
+
+;(() => {
+  const pane = $('#req-pane'), split = $('#split')
+  try { const h = localStorage.getItem('rest-client:req-h'); if (h) pane.style.height = h } catch {}
+  $('#resizer').addEventListener('mousedown', (e) => {
+    e.preventDefault()
+    const startY = e.clientY, startH = pane.offsetHeight, max = split.offsetHeight - 120
+    const move = (ev) => { pane.style.height = Math.max(120, Math.min(max, startH + ev.clientY - startY)) + 'px' }
+    const up = () => {
+      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up)
+      try { localStorage.setItem('rest-client:req-h', pane.style.height) } catch {}
+    }
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up)
+  })
+})()
+
+// ── Wiring ──────────────────────────────────────────────────────────────────
+$('#method').innerHTML = METHODS.map((m) => `<option class="m-${m}" value="${m}">${m}</option>`).join('')
+$('#method').addEventListener('change', () => {
+  const m = $('#method').value
+  $('#method').className = `m-${m}`
+  if (['POST', 'PUT', 'PATCH'].includes(m) && bodyType() === 'none') { $('input[name=bt][value=json]').checked = true; refreshBodyUi() }
+})
+$('#url').addEventListener('input', urlToParams)
+$('#url').addEventListener('paste', (e) => {
+  const text = e.clipboardData.getData('text')
+  if (/^\s*curl\s/i.test(text)) { e.preventDefault(); importCurl(text) }
+})
+$('#url').addEventListener('keydown', (e) => { if (e.key === 'Enter') send() })
+$('#send').addEventListener('click', send)
+$('#body-types').addEventListener('change', refreshBodyUi)
+$('#auth-type').addEventListener('change', refreshAuthUi)
+$('#btn-beautify').addEventListener('click', () => {
+  try { $('#body').value = JSON.stringify(JSON.parse($('#body').value), null, 2) }
+  catch (e) { toast(`JSON invalide : ${e.message}`, true) }
+})
+$('#body').addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return
+  e.preventDefault()
+  const ta = e.target, s = ta.selectionStart
+  ta.setRangeText('  ', s, ta.selectionEnd, 'end')
+})
+$('#res-view').addEventListener('change', () => state.lastResponse && renderResponse(state.lastResponse))
+$('#res-copy').addEventListener('click', () => {
+  const r = state.lastResponse
+  if (!r) return
+  const active = $('#res-tabs .tab.active').dataset.tab
+  if (active === 'rheaders') return copyText(r.headers.map(([k, v]) => `${k}: ${v}`).join('\n'), 'En-têtes copiés')
+  let text = r.body
+  if ($('#res-view').value === 'pretty') { try { text = JSON.stringify(JSON.parse(r.body), null, 2) } catch {} }
+  copyText(text, 'Réponse copiée')
+})
+$('#res-download').addEventListener('click', () => {
+  const r = state.lastResponse
+  if (!r) return
+  const bytes = r.binary ? Uint8Array.from(atob(r.body_base64), (c) => c.charCodeAt(0)) : new TextEncoder().encode(r.body)
+  const type = (r.content_type || 'application/octet-stream').split(';')[0]
+  const ext = { 'application/json': 'json', 'text/html': 'html', 'application/xml': 'xml', 'text/xml': 'xml', 'text/plain': 'txt',
+                'text/csv': 'csv', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'application/pdf': 'pdf' }[type] || 'bin'
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([bytes], { type }))
+  a.download = `reponse.${ext}`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+})
+$('#btn-new').addEventListener('click', () => {
+  loadRequest({ method: 'GET', url: '' }, null)
+  $('#url').focus()
+})
+$('#btn-save').addEventListener('click', openSaveModal)
+$('#btn-curl').addEventListener('click', () => copyText(toCurl(), 'Commande cURL copiée'))
+$('#env-manage').addEventListener('click', openEnvModal)
+$('#env-select').addEventListener('change', async (e) => {
+  state.envs.active = e.target.value || null
+  try { await saveEnvs() } catch (err) { toast(err.message, true) }
+})
+$('#toggle-side').addEventListener('click', () => $('#side').classList.toggle('collapsed'))
+$$('.side-tabs button').forEach((b) => b.addEventListener('click', () => {
+  state.side = b.dataset.side
+  $$('.side-tabs button').forEach((x) => x.classList.toggle('active', x === b))
+  renderSide()
+}))
+$('#side-filter').addEventListener('input', renderSide)
+$('#history-clear').addEventListener('click', async () => {
+  if (!confirm("Vider tout l'historique ?")) return
+  await call('history_clear'); loadHistory()
+})
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send() }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); openSaveModal() }
+})
+
+// ── cURL import (paste a curl command into the URL bar) ─────────────────────
+function shellSplit(s) {
+  const out = []; let cur = '', q = null, any = false
+  s = s.replace(/\\\r?\n/g, ' ')
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (q) {
+      if (c === q) q = null
+      else if (c === '\\' && q === '"' && i + 1 < s.length) cur += s[++i]
+      else cur += c
+    } else if (c === "'" || c === '"') { q = c; any = true }
+    else if (/\s/.test(c)) { if (cur || any) out.push(cur); cur = ''; any = false }
+    else if (c === '\\' && i + 1 < s.length) cur += s[++i]
+    else cur += c
+  }
+  if (cur || any) out.push(cur)
+  return out
+}
+
+function importCurl(text) {
+  const t = shellSplit(text.trim())
+  const r = { method: null, url: '', headers: [], body_type: 'none', body: '', form: [], auth: { type: 'none' }, verify_ssl: true, follow_redirects: false }
+  const data = []
+  for (let i = 1; i < t.length; i++) {
+    const a = t[i], next = () => t[++i] ?? ''
+    if (a === '-X' || a === '--request') r.method = next().toUpperCase()
+    else if (a === '-H' || a === '--header') {
+      const h = next(), c = h.indexOf(':')
+      if (c > 0) r.headers.push({ key: h.slice(0, c).trim(), value: h.slice(c + 1).trim(), enabled: true })
+    } else if (['-d', '--data', '--data-raw', '--data-binary', '--data-ascii'].includes(a)) data.push(next())
+    else if (a === '--data-urlencode') {
+      const v = next(), eq = v.indexOf('=')
+      r.form.push({ key: eq >= 0 ? v.slice(0, eq) : v, value: eq >= 0 ? v.slice(eq + 1) : '', enabled: true })
+    } else if (a === '-u' || a === '--user') {
+      const v = next(), c = v.indexOf(':')
+      r.auth = { type: 'basic', username: c >= 0 ? v.slice(0, c) : v, password: c >= 0 ? v.slice(c + 1) : '' }
+    } else if (a === '-k' || a === '--insecure') r.verify_ssl = false
+    else if (a === '-L' || a === '--location') r.follow_redirects = true
+    else if (a === '--url') r.url = next()
+    else if (a === '-I' || a === '--head') r.method = 'HEAD'
+    else if (['-o', '--output', '-A', '--user-agent', '-e', '--referer', '-b', '--cookie', '-m', '--max-time', '--connect-timeout'].includes(a)) {
+      const v = next()
+      if (a === '-A' || a === '--user-agent') r.headers.push({ key: 'User-Agent', value: v, enabled: true })
+      if (a === '-e' || a === '--referer') r.headers.push({ key: 'Referer', value: v, enabled: true })
+      if (a === '-b' || a === '--cookie') r.headers.push({ key: 'Cookie', value: v, enabled: true })
+      if (a === '-m' || a === '--max-time') r.timeout = Math.min(600, Math.max(1, parseFloat(v) || 30))
+    } else if (!a.startsWith('-') && !r.url) r.url = a
+  }
+  if (r.form.length) r.body_type = 'urlencoded'
+  else if (data.length) {
+    r.body = data.join('&')
+    const ct = r.headers.find((h) => /^content-type$/i.test(h.key))?.value.toLowerCase() || ''
+    r.body_type = ct.includes('json') || /^\s*[{[]/.test(r.body) ? 'json' : ct.includes('xml') ? 'xml' : ct.includes('x-www-form-urlencoded') || !ct ? 'urlencoded' : 'text'
+    if (r.body_type === 'urlencoded') { r.form = parseQuery(r.body); r.body = '' }
+  }
+  const authH = r.headers.findIndex((h) => /^authorization$/i.test(h.key) && /^bearer\s/i.test(h.value))
+  if (authH >= 0) { r.auth = { type: 'bearer', token: r.headers[authH].value.replace(/^bearer\s+/i, '') }; r.headers.splice(authH, 1) }
+  r.method = r.method || (data.length || r.form.length ? 'POST' : 'GET')
+  loadRequest(r, null)
+  toast('Commande cURL importée')
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+loadRequest({ method: 'GET', url: '' }, null)
+loadEnvs()
+loadSaved()
+loadHistory()
+</script>
+</body>
+</html>

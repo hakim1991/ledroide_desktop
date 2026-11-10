@@ -1,0 +1,31 @@
+{
+  "id": "jwt-inspector",
+  "name": "JWT Inspector",
+  "version": "1.0.0",
+  "description": "Décode, vérifie et génère des JSON Web Tokens : header/payload colorés, dates d'expiration lisibles, alerte alg « none », signatures HS*, RS*, PS*, ES* et EdDSA.",
+  "category": "Sécurité",
+  "tags": [
+    "jwt",
+    "token",
+    "signature",
+    "authentification",
+    "crypto"
+  ],
+  "icon": "🎫",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "cryptography>=42,<51"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

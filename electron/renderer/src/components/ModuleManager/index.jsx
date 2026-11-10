@@ -19,11 +19,42 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
   const [tab, setTab]         = useState('installed')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [modal, setModal]     = useState(null)
+  const [selected, setSelected] = useState(() => new Set())
+  const [batch, setBatch]       = useState(null)      // null | { index, total }
   // modal: null | { mod, type: 'activate'|'deactivate'|'uninstall'|'config'|'meta', loading, loadingMsg, log: [] }
 
   const inTab      = modules.filter((m) => (tab === 'installed' ? isInstalled(m) : m.status === 'available'))
   const filtered   = filterModules(inTab, filters).sort((a, b) => a.name.localeCompare(b.name, 'fr'))
   const categories = [...new Set(modules.map((m) => m.category))].sort((a, b) => a.localeCompare(b, 'fr'))
+
+  const selectable  = tab === 'available'
+  const filteredIds = filtered.map((m) => m.id)
+  const nSelFilter  = filteredIds.filter((id) => selected.has(id)).length
+  const allSelected = filteredIds.length > 0 && nSelFilter === filteredIds.length
+
+  useEffect(() => {
+    const available = new Set(modules.filter((m) => m.status === 'available').map((m) => m.id))
+    setSelected((s) => {
+      const next = new Set([...s].filter((id) => available.has(id)))
+      return next.size === s.size ? s : next
+    })
+  }, [modules])
+
+  function toggleSelected(id) {
+    setSelected((s) => {
+      const next = new Set(s)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelected((s) => {
+      const next = new Set(s)
+      filteredIds.forEach((id) => (allSelected ? next.delete(id) : next.add(id)))
+      return next
+    })
+  }
 
   const counts = {
     installed: modules.filter(isInstalled).length,
@@ -65,6 +96,31 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
       showToast(`${mod.name} installé`)
     } catch (err) {
       showToast(err.message, false)
+    }
+  }
+
+  async function installSelected() {
+    const ids = [...selected]
+    const names = Object.fromEntries(modules.map((m) => [m.id, m.name]))
+    setBatch({ index: 0, total: ids.length })
+    const off = window.ledroide.on(SYSTEM, 'modules:install', (d) => setBatch({ index: d.index, total: d.total }))
+    try {
+      const d = await api('/modules/install', { method: 'POST', body: { ids } })
+      const failed = d.results.filter((r) => r.status === 'error')
+      await onRefresh()
+      setSelected(new Set(failed.map((r) => r.id)))
+      if (failed.length === 0) {
+        showToast(`${d.installed} module${d.installed > 1 ? 's' : ''} installé${d.installed > 1 ? 's' : ''}`)
+      } else {
+        const detail = failed.map((r) => `${names[r.id] ?? r.id} (${r.error})`).join(', ')
+        showToast(`${d.installed} installé(s), ${failed.length} en échec : ${detail}`, false)
+      }
+    } catch (err) {
+      await onRefresh()
+      showToast(err.message, false)
+    } finally {
+      off?.()
+      setBatch(null)
     }
   }
 
@@ -153,6 +209,35 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
       </nav>
 
       <div className="cp-content">
+        {selectable && filtered.length > 0 && (
+          <div className="cp-bulk">
+            <label className="cp-bulk-all">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={(el) => el && (el.indeterminate = nSelFilter > 0 && !allSelected)}
+                onChange={toggleAll}
+                disabled={!!batch}
+              />
+              Tout sélectionner
+            </label>
+            <span className="cp-bulk-count">
+              {selected.size > 0 ? `${selected.size} sélectionné${selected.size > 1 ? 's' : ''}` : 'Cochez les modules à installer'}
+            </span>
+            {selected.size > 0 && !batch && (
+              <button className="btn btn-ghost cp-bulk-clear" onClick={() => setSelected(new Set())}>Effacer</button>
+            )}
+            <button
+              className="btn btn-primary cp-bulk-install"
+              onClick={installSelected}
+              disabled={selected.size === 0 || !!batch || busy}
+            >
+              {batch
+                ? <><span className="cp-spinner" /> Installation {Math.min(batch.index + 1, batch.total)}/{batch.total}…</>
+                : `Installer la sélection${selected.size > 0 ? ` (${selected.size})` : ''}`}
+            </button>
+          </div>
+        )}
         {filtered.length === 0 && (
           <p className="cp-empty">
             {inTab.length > 0
@@ -167,6 +252,9 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
               mod={mod}
               onAction={(type) => setModal({ mod, type, loading: false, loadingMsg: '', log: [] })}
               onInstall={install}
+              installing={!!batch}
+              selected={selectable && selected.has(mod.id)}
+              onToggle={selectable && !batch ? () => toggleSelected(mod.id) : null}
               activeTags={filters.tags}
               onTagClick={(tag) => setFilters((f) => toggleTag(f, tag))}
               onCategoryClick={(category) => setFilters((f) => ({ ...f, category }))}
@@ -374,13 +462,27 @@ function ConfigForm({ schema, values, onChange }) {
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 
-function CatalogCard({ mod, onAction, onInstall, activeTags, onTagClick, onCategoryClick, onOpenEnv }) {
+function CatalogCard({ mod, onAction, onInstall, installing, selected, onToggle, activeTags, onTagClick, onCategoryClick, onOpenEnv }) {
   const pythonDeps = mod.dependencies?.python ?? []
   const hasConfig  = Object.keys(mod.config_schema ?? {}).length > 0
+  const canSelect  = mod.status === 'available' && !!onToggle
 
   return (
-    <div className={`cc ${mod.status}`}>
+    <div
+      className={`cc ${mod.status} ${canSelect ? 'selectable' : ''} ${selected ? 'selected' : ''}`}
+      onClick={canSelect ? (e) => { if (!e.target.closest('button, input, a')) onToggle() } : undefined}
+    >
       <div className="cc-top">
+        {mod.status === 'available' && (
+          <input
+            type="checkbox"
+            className="cc-select"
+            checked={!!selected}
+            onChange={() => onToggle?.()}
+            disabled={!onToggle}
+            aria-label={`Sélectionner ${mod.name}`}
+          />
+        )}
         <ModuleIcon id={mod.id} fallback={mod.icon} size={40} className="cc-icon" />
         <div className="cc-info">
           <span className="cc-name">{mod.name}</span>
@@ -433,7 +535,7 @@ function CatalogCard({ mod, onAction, onInstall, activeTags, onTagClick, onCateg
 
       <div className="cc-actions">
         {mod.status === 'available' && (
-          <button className="btn btn-secondary" onClick={() => onInstall(mod)}>Installer</button>
+          <button className="btn btn-secondary" onClick={() => onInstall(mod)} disabled={installing}>Installer</button>
         )}
 
         {isInstalled(mod) && (

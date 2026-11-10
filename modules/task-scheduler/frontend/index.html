@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Planificateur de tâches</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .spacer { flex: 1; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  header h1 { font-size: 15px; font-weight: 600; }
+  .notice { margin: 10px 12px 0; padding: 8px 12px; border: 1px solid rgba(56,189,248,.35); background: rgba(56,189,248,.07);
+            color: #bae6fd; border-radius: 8px; font-size: 12.5px; }
+  #countdowns { display: flex; flex-direction: column; gap: 6px; margin: 10px 12px 0; }
+  .cd { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--err);
+        background: rgba(239,68,68,.12); animation: pulse 1.6s ease-in-out infinite; }
+  .cd b { font-size: 15px; }
+  .cd .secs { font-family: var(--mono); font-size: 22px; font-weight: 700; color: #fca5a5; min-width: 70px; text-align: right; }
+  @keyframes pulse { 50% { background: rgba(239,68,68,.2); } }
+
+  #wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px; gap: 10px; }
+  #tasks { flex: 1 1 55%; min-height: 120px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+  #hist-pane { flex: 1 1 45%; min-height: 120px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+  .pane-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  .pane-head b { font-size: 12.5px; }
+  #history { flex: 1; min-height: 0; overflow: auto; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11.5px; padding: 6px 10px;
+                  border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  table.grid td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.grid tbody tr:hover td { background: var(--surface2); }
+  table.grid tr.sel td { background: rgba(99,102,241,.12); }
+  table.grid tr.off .nm, table.grid tr.off .trig { opacity: .5; }
+  .nm { font-weight: 600; }
+  .sub { color: var(--muted); font-size: 11.5px; margin-top: 2px; font-family: var(--mono); max-width: 420px;
+         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acts { white-space: nowrap; text-align: right; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; font-weight: 600; white-space: nowrap; }
+  .pill.ok { background: rgba(34,197,94,.14); color: #86efac; }
+  .pill.failed, .pill.error, .pill.timeout { background: rgba(239,68,68,.14); color: #fca5a5; }
+  .pill.cancelled, .pill.stopped { background: rgba(245,158,11,.14); color: #fcd34d; }
+  .pill.running { background: rgba(99,102,241,.2); color: #c7d2fe; }
+  .kind { font-size: 10.5px; padding: 1px 6px; border-radius: 6px; background: var(--surface2); color: var(--muted); margin-right: 6px; font-family: var(--mono); }
+  .kind.system { color: #fca5a5; }
+  pre.out { font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; background: var(--bg);
+            border: 1px solid var(--border); border-radius: 6px; padding: 8px; max-height: 260px; overflow: auto; }
+  tr.out-row td { background: var(--bg) !important; }
+
+  .switch { position: relative; width: 34px; height: 18px; display: inline-block; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; background: #3f3f46; border-radius: 10px; cursor: pointer; transition: .15s; }
+  .switch span::before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: .15s; }
+  .switch input:checked + span { background: var(--ok); }
+  .switch input:checked + span::before { transform: translateX(16px); }
+
+  .placeholder { color: var(--muted); padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .placeholder .big { font-size: 30px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(680px, 95vw);
+           max-height: 92vh; display: flex; flex-direction: column; }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .modal-body { padding: 12px 14px; overflow: auto; display: grid; grid-template-columns: 150px 1fr; gap: 9px 12px; align-items: center; }
+  .modal-body > label { color: var(--muted); font-size: 12px; }
+  .modal-body .full { grid-column: 1 / -1; }
+  .modal-body textarea { width: 100%; min-height: 90px; font-family: var(--mono); font-size: 12px; resize: vertical; }
+  .modal-body input[type=text], .modal-body select { width: 100%; }
+  .modal-body .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .modal-body .inline input[type=number] { width: 90px; }
+  .days { display: flex; gap: 4px; flex-wrap: wrap; }
+  .days label { display: flex; align-items: center; gap: 3px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .sec { grid-column: 1 / -1; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-top: 6px;
+         border-top: 1px solid var(--border); padding-top: 8px; }
+  #pv { font-size: 12px; }
+  #pv.bad { color: #fca5a5; }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .hint code { font-family: var(--mono); color: var(--accent-h); }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🗓️ Planificateur de tâches</h1>
+  <span class="spacer"></span>
+  <span class="muted" id="clock"></span>
+  <button id="btn-refresh" class="ghost icon" title="Actualiser (F5)">⟳</button>
+  <button id="btn-new" class="primary" title="Nouvelle tâche (Ctrl+N)">＋ Nouvelle tâche</button>
+</header>
+<div class="notice">ℹ️ Les tâches ne s'exécutent que lorsque LedroideDesktop est ouvert <b>et</b> ce module actif. Une exécution manquée pendant que l'application était fermée n'est pas rattrapée. Ce planificateur est indépendant du Planificateur de tâches de Windows.</div>
+<div id="countdowns"></div>
+
+<div id="wrap">
+  <div id="tasks"><div class="placeholder"><span class="spinner"></span> Chargement…</div></div>
+  <div id="hist-pane">
+    <div class="pane-head"><b id="hist-title">Historique des exécutions</b>
+      <button class="ghost hidden" id="hist-all">Toutes les tâches</button><span class="spacer"></span>
+      <button class="ghost" id="hist-clear" title="Vider l'historique affiché">🗑 Vider</button></div>
+    <div id="history"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'task-scheduler'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const KIND = { cmd: 'cmd', powershell: 'PowerShell', python: 'Python', system: 'Système' }
+const SYS = { shutdown: 'Éteindre l\'ordinateur', restart: 'Redémarrer', sleep: 'Mettre en veille', lock: 'Verrouiller la session' }
+const STATUS = { ok: 'Réussie', failed: 'Échec', error: 'Erreur', timeout: 'Délai dépassé', cancelled: 'Annulée', stopped: 'Arrêtée', running: 'En cours' }
+const DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+
+const state = { tasks: [], countdowns: [], history: [], histTask: null, openRun: null, selected: null }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' }) : '—')
+function rel(iso) {
+  if (!iso) return ''
+  const s = Math.round((new Date(iso) - Date.now()) / 1000)
+  const a = Math.abs(s)
+  const txt = a < 60 ? `${a} s` : a < 3600 ? `${Math.round(a / 60)} min` : a < 86400 ? `${Math.floor(a / 3600)} h ${Math.round((a % 3600) / 60)} min` : `${Math.round(a / 86400)} j`
+  return s >= 0 ? `dans ${txt}` : `il y a ${txt}`
+}
+const fmtDur = (ms) => (ms == null ? '—' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`)
+
+async function load() {
+  try {
+    const r = await call('list')
+    state.tasks = r.items
+    state.countdowns = r.countdowns
+    renderTasks()
+    renderCountdowns()
+  } catch (e) {
+    $('#tasks').innerHTML = `<div class="placeholder"><div class="big">⚠️</div>${esc(e.message)}</div>`
+  }
+}
+async function loadHistory() {
+  try {
+    state.history = (await call('history', { task_id: state.histTask, limit: 200 })).items
+  } catch (e) { toast(e.message, true); return }
+  renderHistory()
+}
+
+function actionText(t) {
+  const a = t.action
+  return a.type === 'system' ? `${SYS[a.system]} (compte à rebours ${a.countdown} s)` : a.command.split('\n')[0]
+}
+
+function renderTasks() {
+  if (!state.tasks.length) {
+    $('#tasks').innerHTML = `<div class="placeholder"><div class="big">🗓️</div>Aucune tâche planifiée.<button class="primary" id="empty-new">＋ Créer une tâche</button></div>`
+    $('#empty-new').onclick = () => openEditor()
+    return
+  }
+  $('#tasks').innerHTML = `<table class="grid"><thead><tr><th style="width:56px">Active</th><th>Tâche</th><th>Déclencheur</th>
+      <th>Prochaine exécution</th><th>Dernière exécution</th><th></th></tr></thead><tbody>
+    ${state.tasks.map((t) => {
+      const lr = t.last_run
+      return `<tr data-id="${t._id}" class="${t.enabled ? '' : 'off'} ${state.selected === t._id ? 'sel' : ''}">
+      <td><label class="switch" title="${t.enabled ? 'Désactiver' : 'Activer'}"><input type="checkbox" data-toggle ${t.enabled ? 'checked' : ''} /><span></span></label></td>
+      <td><div class="nm">${esc(t.name)}</div><div class="sub" title="${esc(actionText(t))}"><span class="kind ${t.action.type}">${KIND[t.action.type]}</span>${esc(actionText(t))}</div></td>
+      <td class="trig">${esc(t.trigger_text)}</td>
+      <td>${t.next_run ? `${fmtDate(t.next_run)}<div class="muted" data-rel="${t.next_run}">${rel(t.next_run)}</div>`
+        : `<span class="muted">${t.enabled ? (t.trigger.type === 'once' ? 'Expirée' : '—') : 'Désactivée'}</span>`}</td>
+      <td>${t.running ? '<span class="pill running"><span class="spinner"></span> En cours</span>'
+        : lr ? `<span class="pill ${lr.status}">${STATUS[lr.status] || lr.status}</span> <span class="muted">${rel(lr.started_at)}</span>` : '<span class="muted">Jamais</span>'}</td>
+      <td class="acts">
+        ${t.running ? '<button class="ghost icon" data-stop title="Arrêter l\'exécution en cours">⏹</button>'
+          : '<button class="ghost icon" data-run title="Exécuter maintenant (Entrée)">▶</button>'}
+        <button class="ghost icon" data-edit title="Modifier">✎</button>
+        <button class="ghost icon" data-dup title="Dupliquer">⧉</button>
+        <button class="ghost icon" data-del title="Supprimer">🗑</button></td></tr>`
+    }).join('')}</tbody></table>`
+}
+
+function renderHistory() {
+  const task = state.tasks.find((t) => t._id === state.histTask)
+  $('#hist-title').textContent = task ? `Historique — ${task.name}` : 'Historique des exécutions'
+  $('#hist-all').classList.toggle('hidden', !state.histTask)
+  if (!state.history.length) { $('#history').innerHTML = '<div class="placeholder">Aucune exécution enregistrée.</div>'; return }
+  $('#history').innerHTML = `<table class="grid"><thead><tr><th>Date</th><th>Tâche</th><th>Origine</th><th>Résultat</th><th>Code</th><th>Durée</th><th>Sortie</th></tr></thead><tbody>
+    ${state.history.map((r) => `<tr data-run="${r.id}" style="cursor:pointer">
+      <td>${fmtDate(r.started_at)}</td><td>${esc(r.task_name)}</td><td class="muted">${esc(r.trigger)}</td>
+      <td><span class="pill ${r.status}">${STATUS[r.status] || esc(r.status)}</span></td>
+      <td class="mono">${r.code ?? '—'}</td><td>${fmtDur(r.duration_ms)}</td>
+      <td class="sub" style="max-width:300px">${esc((r.output || '').split('\n')[0])}</td></tr>
+      ${state.openRun === r.id ? `<tr class="out-row"><td colspan="7"><pre class="out">${esc(r.output || '(aucune sortie)')}</pre></td></tr>` : ''}`).join('')}
+    </tbody></table>`
+}
+
+// ── Countdowns ──────────────────────────────────────────────────────────────
+function renderCountdowns() {
+  $('#countdowns').innerHTML = state.countdowns.map((c) => `<div class="cd" data-run="${c.run_id}">
+    <span style="font-size:22px">⚠️</span><div style="flex:1"><b>${esc(c.label)} imminent(e)</b>
+    <div class="muted">Tâche « ${esc(c.name)} »</div></div>
+    <span class="secs" data-deadline="${c.deadline}">${Math.max(0, Math.ceil(c.deadline - Date.now() / 1000))} s</span>
+    <button class="danger" data-cancel-cd>Annuler</button></div>`).join('')
+}
+setInterval(() => {
+  $$('[data-deadline]').forEach((el) => { el.textContent = Math.max(0, Math.ceil(+el.dataset.deadline - Date.now() / 1000)) + ' s' })
+  $$('[data-rel]').forEach((el) => { el.textContent = rel(el.dataset.rel) })
+  $('#clock').textContent = new Date().toLocaleTimeString('fr-FR')
+}, 250)
+$('#countdowns').addEventListener('click', async (e) => {
+  const cd = e.target.closest('[data-run]')
+  if (!cd || !e.target.closest('[data-cancel-cd]')) return
+  try { await call('cancel_countdown', { run_id: cd.dataset.run }); toast('Action système annulée') } catch (err) { toast(err.message, true) }
+})
+
+// ── Task actions ────────────────────────────────────────────────────────────
+const byId = (id) => state.tasks.find((t) => t._id === id)
+$('#tasks').addEventListener('click', async (e) => {
+  const tr = e.target.closest('tr[data-id]')
+  if (!tr) return
+  const t = byId(tr.dataset.id)
+  if (e.target.closest('[data-run]')) {
+    if (t.action.type === 'system' && !confirm(`Exécuter maintenant « ${t.name} » ?\n\n${SYS[t.action.system]} après un compte à rebours de ${t.action.countdown} s (annulable).`)) return
+    try { await call('run_now', { id: t._id }); toast(`« ${t.name} » lancée`) } catch (err) { toast(err.message, true) }
+  } else if (e.target.closest('[data-stop]')) {
+    try { await call('stop', { id: t._id }) } catch (err) { toast(err.message, true) }
+  } else if (e.target.closest('[data-edit]')) openEditor(t)
+  else if (e.target.closest('[data-dup]')) openEditor({ ...t, _id: null, name: t.name + ' (copie)' })
+  else if (e.target.closest('[data-del]')) {
+    if (!confirm(`Supprimer la tâche « ${t.name} » et son historique ?`)) return
+    try { await call('delete', { id: t._id }); toast('Tâche supprimée'); if (state.histTask === t._id) state.histTask = null; load(); loadHistory() } catch (err) { toast(err.message, true) }
+  } else if (!e.target.closest('.switch')) {
+    state.selected = t._id
+    state.histTask = t._id
+    renderTasks()
+    loadHistory()
+  }
+})
+$('#tasks').addEventListener('change', async (e) => {
+  if (!e.target.matches('[data-toggle]')) return
+  const t = byId(e.target.closest('tr').dataset.id)
+  try {
+    await call('toggle', { id: t._id, enabled: e.target.checked })
+    toast(`« ${t.name} » ${e.target.checked ? 'activée' : 'désactivée'}`)
+  } catch (err) { toast(err.message, true) }
+  load()
+})
+$('#history').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-run]')
+  if (!tr) return
+  state.openRun = state.openRun === tr.dataset.run ? null : tr.dataset.run
+  renderHistory()
+})
+$('#hist-all').addEventListener('click', () => { state.histTask = null; state.selected = null; renderTasks(); loadHistory() })
+$('#hist-clear').addEventListener('click', async () => {
+  const task = byId(state.histTask)
+  if (!confirm(task ? `Vider l'historique de « ${task.name} » ?` : 'Vider tout l\'historique ?')) return
+  try { await call('clear_history', { task_id: state.histTask }); loadHistory(); load() } catch (e) { toast(e.message, true) }
+})
+
+// ── Editor ──────────────────────────────────────────────────────────────────
+function localInput(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+function openEditor(task = null) {
+  const inOneHour = new Date(Date.now() + 3600e3)
+  const t = task || { name: '', enabled: true, trigger: { type: 'daily', at: localInput(inOneHour), minutes: 60, time: '08:00', days: [0, 1, 2, 3, 4, 5, 6], cron: '0 9 * * 1-5' },
+                      action: { type: 'cmd', command: '', system: 'lock', cwd: '', timeout: 300, countdown: 60 } }
+  const tr = { at: localInput(inOneHour), minutes: 60, time: '08:00', days: [0, 1, 2, 3, 4, 5, 6], cron: '0 9 * * 1-5', ...t.trigger }
+  const ac = { command: '', system: 'lock', cwd: '', timeout: 300, countdown: 60, ...t.action }
+  const back = document.createElement('div')
+  back.className = 'backdrop'
+  back.innerHTML = `<div class="modal">
+    <div class="modal-head">${task?._id ? 'Modifier la tâche' : 'Nouvelle tâche'}</div>
+    <div class="modal-body">
+      <label>Nom</label><input type="text" id="e-name" maxlength="120" value="${esc(t.name)}" placeholder="Sauvegarde quotidienne" />
+      <div class="sec">Action</div>
+      <label>Type</label><select id="e-atype">
+        <option value="cmd">Commande (cmd.exe)</option><option value="powershell">PowerShell</option>
+        <option value="python">Python (code ou chemin d'un script .py)</option><option value="system">Action système</option></select>
+      <label data-a="cmd">Commande</label><textarea data-a="cmd" id="e-cmd" spellcheck="false">${esc(ac.command)}</textarea>
+      <label data-a="cmd">Dossier de travail</label><input data-a="cmd" type="text" id="e-cwd" class="mono" value="${esc(ac.cwd)}" placeholder="(facultatif) %USERPROFILE%\\Documents" />
+      <label data-a="cmd">Délai maximum</label><div data-a="cmd" class="inline"><input type="number" id="e-timeout" min="1" max="86400" value="${ac.timeout}" /> secondes, puis le processus (et ses enfants) est arrêté</div>
+      <label data-a="system">Action</label><select data-a="system" id="e-sys">${Object.entries(SYS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+      <label data-a="system">Compte à rebours</label><div data-a="system" class="inline"><input type="number" id="e-cd" min="0" max="3600" value="${ac.countdown}" /> secondes — annulable depuis cette page</div>
+      <div class="sec">Déclencheur</div>
+      <label>Quand</label><select id="e-ttype">
+        <option value="once">Une seule fois</option><option value="interval">Toutes les N minutes</option>
+        <option value="daily">Chaque jour à heure fixe</option><option value="cron">Expression cron</option></select>
+      <label data-t="once">Date et heure</label><input data-t="once" type="datetime-local" id="e-at" value="${esc(tr.at.slice(0, 16))}" />
+      <label data-t="interval">Intervalle</label><div data-t="interval" class="inline"><input type="number" id="e-min" min="1" max="525600" value="${tr.minutes}" /> minutes (la première exécution a lieu un intervalle après l'enregistrement)</div>
+      <label data-t="daily">Heure</label><input data-t="daily" type="time" id="e-time" value="${esc(tr.time)}" style="width:120px" />
+      <label data-t="daily">Jours</label><div data-t="daily" class="days">${DAYS.map((d, i) => `<label><input type="checkbox" value="${i}" ${tr.days.includes(i) ? 'checked' : ''} />${d}</label>`).join('')}</div>
+      <label data-t="cron">Expression</label><input data-t="cron" type="text" id="e-cron" class="mono" value="${esc(tr.cron)}" placeholder="*/15 * * * *" />
+      <div data-t="cron" class="full hint">5 champs : <code>minute heure jour-du-mois mois jour-de-semaine</code> (0 ou 7 = dimanche). Ex. <code>*/15 * * * *</code>, <code>0 9 * * 1-5</code>, <code>30 18 1 * *</code>, <code>@daily</code>.</div>
+      <label>Prochaines exécutions</label><div id="pv" class="muted">…</div>
+      <label>Active</label><label style="display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" id="e-enabled" ${t.enabled ? 'checked' : ''} /> Activer cette tâche</label>
+    </div>
+    <div class="modal-foot"><span class="hint spacer"><kbd>Ctrl</kbd>+<kbd>Entrée</kbd> pour enregistrer</span><button data-x>Annuler</button><button class="primary" data-ok>Enregistrer</button></div></div>`
+  document.body.appendChild(back)
+  const q = (s) => back.querySelector(s)
+  q('#e-atype').value = ac.type
+  q('#e-sys').value = ac.system
+  q('#e-ttype').value = tr.type
+  const placeholders = { cmd: 'echo Bonjour > "%TEMP%\\bonjour.txt"', powershell: 'Get-ChildItem $env:TEMP | Measure-Object', python: 'print("Bonjour")  — ou C:\\scripts\\tache.py' }
+  const sync = () => {
+    const at = q('#e-atype').value, tt = q('#e-ttype').value
+    back.querySelectorAll('[data-a]').forEach((el) => el.classList.toggle('hidden', (el.dataset.a === 'system') !== (at === 'system')))
+    back.querySelectorAll('[data-t]').forEach((el) => el.classList.toggle('hidden', el.dataset.t !== tt))
+    if (placeholders[at]) q('#e-cmd').placeholder = placeholders[at]
+  }
+  const readTrigger = () => ({
+    type: q('#e-ttype').value, at: q('#e-at').value, minutes: +q('#e-min').value || 0, time: q('#e-time').value,
+    days: [...back.querySelectorAll('.days input:checked')].map((i) => +i.value), cron: q('#e-cron').value.trim(),
+  })
+  let pvTimer
+  const preview = () => {
+    clearTimeout(pvTimer)
+    pvTimer = setTimeout(async () => {
+      const pv = q('#pv')
+      if (!pv) return
+      try {
+        const r = await call('preview', { trigger: readTrigger(), count: 3 })
+        pv.className = ''
+        pv.innerHTML = r.items.length ? r.items.map((d) => `${fmtDate(d)} <span class="muted">(${rel(d)})</span>`).join('<br>') : '<span class="muted">Aucune (date passée)</span>'
+      } catch (e) { pv.className = 'bad'; pv.textContent = e.message }
+    }, 250)
+  }
+  sync(); preview()
+  back.addEventListener('input', preview)
+  back.addEventListener('change', (e) => { sync(); preview() })
+  const close = () => back.remove()
+  const save = async () => {
+    const payload = {
+      id: task?._id || null,
+      task: {
+        name: q('#e-name').value.trim(), enabled: q('#e-enabled').checked, trigger: readTrigger(),
+        action: { type: q('#e-atype').value, command: q('#e-cmd').value, system: q('#e-sys').value, cwd: q('#e-cwd').value.trim(),
+                  timeout: +q('#e-timeout').value || 300, countdown: +q('#e-cd').value || 0 },
+      },
+    }
+    if (!payload.task.name) { toast('Le nom est obligatoire', true); q('#e-name').focus(); return }
+    if (payload.task.action.type === 'system' && !confirm(`Cette tâche va ${SYS[payload.task.action.system].toLowerCase()} automatiquement (${readTrigger().type === 'once' ? 'une fois' : 'de façon répétée'}). Confirmer ?`)) return
+    try {
+      const r = await call('save', payload)
+      close()
+      toast(r.warning ? `Enregistrée — ${r.warning}` : 'Tâche enregistrée', !!r.warning)
+      load()
+    } catch (e) { toast(e.message, true) }
+  }
+  q('[data-x]').onclick = close
+  q('[data-ok]').onclick = save
+  back.addEventListener('mousedown', (e) => { if (e.target === back) close() })
+  back.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close()
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); save() }
+  })
+  q('#e-name').focus()
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────
+window.ledroide.on(MODULE_ID, 'run:start', () => load())
+window.ledroide.on(MODULE_ID, 'run:end', (d) => {
+  load(); loadHistory()
+  if (d.status !== 'ok' && d.status !== 'cancelled') toast(`« ${d.name} » : ${STATUS[d.status] || d.status}${d.code != null ? ` (code ${d.code})` : ''}`, true)
+})
+window.ledroide.on(MODULE_ID, 'countdown', (c) => { state.countdowns = [...state.countdowns.filter((x) => x.run_id !== c.run_id), c]; renderCountdowns() })
+window.ledroide.on(MODULE_ID, 'countdown:end', (d) => { state.countdowns = state.countdowns.filter((x) => x.run_id !== d.run_id); renderCountdowns() })
+window.ledroide.on(MODULE_ID, 'tasks:changed', () => load())
+
+$('#btn-new').addEventListener('click', () => openEditor())
+$('#btn-refresh').addEventListener('click', () => { load(); loadHistory() })
+document.addEventListener('keydown', (e) => {
+  if (document.querySelector('.backdrop')) return
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); openEditor() }
+  if (e.key === 'F5') { e.preventDefault(); load(); loadHistory() }
+  if (e.key === 'Enter' && state.selected && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement?.tagName || '')) {
+    $(`tr[data-id="${state.selected}"] [data-run]`)?.click()
+  }
+})
+setInterval(() => { if (!document.hidden) load() }, 30000)
+
+load()
+loadHistory()
+</script>
+</body>
+</html>

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Testeur SMTP</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 15px; font-weight: 600; }
+  .tabs { display: flex; gap: 4px; margin-left: 12px; }
+  .tabs button.active { background: var(--bg); border-color: var(--accent); color: #fff; }
+  .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 10.5px; margin-left: 6px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+
+  .layout { flex: 1; min-height: 0; display: flex; }
+  .form-side { width: 420px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 12px; }
+  .sec-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 6px; }
+  .sec-title:first-child { margin-top: 0; }
+  .grid { display: grid; grid-template-columns: 100px 1fr; gap: 6px 8px; align-items: center; }
+  .grid label { color: var(--muted); font-size: 12px; }
+  .grid input, .grid select, .grid textarea { width: 100%; min-width: 0; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row > input, .row > select { flex: 1; min-width: 0; }
+  .check { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: var(--text) !important; }
+  .subtabs { display: flex; gap: 2px; margin: 8px 0 6px; }
+  .subtab { padding: 3px 10px; border-radius: 5px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .subtab:hover { color: var(--text); }
+  .subtab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  textarea.body { width: 100%; height: 160px; resize: vertical; font-family: var(--mono); font-size: 12.5px; line-height: 1.45; }
+  .actions { display: flex; gap: 6px; margin-top: 12px; }
+  .actions button { flex: 1; }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .file-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 12px; background: var(--surface2); border: 1px solid var(--border); font-size: 12px; }
+
+  .result { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 12px; gap: 10px; }
+  .status-box { border-radius: 8px; padding: 10px 12px; border: 1px solid var(--border); background: var(--surface); }
+  .status-box.ok { border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.07); }
+  .status-box.bad { border-color: rgba(239,68,68,.45); background: rgba(239,68,68,.07); color: #fca5a5; }
+  .status-box h3 { font-size: 13.5px; margin-bottom: 4px; }
+  .status-box .meta { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .feat { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .feat span { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+  .transcript { flex: 1; min-height: 0; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+                padding: 8px 10px; font-family: var(--mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .t-send { color: #a5b4fc; } .t-reply { color: #86efac; } .t-reply.bad { color: #fca5a5; } .t-other { color: var(--muted); }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 6px; text-align: center; padding: 20px; font-family: system-ui, sans-serif; }
+  .placeholder .big { font-size: 30px; }
+
+  /* capture */
+  .cap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .cap-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .cap-bar input[type=number] { width: 80px; }
+  .cap-bar .spacer { flex: 1; }
+  .cap-bar .info { font-size: 12px; color: var(--muted); display: flex; align-items: center; }
+  .cap-bar .info code { font-family: var(--mono); color: var(--accent-h); margin-left: 4px; }
+  .warn-line { margin: 8px 14px 0; padding: 6px 10px; border-radius: 6px; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35); color: #fcd34d; font-size: 12px; }
+  .cap-body { flex: 1; min-height: 0; display: flex; }
+  .mail-list { width: 340px; flex-shrink: 0; border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface); }
+  .mail { padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .mail:hover { background: var(--surface2); }
+  .mail.current { background: rgba(99,102,241,.14); }
+  .mail .l1 { display: flex; gap: 6px; font-size: 12px; color: var(--muted); }
+  .mail .l1 .from { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mail .subj { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+  .mail.unseen .subj { font-weight: 700; }
+  .mail.unseen .l1 .from::before { content: '● '; color: var(--accent-h); }
+  .view { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .view-head { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .view-head h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; word-break: break-word; }
+  .hdr-grid { display: grid; grid-template-columns: 90px 1fr; gap: 2px 8px; font-size: 12px; }
+  .hdr-grid dt { color: var(--muted); }
+  .hdr-grid dd { word-break: break-all; }
+  .view-tabs { display: flex; align-items: center; gap: 2px; padding: 6px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .view-tabs .spacer { flex: 1; }
+  .view-body { flex: 1; min-height: 0; overflow: auto; }
+  .view-body iframe { width: 100%; height: 100%; border: 0; background: #fff; display: block; }
+  .view-body pre { padding: 12px 14px; font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
+  table.hdr { border-collapse: collapse; width: 100%; font-size: 12px; }
+  table.hdr td { padding: 4px 12px; border-bottom: 1px solid var(--border); vertical-align: top; font-family: var(--mono); word-break: break-all; }
+  table.hdr td:first-child { color: #93c5fd; width: 28%; }
+  .atts { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .att { cursor: pointer; }
+  .att:hover { border-color: var(--accent); }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>✉️ Testeur SMTP</h1>
+  <div class="tabs">
+    <button data-tab="send" class="active">Envoi de test</button>
+    <button data-tab="capture"><span class="dot" id="cap-dot"></span>Serveur de capture<span class="badge hidden" id="cap-badge"></span></button>
+  </div>
+</header>
+
+<!-- ── Envoi ── -->
+<div class="layout" data-panel="send">
+  <aside class="form-side">
+    <div class="sec-title">Serveur</div>
+    <div class="grid">
+      <label for="s-host">Hôte</label><input id="s-host" class="mono" type="text" placeholder="smtp.exemple.com" spellcheck="false" />
+      <label for="s-security">Sécurité</label>
+      <div class="row"><select id="s-security"><option value="none">Aucune</option><option value="starttls">STARTTLS</option><option value="ssl">SSL/TLS</option></select>
+        <input id="s-port" type="number" min="1" max="65535" value="25" title="Port" style="flex:0 0 80px" /></div>
+      <span></span><label class="check"><input id="s-verify" type="checkbox" checked /> Vérifier le certificat</label>
+      <label for="s-timeout">Délai (s)</label><input id="s-timeout" type="number" min="2" max="120" value="20" />
+      <label for="s-user">Utilisateur</label><input id="s-user" type="text" autocomplete="off" placeholder="(sans authentification)" />
+      <label for="s-pass">Mot de passe</label><input id="s-pass" type="password" autocomplete="off" placeholder="jamais enregistré" />
+    </div>
+    <div class="sec-title">Message</div>
+    <div class="grid">
+      <label for="s-from">De</label><input id="s-from" type="text" placeholder="Moi &lt;moi@exemple.com&gt;" />
+      <label for="s-to">À</label><input id="s-to" type="text" placeholder="a@exemple.com, b@exemple.com" />
+      <label for="s-cc">Cc</label><input id="s-cc" type="text" placeholder="(optionnel)" />
+      <label for="s-subject">Sujet</label><input id="s-subject" type="text" value="Test SMTP depuis LedroideDesktop" />
+    </div>
+    <div class="subtabs" id="body-tabs"><div class="subtab active" data-body="text">Texte</div><div class="subtab" data-body="html">HTML</div></div>
+    <textarea id="s-text" class="body" spellcheck="false">Bonjour,
+
+Ceci est un message de test envoyé depuis LedroideDesktop.</textarea>
+    <textarea id="s-html" class="body hidden" spellcheck="false" placeholder="&lt;h1&gt;Bonjour&lt;/h1&gt;&lt;p&gt;Version HTML (optionnelle)&lt;/p&gt;"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="s-attach-btn">📎 Pièce jointe…</button>
+      <span id="s-attach-chip" class="file-chip hidden"></span>
+      <input id="s-attach" type="file" class="hidden" />
+    </div>
+    <div class="actions">
+      <button id="s-test" title="Connexion + EHLO + capacités (+ authentification si renseignée)">Tester la connexion</button>
+      <button id="s-send" class="primary" title="Envoyer (Ctrl+Entrée)">Envoyer</button>
+    </div>
+    <p class="hint">Astuce : démarrez le <b>serveur de capture</b> puis utilisez <span class="mono">127.0.0.1</span>, port <span class="mono">2525</span>, sécurité « Aucune » pour tester sans envoyer réellement.</p>
+  </aside>
+  <section class="result">
+    <div id="s-status" class="status-box hidden"></div>
+    <div class="transcript" id="s-transcript"><div class="placeholder"><div class="big">📨</div><div>Le dialogue SMTP (commandes envoyées et réponses du serveur) s'affichera ici.</div>
+      <div><kbd>Ctrl</kbd> + <kbd>Entrée</kbd> pour envoyer</div></div></div>
+  </section>
+</div>
+
+<!-- ── Capture ── -->
+<div class="cap hidden" data-panel="capture">
+  <div class="cap-bar">
+    <select id="c-host" title="Adresse d'écoute">
+      <option value="127.0.0.1">127.0.0.1 (cette machine)</option>
+      <option value="0.0.0.0">0.0.0.0 (tout le réseau)</option>
+    </select>
+    <input id="c-port" type="number" min="1" max="65535" value="2525" title="Port" />
+    <button id="c-start" class="primary">Démarrer</button>
+    <button id="c-stop" class="danger hidden">Arrêter</button>
+    <span class="info" id="c-info"></span>
+    <span class="spacer"></span>
+    <input id="c-search" type="text" placeholder="Rechercher (sujet, adresses)…" style="width:220px" />
+    <button id="c-clear" class="ghost" title="Supprimer tous les mails capturés">🗑 Tout supprimer</button>
+  </div>
+  <div class="warn-line hidden" id="c-warn">⚠️ En écoute sur 0.0.0.0, n'importe quelle machine du réseau peut envoyer des mails à ce serveur.</div>
+  <div class="cap-body">
+    <div class="mail-list" id="c-list"></div>
+    <div class="view" id="c-view"></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'smtp-tester'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const DEFAULT_PORTS = { none: '25', starttls: '587', ssl: '465' }
+
+const state = {
+  tab: 'send', body: 'text', attachment: null, busy: false,
+  server: { running: false }, mails: [], current: null, detail: null, view: 'html', remoteImages: false, unseenNew: 0,
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2200)
+}
+const fmtSize = (n) => n < 1024 ? `${n} o` : n < 1048576 ? `${(n / 1024).toFixed(1)} Ko` : `${(n / 1048576).toFixed(1)} Mo`
+const fmtDate = (ts) => new Date(ts * 1000).toLocaleString('fr-FR')
+
+function setTab(tab) {
+  state.tab = tab
+  $$('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab))
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab))
+  if (tab === 'capture') { state.unseenNew = 0; renderBadge() }
+}
+
+// ── Envoi ───────────────────────────────────────────────────────────────────
+function readForm() {
+  return {
+    host: $('#s-host').value.trim(), port: Number($('#s-port').value) || undefined, security: $('#s-security').value,
+    verify_ssl: $('#s-verify').checked, timeout: Number($('#s-timeout').value) || 20,
+    username: $('#s-user').value.trim(), from: $('#s-from').value.trim(), to: $('#s-to').value, cc: $('#s-cc').value,
+    subject: $('#s-subject').value, text: $('#s-text').value, html: $('#s-html').value,
+  }
+}
+function saveSettings() {
+  const f = readForm()
+  delete f.text; delete f.html
+  call('settings_save', { client: f, server: { host: $('#c-host').value, port: Number($('#c-port').value) } }).catch(() => {})
+}
+
+function renderTranscript(lines) {
+  const box = $('#s-transcript')
+  if (!lines || !lines.length) { box.innerHTML = '<div class="placeholder"><div>Aucun échange avec le serveur.</div></div>'; return }
+  box.innerHTML = lines.map((l) => {
+    let cls = 't-other'
+    if (l.startsWith('send:') || l.startsWith('data:')) cls = 't-send'
+    else if (l.startsWith('reply:')) { const m = l.match(/reply: (?:retcode \()?b?'?(\d{3})/); cls = 't-reply' + (m && m[1][0] >= '4' ? ' bad' : '') }
+    return `<div class="${cls}">${esc(l)}</div>`
+  }).join('')
+  box.scrollTop = box.scrollHeight
+}
+
+function setBusy(b) {
+  state.busy = b
+  $('#s-send').disabled = $('#s-test').disabled = b
+  $('#s-send').innerHTML = b ? '<span class="spinner"></span> Envoi…' : 'Envoyer'
+}
+
+async function runClient(action) {
+  const f = readForm()
+  if (!f.host) return toast("Indiquez l'hôte du serveur SMTP", true)
+  const payload = { ...f, password: $('#s-pass').value }
+  if (action === 'send_test') {
+    if (!f.from) return toast("Indiquez l'expéditeur", true)
+    if (!f.to.trim()) return toast('Indiquez au moins un destinataire', true)
+    if (state.attachment) payload.attachment = state.attachment
+  }
+  setBusy(true)
+  const box = $('#s-status')
+  box.className = 'status-box'
+  box.innerHTML = `<span class="spinner"></span> ${action === 'send_test' ? 'Envoi en cours…' : 'Connexion…'}`
+  try {
+    const r = await call(action, payload, { timeout: (f.timeout + 15) * 1000 * 2 })
+    saveSettings()
+    renderTranscript(r.transcript)
+    if (!r.ok) {
+      box.className = 'status-box bad'
+      box.innerHTML = `<h3>Échec</h3><div>${esc(r.failure)}</div><div class="meta"><span>${esc(r.failure_code)}</span></div>`
+      return
+    }
+    box.className = 'status-box ok'
+    if (action === 'send_test') {
+      const refused = Object.entries(r.refused || {})
+      box.innerHTML = `<h3>✅ Message accepté par le serveur</h3>
+        <div class="meta"><span>Destinataires acceptés : <b>${esc(r.accepted.join(', '))}</b></span><span>Taille : ${fmtSize(r.size)}</span><span>${r.elapsed_ms} ms</span>
+        ${r.tls ? `<span>${esc(r.tls.version)} · ${esc(r.tls.cipher)}</span>` : ''}<span class="mono">${esc(r.message_id)}</span></div>
+        ${refused.length ? `<div style="color:#fca5a5;margin-top:6px">Refusés : ${refused.map(([k, v]) => esc(`${k} (${v[0]} ${v[1]})`)).join(', ')}</div>` : ''}`
+    } else {
+      const feats = Object.entries(r.features || {})
+      box.innerHTML = `<h3>✅ Connexion réussie</h3><div class="mono" style="font-size:12px">${esc(r.banner)}</div>
+        <div class="meta" style="margin-top:4px"><span>${r.elapsed_ms} ms</span>${r.tls ? `<span>${esc(r.tls.version)} · ${esc(r.tls.cipher)}</span>` : '<span>Connexion non chiffrée</span>'}
+        ${r.auth ? `<span style="color:var(--ok)">${esc(r.auth)}</span>` : ''}${!r.tls && r.starttls_available ? '<span>STARTTLS disponible</span>' : ''}</div>
+        <div class="feat">${feats.length ? feats.map(([k, v]) => `<span>${esc(k.toUpperCase())}${v.trim() ? ' ' + esc(v.trim()) : ''}</span>`).join('') : '<span>Aucune extension ESMTP annoncée</span>'}</div>`
+    }
+  } catch (e) {
+    box.className = 'status-box bad'
+    box.innerHTML = `<h3>Erreur</h3><div>${esc(e.message)}</div>`
+  } finally { setBusy(false) }
+}
+
+$('#s-security').addEventListener('change', () => {
+  if (Object.values(DEFAULT_PORTS).includes($('#s-port').value) || $('#s-port').value === '2525' && $('#s-security').value !== 'none') $('#s-port').value = DEFAULT_PORTS[$('#s-security').value]
+})
+$$('#body-tabs .subtab').forEach((t) => t.addEventListener('click', () => {
+  state.body = t.dataset.body
+  $$('#body-tabs .subtab').forEach((x) => x.classList.toggle('active', x === t))
+  $('#s-text').classList.toggle('hidden', state.body !== 'text')
+  $('#s-html').classList.toggle('hidden', state.body !== 'html')
+}))
+$('#s-attach-btn').addEventListener('click', () => $('#s-attach').click())
+$('#s-attach').addEventListener('change', () => {
+  const file = $('#s-attach').files[0]
+  $('#s-attach').value = ''
+  if (!file) return
+  if (file.size > 20 * 1024 * 1024) return toast('Pièce jointe trop volumineuse (20 Mo maximum)', true)
+  const reader = new FileReader()
+  reader.onload = () => {
+    state.attachment = { name: file.name, type: file.type, data: String(reader.result).split(',')[1] || '' }
+    $('#s-attach-chip').innerHTML = `📎 ${esc(file.name)} <span style="color:var(--muted)">${fmtSize(file.size)}</span> <button class="ghost icon" id="s-attach-rm" title="Retirer">✕</button>`
+    $('#s-attach-chip').classList.remove('hidden')
+    $('#s-attach-rm').onclick = () => { state.attachment = null; $('#s-attach-chip').classList.add('hidden') }
+  }
+  reader.onerror = () => toast('Lecture du fichier impossible', true)
+  reader.readAsDataURL(file)
+})
+$('#s-send').addEventListener('click', () => runClient('send_test'))
+$('#s-test').addEventListener('click', () => runClient('test_connection'))
+
+// ── Capture ─────────────────────────────────────────────────────────────────
+function renderServer() {
+  const s = state.server
+  $('#cap-dot').className = 'dot' + (s.running ? ' on' : '')
+  $('#c-start').classList.toggle('hidden', s.running)
+  $('#c-stop').classList.toggle('hidden', !s.running)
+  $('#c-host').disabled = $('#c-port').disabled = s.running
+  $('#c-info').innerHTML = s.running ? `<span class="dot on"></span>En écoute sur<code>${esc(s.host)}:${s.port}</code>` : '<span class="dot"></span>Arrêté'
+  $('#c-warn').classList.toggle('hidden', !(s.running ? s.host === '0.0.0.0' : $('#c-host').value === '0.0.0.0'))
+}
+function renderBadge() {
+  const b = $('#cap-badge')
+  b.textContent = state.unseenNew
+  b.classList.toggle('hidden', !state.unseenNew)
+}
+function renderList() {
+  const box = $('#c-list')
+  if (!state.mails.length) {
+    box.innerHTML = `<div class="placeholder"><div class="big">📭</div><div>${$('#c-search').value ? 'Aucun mail ne correspond.' : state.server.running
+      ? `En attente de mails sur <span class="mono">${esc(state.server.host)}:${state.server.port}</span>…` : 'Démarrez le serveur pour capturer les mails envoyés par vos applications.'}</div></div>`
+    return
+  }
+  box.innerHTML = state.mails.map((m) => `<div class="mail ${m.seen ? '' : 'unseen'} ${state.current === m.id ? 'current' : ''}" data-id="${m.id}">
+    <div class="l1"><span class="from">${esc(m.from_hdr || m.mail_from || '(inconnu)')}</span><span>${new Date(m.received_at * 1000).toLocaleTimeString('fr-FR')}</span></div>
+    <div class="subj">${m.attachments ? '📎 ' : ''}${esc(m.subject || '(sans objet)')}</div>
+    <div class="l1"><span class="from">→ ${esc(m.rcpt_to.join(', '))}</span><span>${fmtSize(m.size)}</span></div></div>`).join('')
+}
+function renderView() {
+  const box = $('#c-view')
+  const d = state.detail
+  if (!d) { box.innerHTML = '<div class="placeholder"><div class="big">✉️</div><div>Sélectionnez un mail capturé pour l\'afficher.</div><div><kbd>↑</kbd> <kbd>↓</kbd> pour naviguer · <kbd>Suppr</kbd> pour supprimer</div></div>'; return }
+  if (!d.html && state.view === 'html') state.view = 'text'
+  box.innerHTML = `<div class="view-head"><h2>${esc(d.subject || '(sans objet)')}</h2><dl class="hdr-grid">
+      <dt>De</dt><dd>${esc(d.from_hdr)}</dd><dt>À</dt><dd>${esc(d.to_hdr)}</dd>
+      <dt>Enveloppe</dt><dd class="mono">${esc(d.mail_from)} → ${esc(d.rcpt_to.join(', '))}</dd>
+      <dt>Reçu</dt><dd>${fmtDate(d.received_at)} · de ${esc(d.peer)}${d.helo ? ` (${esc(d.helo)})` : ''} · ${fmtSize(d.size)}</dd></dl></div>
+    ${d.attachments.length ? `<div class="atts">${d.attachments.map((a) => `<span class="file-chip att" data-att="${a.index}" title="Télécharger">📎 ${esc(a.filename)} <span style="color:var(--muted)">${esc(a.content_type)} · ${fmtSize(a.size)}</span></span>`).join('')}</div>` : ''}
+    <div class="view-tabs">
+      ${d.html ? `<div class="subtab ${state.view === 'html' ? 'active' : ''}" data-view="html">HTML</div>` : ''}
+      <div class="subtab ${state.view === 'text' ? 'active' : ''}" data-view="text">Texte</div>
+      <div class="subtab ${state.view === 'headers' ? 'active' : ''}" data-view="headers">En-têtes (${d.headers.length})</div>
+      <div class="subtab ${state.view === 'source' ? 'active' : ''}" data-view="source">Source</div>
+      <span class="spacer"></span>
+      ${d.html && state.view === 'html' ? `<label class="check" title="Les images distantes peuvent servir au pistage"><input type="checkbox" id="c-remote" ${state.remoteImages ? 'checked' : ''} /> Images distantes</label>` : ''}
+      <button class="ghost" id="c-eml">Télécharger .eml</button>
+      <button class="ghost" id="c-del" title="Supprimer (Suppr)">Supprimer</button>
+    </div>
+    <div class="view-body" id="c-vbody"></div>`
+  const body = $('#c-vbody')
+  if (state.view === 'html') {
+    const imgSrc = state.remoteImages ? 'data: https: http:' : 'data:'
+    const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline'; font-src data:">`
+    const frame = document.createElement('iframe')
+    frame.setAttribute('sandbox', '')
+    frame.setAttribute('referrerpolicy', 'no-referrer')
+    frame.srcdoc = csp + '<base target="_blank">' + d.html
+    body.appendChild(frame)
+  } else if (state.view === 'text') {
+    body.innerHTML = `<pre>${d.text != null ? esc(d.text) : '<span style="color:var(--muted)">(pas de partie texte)</span>'}</pre>`
+  } else if (state.view === 'headers') {
+    body.innerHTML = `<table class="hdr">${d.headers.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`
+  } else {
+    body.innerHTML = '<pre><span class="spinner"></span></pre>'
+    call('mail_raw', { id: d.id }, { timeout: 30000 }).then((r) => { if (state.detail?.id === d.id && state.view === 'source') body.innerHTML = `<pre>${esc(r.source)}</pre>` })
+      .catch((e) => toast(e.message, true))
+  }
+}
+
+async function loadMails() {
+  try {
+    state.mails = (await call('mail_list', { q: $('#c-search').value.trim() })).items
+    renderList()
+  } catch (e) { toast(e.message, true) }
+}
+async function openMail(id) {
+  state.current = id
+  renderList()
+  try {
+    state.detail = await call('mail_get', { id }, { timeout: 30000 })
+    const m = state.mails.find((x) => x.id === id)
+    if (m && !m.seen) { m.seen = true; renderList() }
+    renderView()
+  } catch (e) { toast(e.message, true) }
+}
+async function deleteCurrent() {
+  if (!state.detail) return
+  if (!confirm(`Supprimer le mail « ${state.detail.subject || '(sans objet)'} » ?`)) return
+  const idx = state.mails.findIndex((m) => m.id === state.detail.id)
+  try {
+    await call('mail_delete', { id: state.detail.id })
+    state.mails.splice(idx, 1)
+    state.detail = null; state.current = null
+    renderList(); renderView()
+    const next = state.mails[Math.min(idx, state.mails.length - 1)]
+    if (next) openMail(next.id)
+  } catch (e) { toast(e.message, true) }
+}
+function b64Download(name, type, data) {
+  const bin = atob(data)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([bytes], { type: type || 'application/octet-stream' }))
+  a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+
+$('#c-start').addEventListener('click', async () => {
+  try {
+    state.server = await call('server_start', { host: $('#c-host').value, port: Number($('#c-port').value) || 2525 })
+    renderServer(); renderList(); saveSettings()
+    toast(`Serveur de capture démarré sur le port ${state.server.port}`)
+  } catch (e) { toast(e.message, true) }
+})
+$('#c-stop').addEventListener('click', async () => {
+  try { state.server = await call('server_stop'); renderServer(); renderList() } catch (e) { toast(e.message, true) }
+})
+$('#c-host').addEventListener('change', renderServer)
+let searchTimer
+$('#c-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadMails, 250) })
+$('#c-clear').addEventListener('click', async () => {
+  if (!state.mails.length && !$('#c-search').value) return
+  if (!confirm('Supprimer tous les mails capturés ?')) return
+  try { await call('mail_clear'); state.mails = []; state.detail = null; state.current = null; renderList(); renderView() } catch (e) { toast(e.message, true) }
+})
+$('#c-list').addEventListener('click', (e) => { const el = e.target.closest('[data-id]'); if (el) openMail(Number(el.dataset.id)) })
+$('#c-view').addEventListener('click', async (e) => {
+  const tab = e.target.closest('[data-view]')
+  if (tab) { state.view = tab.dataset.view; renderView(); return }
+  if (e.target.id === 'c-del') return deleteCurrent()
+  if (e.target.id === 'c-eml') {
+    try { const r = await call('mail_raw', { id: state.detail.id }, { timeout: 30000 }); b64Download(`mail-${r.id}.eml`, 'message/rfc822', r.data) } catch (err) { toast(err.message, true) }
+    return
+  }
+  const att = e.target.closest('[data-att]')
+  if (att) {
+    try { const r = await call('mail_attachment', { id: state.detail.id, index: Number(att.dataset.att) }, { timeout: 60000 }); b64Download(r.filename, r.content_type, r.data) } catch (err) { toast(err.message, true) }
+  }
+})
+$('#c-view').addEventListener('change', (e) => { if (e.target.id === 'c-remote') { state.remoteImages = e.target.checked; renderView() } })
+
+window.ledroide.on(MODULE_ID, 'mail', (m) => {
+  const q = $('#c-search').value.trim().toLowerCase()
+  if (!q || [m.subject, m.from_hdr, m.to_hdr, m.mail_from, m.rcpt_to.join(' ')].join(' ').toLowerCase().includes(q)) {
+    state.mails.unshift(m)
+    renderList()
+  }
+  if (state.tab !== 'capture') { state.unseenNew++; renderBadge() }
+  toast(`Mail capturé : ${m.subject || '(sans objet)'}`)
+})
+window.ledroide.on(MODULE_ID, 'server', (s) => { state.server = s; renderServer(); renderList() })
+
+$$('.tabs button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)))
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'Enter' && state.tab === 'send') { e.preventDefault(); if (!state.busy) runClient('send_test') }
+  if (state.tab !== 'capture' || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault()
+    const i = state.mails.findIndex((m) => m.id === state.current)
+    const next = state.mails[Math.max(0, Math.min(state.mails.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]
+    if (next && next.id !== state.current) openMail(next.id)
+  }
+  if (e.key === 'Delete') deleteCurrent()
+})
+
+async function init() {
+  renderServer(); renderView(); renderList()
+  try {
+    const s = await call('settings_get')
+    const c = s.client || {}
+    const map = { host: '#s-host', port: '#s-port', security: '#s-security', timeout: '#s-timeout', username: '#s-user', from: '#s-from', to: '#s-to', cc: '#s-cc', subject: '#s-subject' }
+    Object.entries(map).forEach(([k, sel]) => { if (c[k] != null && c[k] !== '') $(sel).value = c[k] })
+    if (c.verify_ssl === false) $('#s-verify').checked = false
+    if (s.server?.host) $('#c-host').value = s.server.host
+    if (s.server?.port) $('#c-port').value = s.server.port
+  } catch { /* first run */ }
+  try { state.server = await call('server_status'); renderServer() } catch (e) { toast(e.message, true) }
+  await loadMails()
+}
+init()
+</script>
+</body>
+</html>

@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Analyseur de disque</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.danger:hover:not(:disabled) { background: rgba(239,68,68,.25); border-color: var(--err); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 2px 6px; }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+
+  #side { width: 250px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  .side-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 12px 12px 6px; }
+  #drives { overflow-y: auto; padding: 0 8px; flex: 1; }
+  .drive { padding: 8px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; }
+  .drive:hover { background: var(--surface2); border-color: var(--border); }
+  .drive .top { display: flex; justify-content: space-between; gap: 6px; }
+  .drive .top b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drive .sub { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+  .bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 5px; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .bar i.warn { background: var(--warn); } .bar i.crit { background: var(--err); }
+  .side-path { padding: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+  .side-path input { width: 100%; font-family: var(--mono); font-size: 12px; }
+  .side-path .row { display: flex; gap: 6px; }
+  .side-path .row button { flex: 1; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tabs { display: flex; gap: 2px; }
+  .tab { padding: 4px 10px; border-radius: 5px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .tab.disabled { opacity: .4; pointer-events: none; }
+  .spacer { flex: 1; }
+  .summary { color: var(--muted); font-size: 12px; }
+  .summary b { color: var(--text); }
+  .crumbs { display: flex; align-items: center; gap: 2px; padding: 6px 12px; border-bottom: 1px solid var(--border);
+            flex-wrap: wrap; font-size: 12.5px; min-height: 36px; }
+  .crumbs span.c { padding: 2px 6px; border-radius: 4px; cursor: pointer; color: var(--accent-h); }
+  .crumbs span.c:hover { background: var(--surface2); }
+  .crumbs span.c.cur { color: var(--text); font-weight: 600; cursor: default; }
+  .crumbs .sep { color: var(--muted); }
+  .crumbs .size { margin-left: 10px; color: var(--muted); }
+  .panel { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; position: relative; }
+  #map-wrap { padding: 8px; overflow: hidden; }
+  #map { width: 100%; height: 100%; display: block; border-radius: 6px; cursor: pointer; }
+  #tip { position: fixed; pointer-events: none; background: rgba(24,24,27,.96); border: 1px solid var(--border);
+         padding: 6px 9px; border-radius: 6px; font-size: 12px; z-index: 40; max-width: 460px; word-break: break-all; }
+  #tip b { display: block; }
+
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 8px; text-align: center; padding: 20px; }
+  .placeholder .big { font-size: 34px; }
+  .progress-box { width: min(520px, 90%); display: flex; flex-direction: column; gap: 10px; align-items: stretch; text-align: left; }
+  .pbar { height: 10px; background: var(--surface2); border-radius: 5px; overflow: hidden; position: relative; }
+  .pbar i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--accent); border-radius: 5px; transition: width .3s; }
+  .pbar.indet i { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
+  @keyframes indet { from { left: -30%; } to { left: 100%; } }
+  .cur-path { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11.5px; padding: 6px 8px;
+                  border-bottom: 1px solid var(--border); position: sticky; top: -10px; background: var(--bg); z-index: 1; }
+  table.grid td { padding: 4px 8px; border-bottom: 1px solid #1c1c20; white-space: nowrap; }
+  table.grid tr:hover td { background: var(--surface); }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-size: 12px; }
+  td.path { font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 60%; }
+  .inbar { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; width: 140px; }
+  .inbar i { display: block; height: 100%; background: var(--accent); }
+  .tw { display: inline-block; width: 16px; text-align: center; color: var(--muted); cursor: pointer; }
+  .tree-name { cursor: default; }
+  .tree-name.dir { cursor: pointer; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .card h3 { font-size: 13.5px; }
+  .card .val { font-size: 20px; font-weight: 600; }
+  .card .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="side-title">Lecteurs</div>
+  <div id="drives"><div class="placeholder"><span class="spinner"></span></div></div>
+  <div class="side-path">
+    <input id="path" type="text" spellcheck="false" placeholder="C:\Users\moi\Documents" title="Dossier à analyser" />
+    <div class="row">
+      <button id="btn-home" title="Dossier personnel">🏠 Personnel</button>
+      <button id="btn-scan" class="primary" title="Analyser (Entrée)">Analyser</button>
+    </div>
+  </div>
+</aside>
+
+<main id="main">
+  <div class="topbar">
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-tab="map">Carte</div>
+      <div class="tab" data-tab="tree">Arborescence</div>
+      <div class="tab" data-tab="files">Plus gros fichiers</div>
+      <div class="tab" data-tab="ext">Extensions</div>
+      <div class="tab" data-tab="clean">🧹 Nettoyage</div>
+    </div>
+    <span class="spacer"></span>
+    <div class="summary" id="summary"></div>
+  </div>
+  <div class="crumbs hidden" id="crumbs"></div>
+  <div class="panel" id="p-empty"><div class="placeholder"><div class="big">💽</div>
+    <div>Choisissez un lecteur à gauche ou saisissez un dossier, puis cliquez sur <b>Analyser</b>.</div>
+    <div class="hint">Carte : clic pour entrer dans un dossier, <kbd>Retour arrière</kbd> pour remonter, clic droit pour ouvrir dans l'Explorateur.</div></div></div>
+  <div class="panel hidden" id="p-progress"></div>
+  <div class="panel hidden" id="map-wrap" data-panel="map"><canvas id="map"></canvas></div>
+  <div class="panel hidden" data-panel="tree" id="p-tree"></div>
+  <div class="panel hidden" data-panel="files" id="p-files"></div>
+  <div class="panel hidden" data-panel="ext" id="p-ext"></div>
+  <div class="panel hidden" data-panel="clean" id="p-clean"></div>
+</main>
+
+<div id="tip" class="hidden"></div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'disk-analyzer'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const state = { tab: 'map', scan: null, nav: [], scanning: null, expanded: new Set(), hits: [], home: '',
+                clean: null, preview: null, filesFilter: '' }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+function fmtBytes(n) {
+  if (n == null) return '—'
+  const u = ['o', 'Ko', 'Mo', 'Go', 'To']
+  let i = 0
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
+  return `${n.toFixed(i && n < 100 ? 1 : 0)} ${u[i]}`
+}
+const fmtNum = (n) => (n ?? 0).toLocaleString('fr-FR')
+
+// ── Drives ──────────────────────────────────────────────────────────────────
+async function loadDrives() {
+  try {
+    const r = await call('drives', {}, { timeout: 30000 })
+    state.home = r.home
+    $('#drives').innerHTML = r.items.map((d) => {
+      const pct = d.total ? (d.used / d.total) * 100 : 0
+      return `<div class="drive" data-root="${esc(d.root)}" title="Analyser ${esc(d.root)}">
+        <div class="top"><b>${esc(d.root.replace(/\\$/, ''))} ${esc(d.label || '')}</b><span class="muted">${esc(d.type)}</span></div>
+        ${d.total ? `<div class="bar"><i class="${pct > 95 ? 'crit' : pct > 85 ? 'warn' : ''}" style="width:${pct.toFixed(1)}%"></i></div>
+        <div class="sub">${fmtBytes(d.free)} libres sur ${fmtBytes(d.total)} · ${pct.toFixed(0)} % utilisé</div>` : '<div class="sub">Non disponible</div>'}
+      </div>`
+    }).join('') || '<div class="placeholder">Aucun lecteur</div>'
+  } catch (e) {
+    $('#drives').innerHTML = `<div class="placeholder">${esc(e.message)}</div>`
+  }
+}
+$('#drives').addEventListener('click', (e) => {
+  const d = e.target.closest('[data-root]')
+  if (!d || state.scanning) return
+  $('#path').value = d.dataset.root
+  startScan()
+})
+$('#btn-home').addEventListener('click', () => { if (state.home) { $('#path').value = state.home; startScan() } })
+$('#btn-scan').addEventListener('click', startScan)
+$('#path').addEventListener('keydown', (e) => { if (e.key === 'Enter') startScan() })
+
+// ── Scan ────────────────────────────────────────────────────────────────────
+async function startScan() {
+  if (state.scanning) return
+  const raw = $('#path').value.trim()
+  if (!raw) { toast('Indiquez un lecteur ou un dossier', true); $('#path').focus(); return }
+  let path
+  try { path = (await call('check_path', { path: raw })).path } catch (e) { toast(e.message, true); return }
+  state.scanning = { jobId: null, path, p: { files: 0, dirs: 0, bytes: 0, percent: null, message: path } }
+  $('#btn-scan').disabled = true
+  renderProgress()
+  showPanels()
+  try {
+    const res = await window.ledroide.run(MODULE_ID, 'scan', { path }, {
+      onStart: (id) => { state.scanning.jobId = id },
+      onProgress: (p) => { if (state.scanning) { state.scanning.p = p; renderProgress() } },
+    })
+    state.scan = res
+    state.nav = []
+    state.expanded = new Set()
+    if (state.tab === 'clean') state.tab = 'map'
+    toast(`Analyse terminée : ${fmtNum(res.stats.files)} fichiers, ${fmtBytes(res.stats.size)} en ${res.stats.duration_s} s`)
+  } catch (e) {
+    if (e.code === 'JOB_CANCELLED') toast('Analyse annulée')
+    else toast(e.message, true)
+  } finally {
+    state.scanning = null
+    $('#btn-scan').disabled = false
+    showPanels()
+  }
+}
+
+function renderProgress() {
+  const s = state.scanning
+  if (!s) return
+  const p = s.p
+  const indet = p.percent == null
+  $('#p-progress').innerHTML = `<div class="placeholder"><div class="progress-box">
+    <div style="display:flex;justify-content:space-between"><b>Analyse de ${esc(s.path)}…</b><span>${indet ? '' : p.percent.toFixed(0) + ' %'}</span></div>
+    <div class="pbar ${indet ? 'indet' : ''}"><i style="width:${indet ? 30 : p.percent}%"></i></div>
+    <div class="summary">${fmtNum(p.files)} fichiers · ${fmtNum(p.dirs)} dossiers · <b>${fmtBytes(p.bytes)}</b></div>
+    <div class="cur-path" title="${esc(p.message)}">&lrm;${esc(p.message || '')}</div>
+    <div><button id="btn-cancel" class="danger">Annuler (Échap)</button></div></div></div>`
+  $('#btn-cancel').onclick = cancelScan
+}
+async function cancelScan() {
+  if (!state.scanning?.jobId) return
+  try { await window.ledroide.cancel(MODULE_ID, state.scanning.jobId) } catch (e) { toast(e.message, true) }
+}
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+function nodeAt(nav) {
+  let n = state.scan.tree
+  for (const name of nav) {
+    const next = (n.c || []).find((c) => c.n === name && c.t === 'd')
+    if (!next) return null
+    n = next
+  }
+  return n
+}
+function fullPath(nav) {
+  const base = state.scan.path
+  return nav.length ? base.replace(/[\\/]+$/, '') + '\\' + nav.join('\\') : base
+}
+async function ensureLoaded(nav) {
+  const node = nodeAt(nav)
+  if (!node || node.c || !node.m) return node
+  try {
+    const r = await call('subtree', { scan_id: state.scan.scan_id, path: nav }, { timeout: 30000 })
+    node.c = r.tree.c || []
+    delete node.m
+  } catch (e) {
+    toast(e.message, true)
+  }
+  return node
+}
+async function navigate(nav) {
+  const node = await ensureLoaded(nav)
+  if (!node) return
+  state.nav = nav
+  await Promise.all((node.c || []).filter((c) => c.t === 'd' && c.m && !c.c).slice(0, 12).map((c) => ensureLoaded([...nav, c.n])))
+  renderAll()
+}
+function up() { if (state.scan && state.nav.length) navigate(state.nav.slice(0, -1)) }
+
+function renderCrumbs() {
+  const c = $('#crumbs')
+  if (!state.scan || state.tab === 'clean') { c.classList.add('hidden'); return }
+  c.classList.remove('hidden')
+  const node = nodeAt(state.nav)
+  const parts = [state.scan.path.replace(/[\\/]+$/, '') || state.scan.path, ...state.nav]
+  c.innerHTML = `<button class="ghost icon" id="btn-up" ${state.nav.length ? '' : 'disabled'} title="Remonter (Retour arrière)">⬆</button>` +
+    parts.map((p, i) => `${i ? '<span class="sep">›</span>' : ''}<span class="c ${i === parts.length - 1 ? 'cur' : ''}" data-depth="${i}">${esc(p)}</span>`).join('') +
+    `<span class="size">${fmtBytes(node?.s)} · ${fmtNum(node?.f)} fichiers</span><span class="spacer"></span>
+     <button class="ghost" id="btn-open" title="Ouvrir ce dossier dans l'Explorateur">📂 Explorateur</button>`
+  $('#btn-up').onclick = up
+  $('#btn-open').onclick = () => reveal(fullPath(state.nav), true)
+}
+$('#crumbs').addEventListener('click', (e) => {
+  const c = e.target.closest('.c[data-depth]')
+  if (c && !c.classList.contains('cur')) navigate(state.nav.slice(0, +c.dataset.depth))
+})
+
+async function reveal(path, open = false) {
+  try { await call('reveal', { path, open }) } catch (e) { toast(e.message, true) }
+}
+
+// ── Treemap ─────────────────────────────────────────────────────────────────
+function worst(row, side) {
+  let s = 0, mx = 0, mn = Infinity
+  for (const a of row) { s += a; if (a > mx) mx = a; if (a < mn) mn = a }
+  return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn))
+}
+function squarify(items, x, y, w, h) {
+  const total = items.reduce((a, it) => a + it.s, 0)
+  if (!total || w <= 0 || h <= 0) return []
+  const areas = items.map((it) => (it.s * w * h) / total)
+  const out = []
+  let i = 0
+  while (i < items.length) {
+    const side = Math.min(w, h)
+    const row = [areas[i]]
+    let best = worst(row, side), j = i + 1
+    while (j < items.length) {
+      row.push(areas[j])
+      const wr = worst(row, side)
+      if (wr > best) { row.pop(); break }
+      best = wr
+      j++
+    }
+    const sum = row.reduce((a, b) => a + b, 0)
+    if (w >= h) {
+      const cw = sum / h
+      let yy = y
+      for (let k = i; k < j; k++) { const hh = areas[k] / cw; out.push({ x, y: yy, w: cw, h: hh, item: items[k] }); yy += hh }
+      x += cw; w -= cw
+    } else {
+      const rh = sum / w
+      let xx = x
+      for (let k = i; k < j; k++) { const ww = areas[k] / rh; out.push({ x: xx, y, w: ww, h: rh, item: items[k] }); xx += ww }
+      y += rh; h -= rh
+    }
+    i = j
+  }
+  return out
+}
+function hashHue(s) { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 360 }
+function extOf(name) { const i = name.lastIndexOf('.'); return i > 0 ? name.slice(i).toLowerCase() : '' }
+function fill(item, hue, depth) {
+  if (item.t === 'o') return '#34343b'
+  if (item.t === 'f') return `hsl(${hashHue(extOf(item.n) || '?')}, 50%, ${depth ? 40 : 44}%)`
+  return `hsl(${hue}, ${depth ? 35 : 45}%, ${depth ? 30 : 34}%)`
+}
+
+function drawMap() {
+  const canvas = $('#map')
+  const wrap = $('#map-wrap')
+  if (!state.scan || wrap.classList.contains('hidden')) return
+  const dpr = window.devicePixelRatio || 1
+  const W = wrap.clientWidth - 16, H = wrap.clientHeight - 16
+  if (W <= 0 || H <= 0) return
+  canvas.width = W * dpr; canvas.height = H * dpr
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px'
+  const ctx = canvas.getContext('2d')
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.fillStyle = '#0f0f12'
+  ctx.fillRect(0, 0, W, H)
+  ctx.font = '11.5px system-ui, Segoe UI, sans-serif'
+  ctx.textBaseline = 'top'
+  state.hits = []
+  const node = nodeAt(state.nav)
+  const items = (node?.c || []).filter((c) => c.s > 0)
+  if (!items.length) {
+    ctx.fillStyle = '#71717a'
+    ctx.fillText('Dossier vide', 12, 12)
+    return
+  }
+  const label = (r, text, sub) => {
+    if (r.w < 44 || r.h < 15) return
+    ctx.save()
+    ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip()
+    ctx.fillStyle = 'rgba(255,255,255,.92)'
+    ctx.fillText(text, r.x + 4, r.y + 3)
+    if (sub && r.h > 30) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillText(sub, r.x + 4, r.y + 17) }
+    ctx.restore()
+  }
+  squarify(items, 0, 0, W, H).forEach((r, idx) => {
+    const hue = (idx * 47 + 220) % 360
+    const it = r.item
+    ctx.fillStyle = fill(it, hue, 0)
+    ctx.fillRect(r.x + 1, r.y + 1, Math.max(0, r.w - 2), Math.max(0, r.h - 2))
+    state.hits.push({ ...r, nav: [it.n], depth: 0 })
+    const nested = it.t === 'd' && it.c && it.c.length && r.w > 60 && r.h > 50
+    if (nested) {
+      label(r, `${it.n}  ${fmtBytes(it.s)}`)
+      const inner = squarify(it.c.filter((c) => c.s > 0), r.x + 3, r.y + 18, r.w - 6, r.h - 21)
+      for (const ir of inner) {
+        if (ir.w < 1 || ir.h < 1) continue
+        ctx.fillStyle = fill(ir.item, hue, 1)
+        ctx.fillRect(ir.x + .5, ir.y + .5, Math.max(0, ir.w - 1), Math.max(0, ir.h - 1))
+        state.hits.push({ ...ir, nav: [it.n, ir.item.n], depth: 1, parent: it })
+        label(ir, ir.item.n, fmtBytes(ir.item.s))
+      }
+    } else {
+      label(r, it.n, fmtBytes(it.s))
+    }
+  })
+}
+function hitAt(e) {
+  const rect = $('#map').getBoundingClientRect()
+  const x = e.clientX - rect.left, y = e.clientY - rect.top
+  for (let i = state.hits.length - 1; i >= 0; i--) {
+    const h = state.hits[i]
+    if (x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h) return h
+  }
+  return null
+}
+const kindLabel = (it) => (it.t === 'd' ? `Dossier · ${fmtNum(it.f)} fichiers` : it.t === 'f' ? `Fichier ${extOf(it.n)}` : 'Regroupement')
+$('#map').addEventListener('mousemove', (e) => {
+  const h = hitAt(e)
+  const tip = $('#tip')
+  if (!h) { tip.classList.add('hidden'); return }
+  const node = nodeAt(state.nav)
+  const pct = node?.s ? ((h.item.s / node.s) * 100).toFixed(1) : 0
+  tip.innerHTML = `<b>${esc(h.item.n)}</b>${fmtBytes(h.item.s)} · ${pct} % · ${esc(kindLabel(h.item))}<br>
+    <span class="muted">${esc(fullPath([...state.nav, ...h.nav]))}</span>`
+  tip.classList.remove('hidden')
+  const tx = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8)
+  const ty = Math.min(e.clientY + 14, window.innerHeight - tip.offsetHeight - 8)
+  tip.style.left = tx + 'px'; tip.style.top = ty + 'px'
+})
+$('#map').addEventListener('mouseleave', () => $('#tip').classList.add('hidden'))
+$('#map').addEventListener('click', (e) => {
+  const h = hitAt(e)
+  if (!h) return
+  if (h.item.t === 'd') navigate([...state.nav, ...h.nav])
+  else if (h.depth === 1 && h.parent?.t === 'd') navigate([...state.nav, h.nav[0]])
+})
+$('#map').addEventListener('dblclick', (e) => {
+  const h = hitAt(e)
+  if (h && h.item.t === 'f') reveal(fullPath([...state.nav, ...h.nav]))
+})
+$('#map').addEventListener('contextmenu', (e) => {
+  e.preventDefault()
+  const h = hitAt(e)
+  if (!h) return
+  const nav = h.item.t === 'o' ? h.nav.slice(0, -1) : h.nav
+  reveal(fullPath([...state.nav, ...nav]))
+})
+new ResizeObserver(() => { if (state.tab === 'map') drawMap() }).observe($('#map-wrap'))
+
+// ── Tree ────────────────────────────────────────────────────────────────────
+function renderTree() {
+  const node = nodeAt(state.nav)
+  if (!node) return
+  const rows = []
+  const walk = (n, nav, depth) => {
+    for (const c of n.c || []) {
+      const childNav = [...nav, c.n]
+      const key = childNav.join('\u0000')
+      const open = c.t === 'd' && state.expanded.has(key)
+      rows.push({ c, nav: childNav, depth, open, key })
+      if (open && c.c) walk(c, childNav, depth + 1)
+    }
+  }
+  walk(node, [], 0)
+  if (!rows.length) { $('#p-tree').innerHTML = '<div class="placeholder">Dossier vide</div>'; return }
+  $('#p-tree').innerHTML = `<table class="grid"><thead><tr><th>Nom</th><th class="num">Taille</th><th></th><th class="num">Fichiers</th><th></th></tr></thead><tbody>
+    ${rows.map(({ c, nav, depth, open, key }) => {
+      const pct = node.s ? (c.s / node.s) * 100 : 0
+      const icon = c.t === 'd' ? '📁' : c.t === 'f' ? '📄' : '…'
+      return `<tr data-key="${esc(key)}">
+        <td style="padding-left:${8 + depth * 18}px"><span class="tw" data-tw>${c.t === 'd' && (c.c?.length || c.m) ? (open ? '▾' : '▸') : ''}</span>
+          <span class="tree-name ${c.t === 'd' ? 'dir' : ''}" data-enter>${icon} ${esc(c.n)}</span>${c.e ? ' <span title="Accès refusé à une partie du contenu" style="color:var(--warn)">⚠</span>' : ''}</td>
+        <td class="num">${fmtBytes(c.s)}</td>
+        <td><div class="inbar" title="${pct.toFixed(1)} %"><i style="width:${pct.toFixed(1)}%"></i></div></td>
+        <td class="num">${c.t === 'd' ? fmtNum(c.f) : ''}</td>
+        <td>${c.t !== 'o' ? '<button class="ghost icon" data-reveal title="Afficher dans l\'Explorateur">📂</button>' : ''}</td></tr>`
+    }).join('')}</tbody></table>`
+  state.treeRows = new Map(rows.map((r) => [r.key, r]))
+}
+$('#p-tree').addEventListener('click', async (e) => {
+  const tr = e.target.closest('tr[data-key]')
+  if (!tr) return
+  const r = state.treeRows.get(tr.dataset.key)
+  if (!r) return
+  if (e.target.closest('[data-reveal]')) return reveal(fullPath([...state.nav, ...r.nav]))
+  if (r.c.t !== 'd') return
+  if (e.target.closest('[data-tw]')) {
+    if (state.expanded.has(r.key)) state.expanded.delete(r.key)
+    else { await ensureLoaded([...state.nav, ...r.nav]); state.expanded.add(r.key) }
+    renderTree()
+  } else if (e.target.closest('[data-enter]')) {
+    navigate([...state.nav, ...r.nav])
+  }
+})
+
+// ── Files / extensions ──────────────────────────────────────────────────────
+function renderFiles() {
+  const q = state.filesFilter.toLowerCase()
+  const files = state.scan.top_files.filter((f) => !q || f.path.toLowerCase().includes(q))
+  $('#p-files').innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input id="files-q" type="search" placeholder="Filtrer…" value="${esc(state.filesFilter)}" style="width:260px" />
+      <span class="hint">Les ${state.scan.top_files.length} plus gros fichiers de l'analyse. Double-clic : afficher dans l'Explorateur.</span></div>
+    <table class="grid"><thead><tr><th class="num">#</th><th class="num">Taille</th><th>Chemin</th><th></th></tr></thead><tbody>
+    ${files.map((f, i) => `<tr data-path="${esc(f.path)}"><td class="num muted">${i + 1}</td><td class="num">${fmtBytes(f.size)}</td>
+      <td class="path" title="${esc(f.path)}">${esc(f.path)}</td><td><button class="ghost icon" data-reveal title="Afficher dans l'Explorateur">📂</button></td></tr>`).join('')}
+    </tbody></table>`
+  const inp = $('#files-q')
+  inp.oninput = () => { state.filesFilter = inp.value; renderFiles(); const n = $('#files-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length) }
+}
+$('#p-files').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-path]')
+  if (tr && e.target.closest('[data-reveal]')) reveal(tr.dataset.path)
+})
+$('#p-files').addEventListener('dblclick', (e) => {
+  const tr = e.target.closest('tr[data-path]')
+  if (tr) reveal(tr.dataset.path)
+})
+
+function renderExt() {
+  const total = state.scan.stats.size || 1
+  const rows = state.scan.extensions
+  $('#p-ext').innerHTML = `<p class="hint" style="margin-bottom:8px">${state.scan.ext_total} extensions différentes${state.scan.ext_total > rows.length ? ` (les ${rows.length} plus volumineuses sont affichées)` : ''}.</p>
+    <table class="grid"><thead><tr><th>Extension</th><th class="num">Taille</th><th></th><th class="num">%</th><th class="num">Fichiers</th><th class="num">Taille moyenne</th></tr></thead><tbody>
+    ${rows.map((r) => {
+      const pct = (r.size / total) * 100
+      const hue = hashHue(r.ext.startsWith('.') ? r.ext : '?')
+      return `<tr><td class="mono"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:hsl(${hue},50%,44%);margin-right:6px"></span>${esc(r.ext)}</td>
+        <td class="num">${fmtBytes(r.size)}</td><td><div class="inbar"><i style="width:${pct.toFixed(1)}%;background:hsl(${hue},50%,50%)"></i></div></td>
+        <td class="num">${pct.toFixed(1)}</td><td class="num">${fmtNum(r.count)}</td><td class="num">${fmtBytes(r.size / r.count)}</td></tr>`
+    }).join('')}</tbody></table>`
+}
+
+// ── Cleanup ─────────────────────────────────────────────────────────────────
+async function loadClean() {
+  $('#p-clean').innerHTML = '<div class="placeholder"><span class="spinner"></span> Calcul des tailles…</div>'
+  try { state.clean = await call('cleanup_info', {}, { timeout: 120000 }) } catch (e) {
+    $('#p-clean').innerHTML = `<div class="placeholder">${esc(e.message)}</div>`
+    return
+  }
+  renderClean()
+}
+function renderClean() {
+  const c = state.clean
+  if (!c) return
+  const t = c.temp, th = c.thumbnails, rb = c.recycle_bin
+  const pv = state.preview
+  $('#p-clean').innerHTML = `<div class="cards">
+    <div class="card"><h3>🗂️ Fichiers temporaires</h3><div class="val">${t.error ? '—' : fmtBytes(t.size)}</div>
+      <div class="hint">${t.error ? esc(t.error) : `${fmtNum(t.count)} fichiers dans <span class="mono">${esc(t.path)}</span>`}</div>
+      <div class="row"><select id="age"><option value="0">Tous</option><option value="1">Plus de 1 heure</option>
+        <option value="24" selected>Plus de 24 heures</option><option value="168">Plus de 7 jours</option></select>
+        <button id="btn-preview" ${t.error ? 'disabled' : ''}>Aperçu</button><button class="ghost" data-tool="temp">📂</button></div></div>
+    <div class="card"><h3>🖼️ Cache des miniatures</h3><div class="val">${fmtBytes(th.size)}</div>
+      <div class="hint">${th.count} fichiers de cache (miniatures et icônes) gérés par Windows. Utilisez le Nettoyage de disque pour les vider.</div>
+      <div class="row"><button data-tool="cleanmgr">Nettoyage de disque Windows</button></div></div>
+    <div class="card"><h3>🗑️ Corbeille</h3><div class="val">${fmtBytes(rb.size)}</div>
+      <div class="hint">${rb.count == null ? 'Information indisponible' : `${fmtNum(rb.count)} élément(s), tous lecteurs confondus.`} Videz-la depuis l'Explorateur.</div>
+      <div class="row"><button data-tool="recycle_bin">Ouvrir la corbeille</button></div></div>
+  </div>
+  <div id="preview">${pv ? previewHtml(pv) : '<p class="hint">Seul le contenu du dossier temporaire peut être supprimé ici. Cliquez sur « Aperçu » pour voir ce qui serait supprimé.</p>'}</div>`
+  if (pv) $('#age').value = String(pv.age)
+}
+function previewHtml(pv) {
+  if (!pv.items.length) return '<div class="placeholder" style="height:auto;padding:30px">Rien à supprimer avec ce filtre d\'ancienneté.</div>'
+  return `<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <b>${fmtNum(pv.count)} élément(s) · ${fmtNum(pv.files)} fichier(s) · ${fmtBytes(pv.size)}</b>
+      <span class="hint">Les fichiers en cours d'utilisation (verrouillés) seront ignorés.</span><span class="spacer"></span>
+      <button class="danger" id="btn-clean">Supprimer ces éléments</button></div>
+    <table class="grid"><thead><tr><th>Élément</th><th class="num">Taille</th><th class="num">Fichiers</th><th>Modifié</th></tr></thead><tbody>
+    ${pv.items.map((i) => `<tr><td class="path" title="${esc(i.path)}">${i.link ? '🔗' : i.dir ? '📁' : '📄'} ${esc(i.name)}</td>
+      <td class="num">${fmtBytes(i.size)}</td><td class="num">${fmtNum(i.count)}</td>
+      <td>${new Date(i.mtime * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td></tr>`).join('')}
+    </tbody></table>${pv.count > pv.items.length ? `<p class="hint">… et ${pv.count - pv.items.length} autres éléments.</p>` : ''}`
+}
+$('#p-clean').addEventListener('click', async (e) => {
+  const tool = e.target.closest('[data-tool]')
+  if (tool) { try { await call('open_tool', { tool: tool.dataset.tool }) } catch (err) { toast(err.message, true) } return }
+  if (e.target.closest('#btn-preview')) {
+    const age = +$('#age').value
+    $('#preview').innerHTML = '<div class="placeholder" style="height:auto;padding:30px"><span class="spinner"></span> Inventaire…</div>'
+    try {
+      state.preview = { ...(await call('temp_preview', { min_age_hours: age }, { timeout: 120000 })), age }
+      renderClean()
+    } catch (err) { toast(err.message, true); $('#preview').innerHTML = '' }
+    return
+  }
+  if (e.target.closest('#btn-clean')) {
+    const pv = state.preview
+    if (!confirm(`Supprimer définitivement ${fmtNum(pv.count)} élément(s) (${fmtBytes(pv.size)}) du dossier temporaire ?\n\n${pv.path}\n\nCette opération ne passe pas par la corbeille.`)) return
+    e.target.disabled = true
+    e.target.innerHTML = '<span class="spinner"></span> Suppression…'
+    try {
+      const r = await call('temp_clean', { min_age_hours: pv.age, confirm: true }, { timeout: 600000 })
+      toast(`${fmtBytes(r.freed)} libérés · ${fmtNum(r.deleted)} supprimé(s)${r.failed ? ` · ${fmtNum(r.failed)} ignoré(s) (verrouillés)` : ''}`)
+    } catch (err) { toast(err.message, true) }
+    state.preview = null
+    loadClean()
+  }
+})
+$('#p-clean').addEventListener('change', (e) => { if (e.target.id === 'age' && state.preview) { state.preview = null; renderClean() } })
+
+// ── Layout ──────────────────────────────────────────────────────────────────
+function showPanels() {
+  const scanning = !!state.scanning
+  const tab = state.tab
+  $('#p-progress').classList.toggle('hidden', !scanning || tab === 'clean')
+  $('#p-empty').classList.toggle('hidden', scanning || !!state.scan || tab === 'clean')
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab || (tab !== 'clean' && (scanning || !state.scan))))
+  $$('.tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === tab)
+    t.classList.toggle('disabled', t.dataset.tab !== 'clean' && !state.scan && !scanning)
+  })
+  const s = state.scan?.stats
+  $('#summary').innerHTML = s ? `<b>${fmtBytes(s.size)}</b> · ${fmtNum(s.files)} fichiers · ${fmtNum(s.dirs)} dossiers
+    ${s.errors ? ` · <span style="color:var(--warn)" title="Dossiers ou fichiers inaccessibles">${fmtNum(s.errors)} accès refusé(s)</span>` : ''}
+    ${s.links_skipped ? ` · <span title="Liens symboliques et jonctions ignorés">${fmtNum(s.links_skipped)} lien(s) ignoré(s)</span>` : ''}` : ''
+  if (!scanning) renderAll()
+}
+function renderAll() {
+  renderCrumbs()
+  if (state.tab === 'clean') { if (!state.clean) loadClean(); return }
+  if (!state.scan || state.scanning) return
+  if (state.tab === 'map') requestAnimationFrame(drawMap)
+  else if (state.tab === 'tree') renderTree()
+  else if (state.tab === 'files') renderFiles()
+  else if (state.tab === 'ext') renderExt()
+}
+$$('.tab').forEach((t) => t.addEventListener('click', () => { state.tab = t.dataset.tab; showPanels() }))
+
+document.addEventListener('keydown', (e) => {
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')
+  if (e.key === 'Escape' && state.scanning) cancelScan()
+  else if (e.key === 'Backspace' && !typing && state.tab !== 'clean') { e.preventDefault(); up() }
+  else if (e.key === 'F5' && !state.scanning && state.scan) { e.preventDefault(); $('#path').value = state.scan.path; startScan() }
+  else if (!typing && /^[1-5]$/.test(e.key)) {
+    const tabs = ['map', 'tree', 'files', 'ext', 'clean']
+    const t = tabs[+e.key - 1]
+    if (t === 'clean' || state.scan) { state.tab = t; showPanels() }
+  }
+})
+
+loadDrives()
+showPanels()
+</script>
+</body>
+</html>

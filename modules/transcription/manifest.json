@@ -1,0 +1,57 @@
+{
+  "id": "transcription",
+  "name": "Transcription audio",
+  "version": "1.0.0",
+  "description": "Transcrivez un fichier audio ou vidéo en texte, hors ligne, avec Whisper (faster-whisper) : horodatages, segments en direct, export TXT / SRT / VTT.",
+  "category": "Images & médias",
+  "tags": [
+    "audio",
+    "vidéo",
+    "transcription",
+    "sous-titres",
+    "whisper"
+  ],
+  "icon": "🎙️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "filesystem",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "faster-whisper>=1,<2",
+      "imageio-ffmpeg>=0.5,<1"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "compute_type": {
+      "type": "string",
+      "title": "Précision de calcul (CPU)",
+      "enum": ["int8", "int8_float32", "float32"],
+      "default": "int8"
+    },
+    "cpu_threads": {
+      "type": "integer",
+      "title": "Threads CPU (0 = automatique)",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 64
+    },
+    "history_size": {
+      "type": "integer",
+      "title": "Transcriptions conservées dans l'historique",
+      "default": 30,
+      "minimum": 0,
+      "maximum": 500
+    }
+  }
+}

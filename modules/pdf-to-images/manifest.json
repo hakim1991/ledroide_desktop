@@ -21,7 +21,7 @@
   "dependencies": {
     "python": [
       "pdf2image>=1.17,<2",
-      "Pillow>=11,<12"
+      "Pillow>=11,<13"
     ],
     "modules": []
   }

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EXIF</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); padding: 0; }
+  input[type=datetime-local] { color-scheme: dark; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+
+  #side { width: 270px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  .side-tabs { display: flex; gap: 4px; padding: 10px 10px 8px; }
+  .side-tabs button { flex: 1; }
+  .side-tabs button.active { background: var(--bg); border-color: var(--accent); color: #fff; }
+  .open-row { display: flex; gap: 6px; padding: 0 10px 8px; }
+  .open-row input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+  #drop { margin: 0 10px 8px; border: 1.5px dashed #3f3f46; border-radius: 8px; padding: 14px 10px; text-align: center;
+          color: var(--muted); cursor: pointer; font-size: 12px; transition: .12s; }
+  #drop.over { border-color: var(--accent); background: rgba(99,102,241,.08); color: var(--text); }
+  .list-head { padding: 6px 12px 4px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+               display: flex; align-items: center; }
+  .list-head span { flex: 1; }
+  #files { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+  .item:hover { background: var(--surface2); }
+  .item.current { background: rgba(99,102,241,.14); }
+  .item img { width: 34px; height: 34px; object-fit: cover; border-radius: 4px; background: var(--surface2); flex-shrink: 0; }
+  .item .ph { width: 34px; height: 34px; border-radius: 4px; background: var(--surface2); display: flex; align-items: center;
+              justify-content: center; flex-shrink: 0; }
+  .item .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .sub { color: var(--muted); font-size: 11px; }
+  .item .del { visibility: hidden; padding: 0 5px; }
+  .item:hover .del { visibility: visible; }
+  .side-empty { color: var(--muted); text-align: center; padding: 20px 8px; font-size: 12px; }
+
+  #main { flex: 1; min-width: 0; overflow-y: auto; padding: 14px 16px; }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 6px; text-align: center; }
+  .placeholder .big { font-size: 34px; }
+  .head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
+  .thumb { width: 220px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--border);
+           background: repeating-conic-gradient(#222 0 25%, #2a2a2a 0 50%) 0 0 / 16px 16px; }
+  .head-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .head-info h2 { font-size: 16px; font-weight: 600; word-break: break-all; }
+  .head-info .path { font-family: var(--mono); font-size: 11.5px; color: var(--muted); word-break: break-all; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 2px 9px; font-size: 11.5px; color: var(--muted); }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip.warn { border-color: rgba(245,158,11,.5); color: var(--warn); }
+  .chip.ok { border-color: rgba(34,197,94,.4); color: var(--ok); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .actions label { display: flex; align-items: center; gap: 5px; color: var(--muted); cursor: pointer; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+  .card-head { padding: 8px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-weight: 600; }
+  .card-head .n { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .card-head .chev { color: var(--muted); transition: transform .15s; }
+  .card.closed .chev { transform: rotate(-90deg); }
+  .card.closed .card-body { display: none; }
+  .card-body { border-top: 1px solid var(--border); }
+  table.meta { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.meta td { padding: 5px 12px; border-bottom: 1px solid #1d1d21; vertical-align: top; }
+  table.meta tr:last-child td { border-bottom: none; }
+  table.meta td:first-child { color: var(--muted); width: 34%; }
+  table.meta td:last-child { word-break: break-word; }
+  table.meta td .tag { font-family: var(--mono); font-size: 10.5px; color: #52525b; margin-left: 6px; }
+  .gps { padding: 10px 12px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .gps .coords { font-family: var(--mono); font-size: 15px; color: #fcd34d; }
+  .gps a { color: var(--accent-h); }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin: 4px 0 10px; }
+  .toolbar input { flex: 1; max-width: 300px; }
+  .date-row { display: flex; gap: 6px; align-items: center; }
+
+  .batch { max-width: 720px; display: flex; flex-direction: column; gap: 12px; }
+  .form-grid { display: grid; grid-template-columns: 150px 1fr; gap: 8px 10px; align-items: center; }
+  .form-grid label.l { color: var(--muted); }
+  .form-grid input[type=text] { font-family: var(--mono); font-size: 12px; }
+  .radios { display: flex; gap: 14px; }
+  .radios label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  .progress { display: flex; align-items: center; gap: 10px; }
+  .bar { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .muted { color: var(--muted); }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  table.res { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.res td { padding: 4px 8px; border-bottom: 1px solid #1d1d21; font-family: var(--mono); word-break: break-all; }
+  .ok { color: var(--ok); } .err { color: #fca5a5; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="side-tabs">
+    <button data-tab="view" class="active">Images</button>
+    <button data-tab="batch">Traitement par lot</button>
+  </div>
+  <div class="open-row">
+    <input id="path" type="text" spellcheck="false" placeholder="Chemin d'une image ou d'un dossier" />
+    <button id="btn-open" class="primary" title="Ouvrir (Entrée)">Ouvrir</button>
+  </div>
+  <div id="drop">📥 Glissez des images ici<br><span style="font-size:11px">ou cliquez pour choisir (JPEG, PNG, WebP, TIFF)</span></div>
+  <input id="file-input" type="file" multiple accept=".jpg,.jpeg,.jpe,.png,.webp,.tif,.tiff" class="hidden" />
+  <div class="list-head"><span id="list-title">Images ouvertes</span><button id="list-clear" class="ghost icon" title="Vider la liste">🗑</button></div>
+  <div id="files"></div>
+</aside>
+
+<main id="main">
+  <div id="view">
+    <div class="placeholder"><div class="big">📷</div>
+      <div>Ouvrez une image par son chemin, ou glissez-la dans le panneau de gauche.</div>
+      <div>Les métadonnées EXIF, la position GPS et une miniature s'affichent ici.</div>
+      <div><kbd>Ctrl</kbd> + <kbd>O</kbd> choisir des fichiers · <kbd>↑</kbd> <kbd>↓</kbd> image précédente / suivante</div></div>
+  </div>
+  <div id="batch" class="batch hidden">
+    <h2 style="font-size:16px">Nettoyer un dossier</h2>
+    <p class="muted">Crée une copie <span class="mono">_clean</span> de chaque image (JPEG, PNG, WebP, TIFF). Les originaux ne sont jamais modifiés.</p>
+    <div class="form-grid">
+      <label class="l" for="b-folder">Dossier</label><input id="b-folder" type="text" spellcheck="false" placeholder="C:\Users\moi\Pictures\Vacances" />
+      <label class="l">Sous-dossiers</label><label><input id="b-rec" type="checkbox" /> Inclure les sous-dossiers</label>
+      <label class="l">Supprimer</label>
+      <div class="radios"><label><input type="radio" name="bmode" value="all" checked /> Toutes les métadonnées</label>
+        <label><input type="radio" name="bmode" value="gps" /> Seulement la position GPS</label></div>
+      <label class="l" for="b-out">Dossier de sortie</label><input id="b-out" type="text" spellcheck="false" placeholder="optionnel — par défaut à côté de chaque image" />
+    </div>
+    <div><button id="b-run" class="primary">Lancer le traitement</button></div>
+    <div class="progress hidden" id="b-progress"><div class="bar"><div id="b-bar"></div></div><span class="muted" id="b-msg"></span>
+      <button id="b-cancel" class="danger">Annuler</button></div>
+    <div id="b-result"></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'exif-tool'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const EXTS = ['.jpg', '.jpeg', '.jpe', '.png', '.webp', '.tif', '.tiff']
+
+const state = { images: [], current: null, folder: null, closed: new Set(), filter: '', batchJob: null }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+function fmtSize(n) {
+  if (n < 1024) return `${n} o`
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} Ko`
+  return `${(n / 1024 ** 2).toFixed(2)} Mo`
+}
+const baseName = (p) => p.split(/[\\/]/).pop()
+
+// ── Opening ────────────────────────────────────────────────────────────────
+function addImage(info) {
+  const i = state.images.findIndex((x) => x.path === info.path)
+  if (i >= 0) state.images[i] = info; else state.images.push(info)
+  state.current = info.path
+}
+
+async function openPath(path) {
+  path = (path || '').trim().replace(/^"|"$/g, '')
+  if (!path) { toast('Indiquez un chemin', true); return }
+  try {
+    const res = await call('open', { path }, { timeout: 60000 })
+    if (res.folder) {
+      state.folder = res
+      if (!res.files.length) toast('Aucune image prise en charge dans ce dossier', true)
+      else toast(`${res.total} image(s) dans le dossier${res.total > res.files.length ? ` (${res.files.length} listées)` : ''}`)
+      renderList()
+      return
+    }
+    addImage(res)
+    renderList(); renderView()
+  } catch (e) { toast(e.message, true) }
+}
+
+function readAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result).split(',')[1] || '')
+    r.onerror = () => reject(new Error('Lecture du fichier impossible'))
+    r.readAsDataURL(file)
+  })
+}
+
+async function openFiles(files) {
+  const list = [...files]
+  if (!list.length) return
+  let ok = 0
+  for (const f of list) {
+    const ext = '.' + f.name.split('.').pop().toLowerCase()
+    if (['.heic', '.heif', '.avif'].includes(ext)) { toast(`${f.name} : HEIC/HEIF/AVIF non pris en charge`, true); continue }
+    if (!EXTS.includes(ext)) { toast(`${f.name} : format non pris en charge`, true); continue }
+    try {
+      const data = await readAsBase64(f)
+      const info = await call('open_upload', { name: f.name, data }, { timeout: 120000 })
+      addImage(info); ok++
+    } catch (e) { toast(`${f.name} : ${e.message}`, true) }
+  }
+  if (ok) { renderList(); renderView() }
+}
+
+// ── List ───────────────────────────────────────────────────────────────────
+function renderList() {
+  const box = $('#files')
+  if (state.folder) {
+    $('#list-title').textContent = `Dossier (${state.folder.total})`
+    box.innerHTML = `<div class="item" data-back><span class="ph">↩</span><span class="lbl">Images ouvertes (${state.images.length})</span></div>` +
+      state.folder.files.map((p) => `<div class="item ${p === state.current ? 'current' : ''}" data-open="${esc(p)}" title="${esc(p)}">
+        <span class="ph">🖼</span><span class="lbl">${esc(baseName(p))}</span></div>`).join('')
+    return
+  }
+  $('#list-title').textContent = `Images ouvertes (${state.images.length})`
+  box.innerHTML = state.images.map((im) => `<div class="item ${im.path === state.current ? 'current' : ''}" data-path="${esc(im.path)}" title="${esc(im.uploaded ? im.name : im.path)}">
+    <img src="${im.thumbnail}" alt="" /><span class="lbl">${esc(im.name)}
+    <div class="sub">${esc(im.format)} · ${im.count} tag(s)${im.gps?.lat != null ? ' · 📍' : ''}</div></span>
+    <button class="ghost icon del" data-del title="Fermer">✕</button></div>`).join('')
+    || '<div class="side-empty">Aucune image ouverte.</div>'
+}
+
+$('#files').addEventListener('click', async (e) => {
+  const it = e.target.closest('.item'); if (!it) return
+  if (it.dataset.back != null) { state.folder = null; renderList(); return }
+  if (it.dataset.open) { await openPath(it.dataset.open); state.current = it.dataset.open; renderList(); return }
+  const im = state.images.find((x) => x.path === it.dataset.path)
+  if (e.target.closest('[data-del]')) { closeImage(im); return }
+  state.current = im.path; renderList(); renderView()
+})
+
+function closeImage(im) {
+  state.images = state.images.filter((x) => x !== im)
+  if (im.uploaded) call('forget_upload', { path: im.path }).catch(() => {})
+  if (state.current === im.path) state.current = state.images[state.images.length - 1]?.path || null
+  renderList(); renderView()
+}
+
+// ── View ───────────────────────────────────────────────────────────────────
+function renderView() {
+  const im = state.images.find((x) => x.path === state.current)
+  const v = $('#view')
+  if (!im) {
+    v.innerHTML = `<div class="placeholder"><div class="big">📷</div><div>Aucune image sélectionnée.</div></div>`
+    return
+  }
+  const gps = im.gps
+  const f = state.filter.toLowerCase()
+  const groups = im.groups.map((g) => ({ ...g, items: g.items.filter((it) => !f || `${it.label} ${it.value} ${it.tag}`.toLowerCase().includes(f)) }))
+    .filter((g) => g.items.length)
+  const dateVal = im.date ? im.date.slice(0, 16) : ''
+  v.innerHTML = `
+    <div class="head">
+      <img class="thumb" src="${im.thumbnail}" alt="Miniature" />
+      <div class="head-info">
+        <h2>${esc(im.name)}</h2>
+        <div class="path">${esc(im.uploaded ? 'Fichier glissé-déposé (copie temporaire)' : im.path)}</div>
+        <div class="chips">
+          <span class="chip"><b>${esc(im.format)}</b></span>
+          <span class="chip"><b>${im.width} × ${im.height}</b> px</span>
+          <span class="chip"><b>${fmtSize(im.size_bytes)}</b></span>
+          <span class="chip">${esc(im.mode)}${im.icc ? ' · ICC' : ''}${im.frames > 1 ? ` · ${im.frames} images` : ''}</span>
+          ${im.count ? `<span class="chip"><b>${im.count}</b> métadonnée(s)</span>` : '<span class="chip ok">Aucune métadonnée</span>'}
+          ${gps?.lat != null ? '<span class="chip warn">📍 Position GPS présente</span>' : ''}
+          ${im.has_xmp ? '<span class="chip warn">XMP présent</span>' : ''}
+        </div>
+        <div class="actions">
+          <button id="act-all" class="primary" title="Créer une copie sans métadonnées">Supprimer toutes les métadonnées</button>
+          <button id="act-gps" ${gps ? '' : 'disabled'} title="Créer une copie sans la position GPS">Supprimer le GPS</button>
+          ${im.uploaded ? '' : '<label title="Remplace le fichier original au lieu de créer une copie _clean"><input type="checkbox" id="act-overwrite" /> Écraser l\'original</label>'}
+        </div>
+        <div class="date-row">
+          <span class="muted">Date de prise de vue</span>
+          <input type="datetime-local" id="act-date" step="1" value="${esc(dateVal)}" />
+          <button id="act-date-btn">Modifier la date</button>
+        </div>
+      </div>
+    </div>
+    ${gps ? `<div class="card"><div class="card-head" style="cursor:default">📍 Position GPS</div><div class="card-body">
+      ${gps.lat != null ? `<div class="gps"><span class="coords">${esc(gps.text)}</span>
+        ${gps.alt != null ? `<span class="muted">Altitude ${gps.alt} m</span>` : ''}
+        <a href="${esc(gps.osm)}" target="_blank" rel="noopener noreferrer">Voir sur OpenStreetMap ↗</a>
+        <button class="ghost" id="copy-gps">Copier les coordonnées</button><button class="ghost" id="copy-osm">Copier le lien</button></div>`
+        : '<div class="gps muted">Bloc GPS présent mais sans coordonnées exploitables.</div>'}
+      <table class="meta">${Object.entries(gps.raw).map(([k, val]) => `<tr><td>${esc(k)}</td><td class="mono">${esc(val)}</td></tr>`).join('')}</table>
+      </div></div>` : ''}
+    <div class="toolbar"><input id="meta-filter" type="text" placeholder="Filtrer les métadonnées…" value="${esc(state.filter)}" />
+      <button class="ghost" id="copy-all">Copier en texte</button><button class="ghost" id="export-json">Exporter JSON</button></div>
+    ${groups.length ? groups.map((g) => `<div class="card ${state.closed.has(g.title) ? 'closed' : ''}" data-group="${esc(g.title)}">
+      <div class="card-head"><span class="chev">▾</span>${esc(g.title)} <span class="n">${g.items.length}</span></div>
+      <div class="card-body"><table class="meta">${g.items.map((it) => `<tr><td>${esc(it.label)}<span class="tag">${esc(it.tag)}</span></td><td>${esc(it.value)}</td></tr>`).join('')}</table></div></div>`).join('')
+      : `<div class="placeholder" style="height:auto;padding:30px">${im.count ? 'Aucune métadonnée ne correspond au filtre.' : 'Cette image ne contient pas de métadonnées EXIF.'}</div>`}`
+
+  $('#meta-filter').addEventListener('input', (e) => {
+    state.filter = e.target.value
+    const pos = e.target.selectionStart
+    renderView()
+    const inp = $('#meta-filter'); inp.focus(); inp.setSelectionRange(pos, pos)
+  })
+  $('#act-all').addEventListener('click', () => strip(im, 'all'))
+  $('#act-gps').addEventListener('click', () => strip(im, 'gps'))
+  $('#act-date-btn').addEventListener('click', () => setDate(im))
+  $('#copy-gps')?.addEventListener('click', () => copyText(gps.text, 'Coordonnées copiées'))
+  $('#copy-osm')?.addEventListener('click', () => copyText(gps.osm, 'Lien copié'))
+  $('#copy-all').addEventListener('click', () => copyText(im.groups.map((g) => `[${g.title}]\n` + g.items.map((it) => `${it.label}: ${it.value}`).join('\n')).join('\n\n')
+    + (gps?.lat != null ? `\n\n[GPS]\n${gps.text}${gps.alt != null ? ` (${gps.alt} m)` : ''}` : ''), 'Métadonnées copiées'))
+  $('#export-json').addEventListener('click', () => {
+    const data = { file: im.name, format: im.format, width: im.width, height: im.height, gps: gps || null,
+      metadata: Object.fromEntries(im.groups.map((g) => [g.title, Object.fromEntries(g.items.map((it) => [it.label, it.value]))])) }
+    downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), im.name.replace(/\.[^.]+$/, '') + '_exif.json')
+  })
+}
+
+$('#view').addEventListener('click', (e) => {
+  const head = e.target.closest('.card[data-group] .card-head'); if (!head) return
+  const card = head.parentElement, t = card.dataset.group
+  if (state.closed.has(t)) state.closed.delete(t); else state.closed.add(t)
+  card.classList.toggle('closed')
+})
+
+function overwriteFlags(im) {
+  const ow = !im.uploaded && $('#act-overwrite')?.checked
+  if (ow && !confirm(`Remplacer définitivement le fichier original ?\n\n${im.path}\n\nCette opération est irréversible.`)) return null
+  return { overwrite: !!ow, confirm_overwrite: !!ow }
+}
+
+async function afterWrite(im, res, msg) {
+  if (res.download) {
+    const bytes = Uint8Array.from(atob(res.download.data), (c) => c.charCodeAt(0))
+    downloadBlob(new Blob([bytes]), res.download.name)
+    toast(`${msg} — téléchargement de ${res.download.name}`)
+    return
+  }
+  toast(`${msg} : ${res.name}`)
+  try {
+    const info = await call('open', { path: res.path }, { timeout: 60000 })
+    addImage(info); renderList(); renderView()
+  } catch (e) { toast(e.message, true) }
+}
+
+async function strip(im, mode) {
+  const flags = overwriteFlags(im); if (!flags) return
+  const btn = mode === 'all' ? $('#act-all') : $('#act-gps')
+  btn.disabled = true; const label = btn.textContent; btn.innerHTML = '<span class="spinner"></span>'
+  try {
+    const res = await call('strip', { path: im.path, mode, ...flags }, { timeout: 120000 })
+    const delta = res.size_before - res.size_after
+    await afterWrite(im, res, `${mode === 'all' ? 'Métadonnées supprimées' : 'Position GPS supprimée'}${delta > 0 ? ` (−${fmtSize(delta)})` : ''}${res.lossless ? '' : ' — WebP réencodé'}`)
+  } catch (e) { toast(e.message, true) }
+  finally { if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = label } }
+}
+
+async function setDate(im) {
+  const v = $('#act-date').value
+  if (!v) { toast('Choisissez une date', true); return }
+  const flags = overwriteFlags(im); if (!flags) return
+  try {
+    const res = await call('set_date', { path: im.path, date: v.length === 16 ? v + ':00' : v, ...flags }, { timeout: 120000 })
+    await afterWrite(im, res, `Date modifiée (${res.date})`)
+  } catch (e) { toast(e.message, true) }
+}
+
+function downloadBlob(blob, name) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500)
+}
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text) }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); ta.remove()
+  }
+  toast(msg)
+}
+
+// ── Batch ──────────────────────────────────────────────────────────────────
+async function runBatch() {
+  const folder = $('#b-folder').value.trim()
+  if (!folder) { toast('Indiquez un dossier', true); return }
+  const mode = $('input[name=bmode]:checked').value
+  $('#b-run').disabled = true
+  $('#b-progress').classList.remove('hidden'); $('#b-bar').style.width = '0'; $('#b-msg').textContent = ''
+  $('#b-result').innerHTML = ''
+  try {
+    const res = await window.ledroide.run(MODULE_ID, 'batch_clean',
+      { folder, mode, recursive: $('#b-rec').checked, out_dir: $('#b-out').value.trim() },
+      { onStart: (id) => (state.batchJob = id),
+        onProgress: (p) => { if (p.percent != null) $('#b-bar').style.width = p.percent + '%'; if (p.message) $('#b-msg').textContent = p.message } })
+    $('#b-result').innerHTML = `<p style="margin-bottom:8px"><b>${res.ok}</b> image(s) nettoyée(s)${res.failed ? `, <span class="err">${res.failed} en erreur</span>` : ''} sur ${res.total}.</p>` +
+      (res.results.length ? `<table class="res">${res.results.sort((a, b) => a.ok - b.ok).map((r) => `<tr><td class="${r.ok ? 'ok' : 'err'}">${r.ok ? '✓' : '✕'}</td>
+        <td>${esc(r.src)}</td><td class="${r.ok ? '' : 'err'}">${esc(r.ok ? '→ ' + baseName(r.dst) : r.error)}</td></tr>`).join('')}</table>` : '<p class="muted">Aucune image trouvée.</p>')
+    toast('Traitement terminé', !!res.failed)
+  } catch (e) {
+    toast(e.code === 'JOB_CANCELLED' ? 'Traitement annulé' : e.message, e.code !== 'JOB_CANCELLED')
+  } finally {
+    state.batchJob = null; $('#b-run').disabled = false; $('#b-progress').classList.add('hidden')
+  }
+}
+$('#b-run').addEventListener('click', runBatch)
+$('#b-cancel').addEventListener('click', () => state.batchJob && window.ledroide.cancel(MODULE_ID, state.batchJob).catch(() => {}))
+
+// ── Wiring ─────────────────────────────────────────────────────────────────
+$$('.side-tabs button').forEach((b) => b.addEventListener('click', () => {
+  $$('.side-tabs button').forEach((x) => x.classList.toggle('active', x === b))
+  $('#view').classList.toggle('hidden', b.dataset.tab !== 'view')
+  $('#batch').classList.toggle('hidden', b.dataset.tab !== 'batch')
+}))
+$('#btn-open').addEventListener('click', () => openPath($('#path').value))
+$('#path').addEventListener('keydown', (e) => { if (e.key === 'Enter') openPath($('#path').value) })
+$('#drop').addEventListener('click', () => $('#file-input').click())
+$('#file-input').addEventListener('change', (e) => { openFiles(e.target.files); e.target.value = '' })
+const drop = $('#drop')
+for (const ev of ['dragenter', 'dragover']) document.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over') })
+for (const ev of ['dragleave', 'drop']) document.addEventListener(ev, (e) => { e.preventDefault(); if (ev === 'drop' || !e.relatedTarget) drop.classList.remove('over') })
+document.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) openFiles(e.dataTransfer.files) })
+$('#list-clear').addEventListener('click', () => {
+  if (state.folder) { state.folder = null; renderList(); return }
+  for (const im of [...state.images]) if (im.uploaded) call('forget_upload', { path: im.path }).catch(() => {})
+  state.images = []; state.current = null; renderList(); renderView()
+})
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); $('#file-input').click() }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !['INPUT', 'SELECT'].includes(document.activeElement?.tagName) && state.images.length && !state.folder) {
+    e.preventDefault()
+    const i = state.images.findIndex((x) => x.path === state.current)
+    const n = Math.max(0, Math.min(state.images.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+    state.current = state.images[n].path; renderList(); renderView()
+  }
+})
+renderList()
+</script>
+</body>
+</html>

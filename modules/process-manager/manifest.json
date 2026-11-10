@@ -1,0 +1,32 @@
+{
+  "id": "process-manager",
+  "name": "Gestionnaire de processus",
+  "version": "1.0.0",
+  "description": "Processus en cours : CPU, mémoire, threads, ligne de commande, vue arborescente, connexions et fichiers ouverts, « qui utilise ce port ? », priorité, arrêt d'un processus ou d'un arbre.",
+  "category": "Système",
+  "tags": [
+    "windows",
+    "processus",
+    "performance",
+    "admin"
+  ],
+  "icon": "⚙️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "process"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "psutil>=5,<8"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

@@ -1,0 +1,49 @@
+{
+  "id": "ws-mqtt-tester",
+  "name": "Testeur WebSocket / MQTT",
+  "version": "1.0.0",
+  "description": "Client de test temps réel : connexion WebSocket (ws/wss) avec journal des messages, ping et messages enregistrés ; client MQTT (TLS, identifiants, abonnements avec jokers, publication QoS 0/1/2 et retain).",
+  "category": "Développement",
+  "tags": [
+    "websocket",
+    "mqtt",
+    "iot",
+    "temps réel",
+    "test"
+  ],
+  "icon": "🔌",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "paho-mqtt>=2,<3"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "log_size": {
+      "type": "integer",
+      "title": "Nombre de messages conservés dans le journal",
+      "default": 1000,
+      "minimum": 100,
+      "maximum": 10000
+    },
+    "max_message_kb": {
+      "type": "integer",
+      "title": "Taille max. affichée d'un message (Ko)",
+      "default": 64,
+      "minimum": 1,
+      "maximum": 1024
+    }
+  }
+}

@@ -99,6 +99,7 @@ function startPythonBackend() {
       LEDROIDE_BACKEND_PORT: String(backendPort),
       LEDROIDE_TOKEN: TOKEN,
       LEDROIDE_DATA_DIR: dataDir,
+      PYTHONUSERBASE: path.join(dataDir, 'python'),
       PYTHONUNBUFFERED: '1',
       PYTHONIOENCODING: 'utf-8',
     },

@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SQLite Browser</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  button.danger { color: #fca5a5; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+
+  #side { width: 290px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  .open-bar { padding: 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); }
+  .open-bar .row { display: flex; gap: 6px; }
+  .open-bar input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+  .open-bar label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; cursor: pointer; }
+  .side-tabs { display: flex; gap: 4px; padding: 8px 10px 6px; }
+  .side-tabs button { flex: 1; }
+  .side-tabs button.active { background: var(--bg); border-color: var(--accent); color: #fff; }
+  .side-search { padding: 0 10px 6px; }
+  .side-search input { width: 100%; }
+  #side-list { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .group { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 10px 6px 4px;
+           display: flex; justify-content: space-between; cursor: pointer; user-select: none; }
+  .item { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+  .item:hover { background: var(--surface2); }
+  .item.current { background: rgba(99,102,241,.16); }
+  .item .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .sub { color: var(--muted); font-size: 11px; font-family: var(--mono); }
+  .item .del { visibility: hidden; padding: 0 5px; }
+  .item:hover .del { visibility: visible; }
+  .item.missing .lbl { color: var(--muted); text-decoration: line-through; }
+  .item .path { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .side-empty { color: var(--muted); text-align: center; padding: 24px 8px; font-size: 12px; line-height: 1.5; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px 12px; gap: 8px; }
+  .topbar { display: flex; align-items: center; gap: 8px; }
+  .topbar .title { flex: 1; min-width: 0; }
+  .topbar .title b { font-weight: 600; }
+  .topbar .title small { color: var(--muted); margin-left: 8px; font-family: var(--mono); font-size: 11px; }
+  .mode { font-weight: 600; }
+  .mode.ro { color: var(--ok); border-color: rgba(34,197,94,.35); }
+  .mode.rw { color: var(--warn); border-color: rgba(245,158,11,.5); background: rgba(245,158,11,.08); }
+  .pane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex;
+          flex-direction: column; min-height: 0; flex: 1; }
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 5px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .tab { padding: 4px 10px; border-radius: 5px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .tabs .spacer { flex: 1; }
+  .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .toolbar { display: flex; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .toolbar .grow { flex: 1; }
+  .toolbar input[type=text] { width: 220px; }
+  .scroll { flex: 1; min-height: 0; overflow: auto; }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 8px; text-align: center; padding: 20px; line-height: 1.5; }
+  .placeholder .big { font-size: 34px; }
+
+  table.grid { border-collapse: separate; border-spacing: 0; font-family: var(--mono); font-size: 12px; min-width: 100%; }
+  table.grid th { position: sticky; top: 0; background: var(--surface2); text-align: left; padding: 5px 8px; font-weight: 600;
+                  border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); white-space: nowrap; z-index: 1; }
+  table.grid th.sortable { cursor: pointer; user-select: none; }
+  table.grid th.sortable:hover { color: var(--accent-h); }
+  table.grid th .arrow { color: var(--accent-h); margin-left: 4px; }
+  table.grid td { padding: 4px 8px; border-bottom: 1px solid var(--border); border-right: 1px solid #1d1d21;
+                  max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+  table.grid tr:hover td { background: rgba(255,255,255,.025); }
+  table.grid td.num { text-align: right; color: #fbbf24; }
+  table.grid td.rn { color: var(--muted); text-align: right; background: var(--surface); position: sticky; left: 0; }
+  .null { color: var(--muted); font-style: italic; }
+  .blob { color: #c084fc; }
+
+  .detail { padding: 12px 14px; }
+  .detail h3 { font-size: 15px; margin-bottom: 4px; }
+  .detail .sec { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 6px; }
+  table.cols { border-collapse: collapse; font-size: 12px; min-width: 60%; }
+  table.cols th, table.cols td { padding: 5px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  table.cols th { color: var(--muted); font-weight: 500; }
+  table.cols td.n { font-family: var(--mono); color: #93c5fd; }
+  .badge { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 8px; margin-right: 4px;
+           background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+  .badge.pk { color: var(--warn); border-color: rgba(245,158,11,.4); }
+  .badge.uq { color: var(--info); border-color: rgba(56,189,248,.4); }
+  pre.sql { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--border);
+            border-radius: 6px; padding: 10px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+  .kw { color: #c084fc; } .str { color: #86efac; } .cm { color: var(--muted); font-style: italic; } .nb { color: #fbbf24; }
+
+  .sql-layout { flex: 1; min-height: 0; display: flex; }
+  .sql-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #sql { height: 150px; min-height: 70px; resize: vertical; margin: 8px; font-family: var(--mono); font-size: 12.5px;
+         line-height: 1.5; tab-size: 2; white-space: pre; }
+  .sql-meta { padding: 0 8px 6px; display: flex; gap: 14px; color: var(--muted); font-size: 12px; align-items: center; flex-wrap: wrap; }
+  .sql-meta b { color: var(--text); font-weight: 600; }
+  .sql-meta .warn { color: var(--warn); }
+  #result { flex: 1; min-height: 0; overflow: auto; border-top: 1px solid var(--border); }
+  #history { width: 270px; border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  #history .head { padding: 8px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); }
+  #history .head span { flex: 1; font-weight: 600; }
+  #history-list { flex: 1; overflow-y: auto; padding: 4px; }
+  .h-item { padding: 6px; border-radius: 6px; cursor: pointer; border-left: 2px solid transparent; }
+  .h-item:hover { background: var(--surface2); }
+  .h-item.ok { border-left-color: var(--ok); } .h-item.ko { border-left-color: var(--err); }
+  .h-item code { font-family: var(--mono); font-size: 11.5px; display: block; overflow: hidden; text-overflow: ellipsis;
+                 white-space: nowrap; }
+  .h-item small { color: var(--muted); font-size: 10.5px; }
+  .error-box { color: #fca5a5; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: 6px;
+               padding: 10px 12px; white-space: pre-wrap; margin: 10px; font-family: var(--mono); font-size: 12px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(640px, 94vw);
+           max-height: 86vh; display: flex; flex-direction: column; }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; align-items: center; }
+  .modal-head span { flex: 1; }
+  .modal-body { padding: 12px 14px; overflow: auto; flex: 1; }
+  .modal-body pre { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="open-bar">
+    <div class="row">
+      <input id="path" type="text" spellcheck="false" placeholder="C:\chemin\vers\base.db" />
+      <button id="btn-open" class="primary">Ouvrir</button>
+    </div>
+    <label><input type="checkbox" id="open-rw" /> Ouvrir directement en écriture</label>
+  </div>
+  <div class="side-tabs">
+    <button data-side="files" class="active">Bases</button>
+    <button data-side="schema">Schéma</button>
+  </div>
+  <div class="side-search"><input id="side-filter" type="text" placeholder="Filtrer…" /></div>
+  <div id="side-list"></div>
+</aside>
+
+<main id="main">
+  <div class="topbar">
+    <div class="title" id="db-title"><b>Aucune base ouverte</b></div>
+    <button id="btn-mode" class="mode ro hidden" title="Basculer lecture seule / écriture"></button>
+    <button id="btn-refresh" class="hidden" title="Recharger le schéma (F5)">⟳ Actualiser</button>
+    <button id="btn-close" class="ghost hidden" title="Fermer la base">✕ Fermer</button>
+  </div>
+
+  <section class="pane">
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-tab="structure">Structure</div>
+      <div class="tab" data-tab="data">Données</div>
+      <div class="tab" data-tab="sql">SQL</div>
+      <span class="spacer"></span>
+      <span class="muted" id="sel-name" style="font-family:var(--mono);font-size:12px"></span>
+    </div>
+
+    <div class="panel" data-panel="structure"><div class="scroll" id="structure"></div></div>
+
+    <div class="panel hidden" data-panel="data">
+      <div class="toolbar">
+        <input id="data-filter" type="text" placeholder="Filtrer (toutes colonnes)…" />
+        <select id="page-size" title="Lignes par page">
+          <option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option>
+        </select>
+        <button id="pg-first" class="icon" title="Première page">«</button>
+        <button id="pg-prev" class="icon" title="Page précédente">‹</button>
+        <span id="pg-info" class="muted"></span>
+        <button id="pg-next" class="icon" title="Page suivante">›</button>
+        <button id="pg-last" class="icon" title="Dernière page">»</button>
+        <span class="grow"></span>
+        <button id="data-csv" title="Exporter la table (filtre et tri appliqués)">Export CSV</button>
+        <button id="data-json">Export JSON</button>
+      </div>
+      <div class="scroll" id="data-grid"></div>
+    </div>
+
+    <div class="panel hidden" data-panel="sql">
+      <div class="sql-layout">
+        <div class="sql-main">
+          <textarea id="sql" spellcheck="false" placeholder="SELECT * FROM ma_table LIMIT 100;&#10;&#10;Ctrl+Entrée pour exécuter (la sélection seule si du texte est sélectionné)"></textarea>
+          <div class="sql-meta">
+            <button id="btn-run" class="primary" title="Exécuter (Ctrl+Entrée)">▶ Exécuter</button>
+            <button id="btn-stop" class="hidden danger">■ Interrompre</button>
+            <span id="sql-info"></span>
+            <span style="flex:1"></span>
+            <button id="res-csv" disabled title="Ré-exécute la requête en lecture seule, sans limite d'affichage">Export CSV</button>
+            <button id="res-json" disabled>Export JSON</button>
+            <button id="btn-hist" class="ghost" title="Afficher / masquer l'historique">Historique</button>
+          </div>
+          <div id="result"></div>
+        </div>
+        <div id="history">
+          <div class="head"><span>Historique</span><button id="hist-clear" class="ghost icon" title="Vider l'historique">🗑</button></div>
+          <div id="history-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'sqlite-browser'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const state = {
+  info: { open: false },
+  objects: null,
+  side: 'files',
+  tab: 'structure',
+  selected: null,          // { kind, name }
+  recent: [], moduleDbs: [], history: [],
+  data: { page: 1, sort: null, desc: false, filter: '', result: null },
+  lastSql: null, lastResult: null,
+  collapsed: {},
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+
+function fmtSize(n) {
+  if (n == null) return '?'
+  const u = ['o', 'Ko', 'Mo', 'Go']
+  let i = 0
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
+  return (i ? n.toFixed(1) : n) + ' ' + u[i]
+}
+const fmtNum = (n) => n == null ? '?' : Number(n).toLocaleString('fr-FR')
+function fmtDate(iso) {
+  try { return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) } catch { return '' }
+}
+
+const SQL_KW = /\b(SELECT|FROM|WHERE|AND|OR|NOT|NULL|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|VIEW|INDEX|UNIQUE|TRIGGER|PRIMARY|KEY|FOREIGN|REFERENCES|ON|AS|IF|EXISTS|DEFAULT|INTEGER|TEXT|REAL|BLOB|NUMERIC|AUTOINCREMENT|CHECK|CONSTRAINT|BEGIN|END|AFTER|BEFORE|FOR|EACH|ROW|JOIN|LEFT|INNER|GROUP|BY|ORDER|LIMIT|COLLATE|WITHOUT|ROWID|CASCADE|STRICT|DESC|ASC)\b/gi
+function hlSql(sql) {
+  const parts = []
+  const re = /(--[^\n]*|\/\*[\s\S]*?\*\/)|('(?:[^']|'')*')|(\b\d+(?:\.\d+)?\b)/g
+  let last = 0, m
+  while ((m = re.exec(sql))) {
+    parts.push(esc(sql.slice(last, m.index)).replace(SQL_KW, '<span class="kw">$1</span>'))
+    const cls = m[1] ? 'cm' : m[2] ? 'str' : 'nb'
+    parts.push(`<span class="${cls}">${esc(m[0])}</span>`)
+    last = re.lastIndex
+  }
+  parts.push(esc(sql.slice(last)).replace(SQL_KW, '<span class="kw">$1</span>'))
+  return parts.join('')
+}
+
+// ── Grid ────────────────────────────────────────────────────────────────────
+function cellHtml(v) {
+  if (v === null || v === undefined) return { cls: '', html: '<span class="null">NULL</span>' }
+  if (typeof v === 'object' && v.$blob !== undefined) {
+    return { cls: '', html: `<span class="blob">BLOB ${fmtSize(v.$blob)}${v.hex ? ' · ' + esc(v.hex) + (v.$blob > v.hex.length / 2 ? '…' : '') : ''}</span>` }
+  }
+  if (typeof v === 'number') return { cls: 'num', html: esc(v) }
+  return { cls: '', html: esc(v) }
+}
+function cellText(v) {
+  if (v === null || v === undefined) return 'NULL'
+  if (typeof v === 'object' && v.$blob !== undefined) return `BLOB (${v.$blob} octets)\n${v.hex}${v.$blob * 2 > v.hex.length ? '…' : ''}`
+  return String(v)
+}
+
+function renderGrid(container, columns, rows, { offset = 0, sort = null, desc = false, onSort = null } = {}) {
+  if (!columns.length) { container.innerHTML = '<div class="placeholder">Aucune colonne</div>'; return }
+  const head = columns.map((c) => {
+    const arrow = sort === c ? `<span class="arrow">${desc ? '▼' : '▲'}</span>` : ''
+    return `<th class="${onSort ? 'sortable' : ''}" data-col="${esc(c)}" title="${onSort ? 'Trier par ' + esc(c) : ''}">${esc(c)}${arrow}</th>`
+  }).join('')
+  const body = rows.map((r, i) => `<tr data-r="${i}"><td class="rn">${offset + i + 1}</td>${r.map((v, j) => {
+    const c = cellHtml(v)
+    return `<td class="${c.cls}" data-c="${j}">${c.html}</td>`
+  }).join('')}</tr>`).join('')
+  container.innerHTML = `<table class="grid"><thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${body}</tbody></table>` +
+    (rows.length ? '' : '<div class="placeholder" style="height:auto;padding:30px">Aucune ligne</div>')
+  container._rows = rows
+  container._cols = columns
+  container._onSort = onSort
+}
+function bindGrid(container) {
+  container.addEventListener('click', (e) => {
+    const th = e.target.closest('th[data-col]')
+    if (th && container._onSort) container._onSort(th.dataset.col)
+  })
+  container.addEventListener('dblclick', (e) => {
+    const td = e.target.closest('td[data-c]')
+    if (!td) return
+    const r = +td.parentElement.dataset.r, c = +td.dataset.c
+    showValue(container._cols[c], container._rows[r][c])
+  })
+}
+bindGrid($('#data-grid'))
+bindGrid($('#result'))
+
+function modal(title, bodyHtml, buttons = []) {
+  const bd = document.createElement('div')
+  bd.className = 'backdrop'
+  bd.innerHTML = `<div class="modal"><div class="modal-head"><span>${esc(title)}</span><button class="ghost icon" data-x>✕</button></div>
+    <div class="modal-body">${bodyHtml}</div><div class="modal-foot"></div></div>`
+  const close = () => { bd.remove(); document.removeEventListener('keydown', onKey) }
+  const onKey = (e) => { if (e.key === 'Escape') close() }
+  document.addEventListener('keydown', onKey)
+  bd.addEventListener('click', (e) => { if (e.target === bd || e.target.closest('[data-x]')) close() })
+  const foot = bd.querySelector('.modal-foot')
+  for (const b of [...buttons, { label: 'Fermer', fn: close }]) {
+    const el = document.createElement('button')
+    el.textContent = b.label
+    if (b.primary) el.className = 'primary'
+    el.onclick = () => b.fn(close)
+    foot.appendChild(el)
+  }
+  document.body.appendChild(bd)
+  return close
+}
+function showValue(col, v) {
+  const text = cellText(v)
+  modal(`Valeur — ${col}`, `<pre>${esc(text)}</pre>`, [{
+    label: 'Copier', primary: true,
+    fn: async (close) => { await copy(typeof v === 'object' && v ? text : String(v ?? '')); close() },
+  }])
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copié') } catch { toast('Copie impossible', true) }
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+function setSide(side) {
+  state.side = side
+  $$('.side-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.side === side))
+  renderSide()
+}
+$$('.side-tabs button').forEach((b) => (b.onclick = () => setSide(b.dataset.side)))
+$('#side-filter').addEventListener('input', renderSide)
+
+function renderSide() {
+  const f = $('#side-filter').value.trim().toLowerCase()
+  const match = (s) => !f || String(s).toLowerCase().includes(f)
+  const list = $('#side-list')
+  if (state.side === 'files') {
+    const recent = state.recent.filter((r) => match(r.path))
+    const mods = state.moduleDbs.filter((r) => match(r.path))
+    let html = `<div class="group"><span>Fichiers récents</span></div>`
+    html += recent.length ? recent.map((r) => `
+      <div class="item ${r.exists ? '' : 'missing'} ${state.info.path === r.path ? 'current' : ''}" data-open="${esc(r.path)}" title="${esc(r.path)}${r.exists ? '' : ' (introuvable)'}">
+        <span>🗄️</span><span class="lbl">${esc(r.name)}<span class="path">${esc(r.path)}</span></span>
+        <button class="ghost icon del" data-rm="${esc(r._id)}" title="Retirer de la liste">✕</button>
+      </div>`).join('') : '<div class="side-empty">Aucun fichier récent.<br>Saisissez un chemin ci-dessus.</div>'
+    html += `<div class="group" data-reload-mods><span>Bases des modules LedroideDesktop</span><span title="Actualiser">⟳</span></div>`
+    html += mods.length ? mods.map((r) => `
+      <div class="item ${state.info.path === r.path ? 'current' : ''}" data-open="${esc(r.path)}" title="${esc(r.path)}">
+        <span>🧩</span><span class="lbl">${esc(r.module)}<span class="path">${esc(r.name)}</span></span>
+        <span class="sub">${fmtSize(r.size)}</span>
+      </div>`).join('') : '<div class="side-empty">Aucune base de module trouvée.</div>'
+    list.innerHTML = html
+    return
+  }
+  if (!state.objects) { list.innerHTML = '<div class="side-empty">Ouvrez une base pour voir son schéma.</div>'; return }
+  const o = state.objects
+  const groups = [
+    ['tables', 'Tables', '▦', (t) => `<span class="sub">${t.rows == null ? '' : fmtNum(t.rows)}</span>`],
+    ['views', 'Vues', '◫', () => ''],
+    ['indexes', 'Index', '⚡', (t) => `<span class="sub">${esc(t.table)}</span>`],
+    ['triggers', 'Déclencheurs', '⚙', (t) => `<span class="sub">${esc(t.table)}</span>`],
+  ]
+  list.innerHTML = groups.map(([key, label, icon, extra]) => {
+    const items = o[key].filter((t) => match(t.name))
+    const coll = state.collapsed[key]
+    return `<div class="group" data-toggle="${key}"><span>${coll ? '▸' : '▾'} ${label}</span><span>${items.length}</span></div>` +
+      (coll ? '' : items.map((t) => `
+        <div class="item ${state.selected && state.selected.name === t.name && state.selected.kind === key ? 'current' : ''}" data-kind="${key}" data-name="${esc(t.name)}" title="${esc(t.name)}">
+          <span class="muted">${icon}</span><span class="lbl mono" style="font-size:12px">${esc(t.name)}</span>${extra(t)}
+        </div>`).join(''))
+  }).join('')
+}
+
+$('#side-list').addEventListener('click', async (e) => {
+  const rm = e.target.closest('[data-rm]')
+  if (rm) { e.stopPropagation(); await call('recent_remove', { id: rm.dataset.rm }); await loadRecent(); return }
+  if (e.target.closest('[data-reload-mods]')) { await loadModuleDbs(); toast('Liste actualisée'); return }
+  const tg = e.target.closest('[data-toggle]')
+  if (tg) { state.collapsed[tg.dataset.toggle] = !state.collapsed[tg.dataset.toggle]; renderSide(); return }
+  const op = e.target.closest('[data-open]')
+  if (op) { $('#path').value = op.dataset.open; openDb(); return }
+  const it = e.target.closest('[data-kind]')
+  if (it) select(it.dataset.kind, it.dataset.name)
+})
+
+async function loadRecent() {
+  try { state.recent = (await call('recent_list')).items } catch (e) { toast(e.message, true) }
+  renderSide()
+}
+async function loadModuleDbs() {
+  try { state.moduleDbs = (await call('module_dbs')).items } catch (e) { toast(e.message, true) }
+  renderSide()
+}
+
+// ── Open / mode ────────────────────────────────────────────────────────────
+async function openDb() {
+  const path = $('#path').value.trim()
+  if (!path) { toast('Indiquez un chemin', true); $('#path').focus(); return }
+  const rw = $('#open-rw').checked
+  if (rw && !confirm('Ouvrir en mode écriture ?\n\nLes requêtes pourront modifier ou supprimer des données de ce fichier.')) return
+  $('#btn-open').disabled = true
+  try {
+    const r = await call('open', { path, readonly: !rw }, { timeout: 30000 })
+    state.info = r
+    state.objects = r.objects
+    state.selected = null
+    state.lastResult = null
+    $('#result').innerHTML = ''
+    $('#sql-info').textContent = ''
+    setSide('schema')
+    renderHeader()
+    const first = r.objects.tables.find((t) => !t.system) || r.objects.tables[0] || r.objects.views[0]
+    if (first) select(r.objects.tables.includes(first) ? 'tables' : 'views', first.name)
+    else renderStructure()
+    toast(`${r.name} ouvert${r.readonly ? ' en lecture seule' : ' en écriture'}`)
+  } catch (e) {
+    toast(e.message, true)
+  } finally {
+    $('#btn-open').disabled = false
+    loadRecent()
+  }
+}
+$('#btn-open').onclick = openDb
+$('#path').addEventListener('keydown', (e) => { if (e.key === 'Enter') openDb() })
+
+function renderHeader() {
+  const i = state.info
+  const has = !!i.open
+  $('#db-title').innerHTML = has
+    ? `<b>${esc(i.name)}</b><small title="${esc(i.path)}">${esc(i.path)} · ${fmtSize(i.size)} · SQLite ${esc(i.sqlite_version)}</small>`
+    : '<b>Aucune base ouverte</b>'
+  for (const id of ['#btn-mode', '#btn-refresh', '#btn-close']) $(id).classList.toggle('hidden', !has)
+  const m = $('#btn-mode')
+  m.className = 'mode ' + (i.readonly ? 'ro' : 'rw') + (has ? '' : ' hidden')
+  m.textContent = i.readonly ? '🔒 Lecture seule' : '✏️ Écriture'
+}
+
+$('#btn-mode').onclick = async () => {
+  const toRw = state.info.readonly
+  if (toRw && !confirm('Passer en mode écriture ?\n\nLes instructions INSERT, UPDATE, DELETE, DROP… seront appliquées directement au fichier (validation automatique, sauf transaction BEGIN explicite). Pensez à faire une copie de sauvegarde.')) return
+  let r
+  try {
+    r = await call('set_mode', { readonly: !toRw })
+  } catch (e) {
+    if (e.code === 'IN_TRANSACTION' && confirm(e.message + '\n\nChanger quand même ? La transaction en cours sera annulée.')) {
+      try { r = await call('set_mode', { readonly: !toRw, force: true }) } catch (e2) { toast(e2.message, true); return }
+    } else { toast(e.message, true); return }
+  }
+  state.info = r
+  renderHeader()
+  toast(r.readonly ? 'Lecture seule' : 'Mode écriture activé')
+}
+
+$('#btn-close').onclick = async () => {
+  await call('close')
+  state.info = { open: false }
+  state.objects = null
+  state.selected = null
+  renderHeader(); setSide('files'); renderStructure(); renderData(); $('#result').innerHTML = ''
+  $('#sel-name').textContent = ''
+}
+
+async function refreshSchema() {
+  if (!state.info.open) return
+  try {
+    const r = await call('schema', {}, { timeout: 30000 })
+    state.info = r
+    state.objects = r.objects
+    renderHeader(); renderSide()
+    if (state.selected) await select(state.selected.kind, state.selected.name, true)
+  } catch (e) { toast(e.message, true) }
+}
+$('#btn-refresh').onclick = refreshSchema
+
+// ── Selection / structure ──────────────────────────────────────────────────
+async function select(kind, name, keepPage = false) {
+  const changed = !state.selected || state.selected.name !== name
+  state.selected = { kind, name }
+  if (changed && !keepPage) state.data = { page: 1, sort: null, desc: false, filter: '', result: null }
+  $('#data-filter').value = state.data.filter
+  $('#sel-name').textContent = name
+  renderSide()
+  if (kind === 'indexes' || kind === 'triggers') {
+    if (state.tab === 'data') setTab('structure')
+  }
+  await renderStructure()
+  if (state.tab === 'data') await loadData()
+}
+
+async function renderStructure() {
+  const el = $('#structure')
+  if (!state.info.open) {
+    el.innerHTML = `<div class="placeholder"><div class="big">🗄️</div><b>Ouvrez une base SQLite</b>
+      Saisissez un chemin à gauche ou choisissez une base récente ou celle d'un module.<br>
+      Les bases sont ouvertes en <b>lecture seule</b> par défaut.</div>`
+    return
+  }
+  const sel = state.selected
+  if (!sel) { el.innerHTML = '<div class="placeholder">Sélectionnez une table, une vue, un index ou un déclencheur.</div>'; return }
+  if (sel.kind === 'indexes' || sel.kind === 'triggers') {
+    const o = state.objects[sel.kind].find((x) => x.name === sel.name) || {}
+    el.innerHTML = `<div class="detail"><h3 class="mono">${esc(sel.name)}</h3>
+      <div class="muted">${sel.kind === 'indexes' ? 'Index' : 'Déclencheur'} sur <span class="mono">${esc(o.table)}</span></div>
+      <div class="sec">Définition</div>
+      ${o.sql ? `<pre class="sql">${hlSql(o.sql)}</pre>` : '<div class="muted">Index créé automatiquement par SQLite (contrainte UNIQUE ou PRIMARY KEY).</div>'}</div>`
+    return
+  }
+  el.innerHTML = '<div class="placeholder"><span class="spinner"></span></div>'
+  let d
+  try { d = await call('details', { name: sel.name }, { timeout: 30000 }) } catch (e) {
+    el.innerHTML = `<div class="error-box">${esc(e.message)}</div>`; return
+  }
+  const cols = d.columns.map((c) => `<tr><td class="n">${esc(c.name)}</td><td class="mono">${esc(c.type) || '<span class="muted">—</span>'}</td>
+      <td>${c.pk ? `<span class="badge pk">PK${d.columns.filter((x) => x.pk).length > 1 ? ' ' + c.pk : ''}</span>` : ''}${c.notnull ? '<span class="badge">NOT NULL</span>' : ''}${c.hidden ? '<span class="badge">générée</span>' : ''}</td>
+      <td class="mono">${c.default == null ? '' : esc(c.default)}</td></tr>`).join('')
+  let html = `<div class="detail"><h3 class="mono">${esc(d.name)}</h3>
+    <div class="muted">${d.kind === 'view' ? 'Vue' : 'Table'}${d.rows != null ? ' · ' + fmtNum(d.rows) + ' ligne(s)' : ''} · ${d.columns.length} colonne(s)</div>
+    <div class="sec">Colonnes</div>
+    <table class="cols"><thead><tr><th>Nom</th><th>Type</th><th>Contraintes</th><th>Défaut</th></tr></thead><tbody>${cols}</tbody></table>`
+  if (d.indexes) {
+    html += `<div class="sec">Index (${d.indexes.length})</div>`
+    html += d.indexes.length ? `<table class="cols"><thead><tr><th>Nom</th><th>Colonnes</th><th></th></tr></thead><tbody>${d.indexes.map((i) =>
+      `<tr><td class="n">${esc(i.name)}</td><td class="mono">${i.columns.map(esc).join(', ')}</td><td>${i.unique ? '<span class="badge uq">UNIQUE</span>' : ''}${i.origin === 'pk' ? '<span class="badge pk">PK</span>' : ''}${i.origin === 'u' ? '<span class="badge">contrainte</span>' : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">Aucun index</div>'
+  }
+  if (d.foreign_keys && d.foreign_keys.length) {
+    html += `<div class="sec">Clés étrangères</div><table class="cols"><tbody>${d.foreign_keys.map((f) =>
+      `<tr><td class="n">${esc(f.from)}</td><td class="mono">→ ${esc(f.table)}(${esc(f.to ?? '')})</td><td class="muted">ON DELETE ${esc(f.on_delete)}</td></tr>`).join('')}</tbody></table>`
+  }
+  if (d.sql) html += `<div class="sec">Définition</div><pre class="sql">${hlSql(d.sql)}</pre>`
+  el.innerHTML = html + '</div>'
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function setTab(tab) {
+  state.tab = tab
+  $$('#tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab))
+  $$('.panel').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab))
+  if (tab === 'data') loadData()
+  if (tab === 'sql') { loadHistory(); setTimeout(() => $('#sql').focus(), 0) }
+}
+$$('#tabs .tab').forEach((t) => (t.onclick = () => setTab(t.dataset.tab)))
+
+// ── Data tab ───────────────────────────────────────────────────────────────
+function renderData() {
+  const el = $('#data-grid')
+  const d = state.data.result
+  const tableSel = state.selected && (state.selected.kind === 'tables' || state.selected.kind === 'views')
+  for (const id of ['#pg-first', '#pg-prev', '#pg-next', '#pg-last', '#data-csv', '#data-json']) $(id).disabled = !d
+  if (!state.info.open || !tableSel) {
+    el.innerHTML = '<div class="placeholder"><div class="big">▦</div>Sélectionnez une table ou une vue dans le schéma.</div>'
+    $('#pg-info').textContent = ''
+    return
+  }
+  if (!d) return
+  $('#pg-info').textContent = `Page ${d.page} / ${d.pages} · ${fmtNum(d.total)} ligne(s)${state.data.filter ? ' filtrée(s)' : ''}`
+  $('#pg-first').disabled = $('#pg-prev').disabled = d.page <= 1
+  $('#pg-next').disabled = $('#pg-last').disabled = d.page >= d.pages
+  renderGrid(el, d.columns, d.rows, {
+    offset: (d.page - 1) * d.page_size, sort: state.data.sort, desc: state.data.desc,
+    onSort: (col) => {
+      if (state.data.sort === col) {
+        if (state.data.desc) { state.data.sort = null; state.data.desc = false } else state.data.desc = true
+      } else { state.data.sort = col; state.data.desc = false }
+      loadData()
+    },
+  })
+}
+
+let dataSeq = 0
+async function loadData() {
+  const sel = state.selected
+  if (!state.info.open || !sel || (sel.kind !== 'tables' && sel.kind !== 'views')) { renderData(); return }
+  const seq = ++dataSeq
+  $('#data-grid').style.opacity = '.5'
+  try {
+    const r = await call('rows', {
+      name: sel.name, page: state.data.page, page_size: +$('#page-size').value,
+      sort: state.data.sort, desc: state.data.desc, filter: state.data.filter,
+    }, { timeout: 60000 })
+    if (seq !== dataSeq) return
+    state.data.result = r
+    state.data.page = r.page
+  } catch (e) {
+    if (seq !== dataSeq) return
+    state.data.result = null
+    $('#data-grid').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+  } finally {
+    if (seq === dataSeq) $('#data-grid').style.opacity = ''
+  }
+  if (state.data.result) renderData()
+}
+let filterTimer
+$('#data-filter').addEventListener('input', () => {
+  clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => { state.data.filter = $('#data-filter').value; state.data.page = 1; loadData() }, 300)
+})
+$('#page-size').onchange = () => { state.data.page = 1; loadData() }
+$('#pg-first').onclick = () => { state.data.page = 1; loadData() }
+$('#pg-prev').onclick = () => { state.data.page--; loadData() }
+$('#pg-next').onclick = () => { state.data.page++; loadData() }
+$('#pg-last').onclick = () => { state.data.page = state.data.result ? state.data.result.pages : 1; loadData() }
+
+function download(content, filename, mime) {
+  const blob = new Blob([content], { type: mime + ';charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove() }, 1000)
+}
+async function doExport(payload, btn) {
+  const old = btn.textContent
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span>'
+  try {
+    const r = await call('export', payload, { timeout: 180000 })
+    download((payload.format === 'csv' ? '\ufeff' : '') + r.content, r.filename, r.mime)
+    toast(`${fmtNum(r.rows)} ligne(s) exportée(s)${r.truncated ? ' (limite atteinte)' : ''}`, r.truncated)
+  } catch (e) { toast(e.message, true) } finally { btn.textContent = old; btn.disabled = false }
+}
+const dataExport = (format, btn) => doExport({
+  table: state.selected.name, format, sort: state.data.sort, desc: state.data.desc, filter: state.data.filter,
+}, btn)
+$('#data-csv').onclick = (e) => dataExport('csv', e.currentTarget)
+$('#data-json').onclick = (e) => dataExport('json', e.currentTarget)
+
+// ── SQL tab ────────────────────────────────────────────────────────────────
+function sqlToRun() {
+  const ta = $('#sql')
+  const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd)
+  return sel.trim() ? sel : ta.value
+}
+
+async function runSql() {
+  if (!state.info.open) { toast('Ouvrez d\'abord une base', true); return }
+  const sql = sqlToRun()
+  if (!sql.trim()) { toast('Requête vide', true); return }
+  $('#btn-run').disabled = true
+  $('#btn-stop').classList.remove('hidden')
+  $('#sql-info').innerHTML = '<span class="spinner"></span> Exécution…'
+  try {
+    const r = await call('execute', { sql }, { timeout: 0 })
+    state.lastSql = sql
+    state.lastResult = r.result
+    const parts = [`<b>${r.elapsed_ms.toLocaleString('fr-FR')} ms</b>`]
+    if (r.statements > 1) parts.push(`${r.statements} instructions`)
+    if (r.result) parts.push(`<b>${fmtNum(r.result.rows.length)}</b> ligne(s)${r.result.truncated ? ' <span class="warn">(affichage limité)</span>' : ''}`)
+    if (r.changes || !r.result) parts.push(`<b>${fmtNum(r.changes)}</b> ligne(s) affectée(s)`)
+    if (r.in_transaction) parts.push('<span class="warn">transaction ouverte (COMMIT / ROLLBACK)</span>')
+    $('#sql-info').innerHTML = parts.join(' · ')
+    if (r.result) renderGrid($('#result'), r.result.columns, r.result.rows)
+    else $('#result').innerHTML = '<div class="placeholder">✓ Instruction exécutée</div>'
+    $('#res-csv').disabled = $('#res-json').disabled = !r.result
+    if (r.changes || /\b(CREATE|DROP|ALTER)\b/i.test(sql)) refreshSchema()
+  } catch (e) {
+    state.lastResult = null
+    $('#res-csv').disabled = $('#res-json').disabled = true
+    $('#sql-info').innerHTML = '<span style="color:var(--err)">Erreur</span>'
+    $('#result').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+    if (e.code === 'READ_ONLY') toast('Base en lecture seule : utilisez le bouton « Lecture seule » pour passer en écriture', true)
+  } finally {
+    $('#btn-run').disabled = false
+    $('#btn-stop').classList.add('hidden')
+    loadHistory()
+  }
+}
+$('#btn-run').onclick = runSql
+$('#btn-stop').onclick = () => call('interrupt')
+$('#res-csv').onclick = (e) => doExport({ sql: state.lastSql, format: 'csv' }, e.currentTarget)
+$('#res-json').onclick = (e) => doExport({ sql: state.lastSql, format: 'json' }, e.currentTarget)
+
+$('#sql').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runSql(); return }
+  if (e.key === 'Tab' && !e.shiftKey) {
+    e.preventDefault()
+    const ta = e.target, s = ta.selectionStart
+    ta.setRangeText('  ', s, ta.selectionEnd, 'end')
+  }
+})
+
+async function loadHistory() {
+  try { state.history = (await call('history_list')).items } catch { state.history = [] }
+  const el = $('#history-list')
+  el.innerHTML = state.history.length ? state.history.map((h, i) => `
+    <div class="h-item ${h.ok ? 'ok' : 'ko'}" data-h="${i}" title="${esc(h.sql)}\n\nClic : charger · Double-clic : exécuter">
+      <code>${esc(h.sql.replace(/\s+/g, ' ').trim())}</code>
+      <small>${fmtDate(h.at)}${h.ok ? ` · ${h.elapsed_ms} ms${h.rows != null ? ' · ' + h.rows + ' l.' : ''}${h.changes ? ' · ' + h.changes + ' modif.' : ''}` : ' · ' + esc(h.error || 'erreur')}</small>
+    </div>`).join('') : '<div class="side-empty">Aucune requête exécutée.</div>'
+}
+$('#history-list').addEventListener('click', (e) => {
+  const it = e.target.closest('[data-h]')
+  if (it) { $('#sql').value = state.history[+it.dataset.h].sql; $('#sql').focus() }
+})
+$('#history-list').addEventListener('dblclick', (e) => { if (e.target.closest('[data-h]')) runSql() })
+$('#hist-clear').onclick = async () => {
+  if (!confirm('Vider l\'historique des requêtes ?')) return
+  await call('history_clear'); loadHistory()
+}
+$('#btn-hist').onclick = () => $('#history').classList.toggle('hidden')
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F5') { e.preventDefault(); refreshSchema() }
+  if (e.ctrlKey && e.key.toLowerCase() === 'o') { e.preventDefault(); $('#path').focus(); $('#path').select() }
+  if (e.altKey && ['1', '2', '3'].includes(e.key)) { e.preventDefault(); setTab(['structure', 'data', 'sql'][+e.key - 1]) }
+})
+
+// ── Init ───────────────────────────────────────────────────────────────────
+;(async () => {
+  renderHeader(); renderStructure(); renderData()
+  try {
+    const st = await call('status')
+    if (st.open) {
+      state.info = st
+      $('#path').value = st.path
+      await refreshSchema()
+      setSide('schema')
+    }
+  } catch { /* backend not ready */ }
+  loadRecent()
+  loadModuleDbs()
+})()
+</script>
+</body>
+</html>

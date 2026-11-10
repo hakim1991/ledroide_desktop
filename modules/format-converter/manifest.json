@@ -1,0 +1,30 @@
+{
+  "id": "format-converter",
+  "name": "Convertisseur de formats",
+  "version": "1.0.0",
+  "description": "Convertit entre JSON, YAML, TOML, XML, CSV, .env et INI avec détection automatique du format, validation (ligne de l'erreur), indentation, tri des clés et import/export de fichiers.",
+  "category": "Développement",
+  "tags": [
+    "json",
+    "yaml",
+    "toml",
+    "xml",
+    "csv",
+    "conversion"
+  ],
+  "icon": "🔄",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

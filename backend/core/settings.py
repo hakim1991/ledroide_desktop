@@ -15,6 +15,10 @@ DATA_DIR = Path(os.environ.get("LEDROIDE_DATA_DIR") or BACKEND_DIR).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["LEDROIDE_DATA_DIR"] = str(DATA_DIR)
 
+# Modules installed by the user (catalog, archive): the install dir is wiped on
+# every app update, so only the modules shipped with the app live in MODULES_DIR.
+USER_MODULES_DIR = DATA_DIR / "installed-modules"
+
 CONFIGS_FILE = DATA_DIR / "configs.json"
 STATE_FILE   = DATA_DIR / "state.json"
 

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Git Viewer</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  #repo-path { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
+  #recents { max-width: 200px; }
+  .chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 2px 9px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .chip b { color: var(--text); }
+  .chip.br { border-color: rgba(99,102,241,.5); color: var(--accent-h); }
+  .chip.up { color: var(--ok); } .chip.down { color: var(--warn); }
+  #repo-info { display: flex; gap: 6px; align-items: center; }
+
+  .layout { flex: 1; min-height: 0; display: flex; }
+  nav { width: 170px; flex-shrink: 0; border-right: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 2px; background: var(--surface); }
+  nav button { text-align: left; background: transparent; border-color: transparent; color: var(--muted); display: flex; justify-content: space-between; }
+  nav button.active { background: rgba(99,102,241,.14); color: var(--text); }
+  nav button .n { font-size: 11px; color: var(--accent-h); }
+  nav .sep { flex: 1; }
+  nav .ver { font-size: 10.5px; color: #52525b; padding: 4px 6px; }
+  .view { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .toolbar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .toolbar input[type=text] { width: 240px; }
+  .split { flex: 1; min-height: 0; display: flex; }
+  .list { flex: 1; min-width: 0; overflow: auto; }
+  .detail { width: 52%; min-width: 360px; border-left: 1px solid var(--border); overflow: auto; background: var(--surface); }
+  .detail.hidden + .x { display: none; }
+
+  .commit { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 24px; cursor: pointer; white-space: nowrap; font-size: 12.5px; }
+  .commit:hover { background: var(--surface2); }
+  .commit.sel { background: rgba(99,102,241,.16); }
+  .gline { height: 18px; padding: 0 10px; display: flex; align-items: center; }
+  .graph { font-family: var(--mono); font-size: 13px; white-space: pre; flex-shrink: 0; line-height: 1; }
+  .g0 { color: #818cf8; } .g1 { color: #22c55e; } .g2 { color: #f59e0b; } .g3 { color: #f472b6; } .g4 { color: #38bdf8; } .g5 { color: #a3e635; } .g6 { color: #fb923c; } .g7 { color: #c084fc; }
+  .sha { font-family: var(--mono); font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
+  .subj { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .auth { color: var(--muted); width: 140px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; font-size: 12px; }
+  .date { color: var(--muted); width: 110px; text-align: right; flex-shrink: 0; font-size: 12px; }
+  .ref { font-size: 10.5px; padding: 0 6px; border-radius: 8px; border: 1px solid; flex-shrink: 0; font-weight: 600; }
+  .ref.head { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .ref.local { color: var(--ok); border-color: rgba(34,197,94,.45); }
+  .ref.remote { color: var(--info); border-color: rgba(56,189,248,.45); }
+  .ref.tag { color: var(--warn); border-color: rgba(245,158,11,.45); }
+  .more { padding: 10px; text-align: center; }
+
+  .d-head { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+  .d-head .msg { font-size: 14px; font-weight: 600; white-space: pre-wrap; word-break: break-word; }
+  .d-head .body { white-space: pre-wrap; color: #c4c4cc; font-size: 12.5px; word-break: break-word; }
+  .d-meta { display: grid; grid-template-columns: 90px 1fr; gap: 2px 8px; font-size: 12px; }
+  .d-meta span:nth-child(odd) { color: var(--muted); }
+  .d-meta a { color: var(--accent-h); cursor: pointer; font-family: var(--mono); }
+  .stats { display: flex; gap: 10px; font-size: 12px; align-items: center; }
+  .add { color: var(--ok); } .del { color: var(--err); }
+  .file { border-bottom: 1px solid var(--border); }
+  .file-head { display: flex; gap: 8px; align-items: center; padding: 6px 12px; cursor: pointer; position: sticky; top: 0; background: var(--surface2); font-size: 12.5px; z-index: 1; }
+  .file-head .p { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  .st { font-family: var(--mono); font-weight: 700; width: 14px; text-align: center; }
+  .st-A { color: var(--ok); } .st-D { color: var(--err); } .st-M { color: var(--warn); } .st-R, .st-C { color: var(--info); }
+  .file.closed .diff { display: none; }
+  .diff { font-family: var(--mono); font-size: 12px; line-height: 1.45; overflow-x: auto; }
+  .diff div { white-space: pre; padding: 0 12px; min-width: max-content; }
+  .diff .a { background: rgba(34,197,94,.12); color: #bbf7d0; }
+  .diff .r { background: rgba(239,68,68,.12); color: #fecaca; }
+  .diff .h { color: var(--info); background: rgba(56,189,248,.06); }
+  .diff .n { color: var(--muted); }
+  .note { padding: 8px 12px; color: var(--muted); font-size: 12px; }
+
+  .section { padding: 10px 14px; }
+  .section h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 10px 0 6px; display: flex; gap: 8px; }
+  .section h3:first-child { margin-top: 0; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.t td, table.t th { padding: 4px 8px; border-bottom: 1px solid #1d1d21; text-align: left; }
+  table.t th { color: var(--muted); font-weight: 500; }
+  table.t tr.click { cursor: pointer; } table.t tr.click:hover { background: var(--surface2); }
+  table.t td.m { font-family: var(--mono); font-size: 12px; }
+
+  .blame { font-family: var(--mono); font-size: 12px; line-height: 1.45; }
+  .blame .ln { display: flex; }
+  .blame .ln.alt { background: rgba(255,255,255,.02); }
+  .blame .meta { width: 290px; flex-shrink: 0; color: var(--muted); padding: 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-right: 1px solid var(--border); cursor: pointer; }
+  .blame .meta:hover { color: var(--accent-h); }
+  .blame .no { width: 50px; flex-shrink: 0; text-align: right; color: #52525b; padding-right: 8px; }
+  .blame .code { white-space: pre; padding-left: 8px; }
+
+  .placeholder { color: var(--muted); flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 30px; height: 100%; }
+  .placeholder .big { font-size: 34px; }
+  .error-box { margin: 14px; color: #fca5a5; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:16px">🌿</span>
+  <input id="repo-path" type="text" spellcheck="false" placeholder="Dossier du dépôt Git (ex. C:\Projets\mon-app)" />
+  <select id="recents" title="Dépôts récents"><option value="">Récents…</option></select>
+  <button id="btn-open" class="primary" title="Ouvrir (Entrée)">Ouvrir</button>
+  <div id="repo-info"></div>
+  <button id="btn-refresh" class="ghost" title="Actualiser (F5)" disabled>⟳</button>
+  <button id="btn-fetch" title="git fetch --all (seule commande réseau ; ne modifie pas vos branches locales)" disabled>Fetch</button>
+</header>
+<div class="layout">
+  <nav>
+    <button data-view="log" class="active">Historique</button>
+    <button data-view="status">Statut <span class="n" id="n-status"></span></button>
+    <button data-view="refs">Branches & tags <span class="n" id="n-refs"></span></button>
+    <button data-view="stash">Stash <span class="n" id="n-stash"></span></button>
+    <button data-view="blame">Blame</button>
+    <span class="sep"></span>
+    <div class="ver" id="git-version"></div>
+  </nav>
+  <div class="view" id="view">
+    <div class="placeholder"><div class="big">🌿</div><div>Ouvrez un dépôt Git local pour parcourir son historique.</div>
+      <div>Visionneuse en <b>lecture seule</b> : aucune commande ne modifie le dépôt (sauf « Fetch », sur demande).</div>
+      <div><kbd>Entrée</kbd> ouvrir · <kbd>F5</kbd> actualiser · <kbd>Ctrl</kbd> + <kbd>F</kbd> rechercher · <kbd>↑</kbd> <kbd>↓</kbd> commit précédent / suivant</div></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'git-viewer'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const state = { repo: null, status: null, refs: null, view: 'log', rows: [], more: false, ref: '', search: { field: 'message', text: '' },
+                selected: null, commit: null, closedFiles: new Set(), files: null, blame: null, loading: false }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+const fmtDate = (t) => t ? new Date(t * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
+function relDate(t) {
+  const s = Date.now() / 1000 - t
+  if (s < 3600) return `il y a ${Math.max(1, Math.floor(s / 60))} min`
+  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`
+  if (s < 86400 * 30) return `il y a ${Math.floor(s / 86400)} j`
+  return new Date(t * 1000).toLocaleDateString('fr-FR')
+}
+
+// ── Repo ───────────────────────────────────────────────────────────────────
+async function openRepo(path) {
+  path = (path ?? $('#repo-path').value).trim().replace(/^"|"$/g, '')
+  if (!path) { toast('Indiquez le dossier du dépôt', true); return }
+  $('#btn-open').disabled = true
+  try {
+    const st = await call('open', { path }, { timeout: 60000 })
+    state.repo = st.root; state.status = st
+    $('#repo-path').value = st.root
+    state.rows = []; state.selected = null; state.commit = null; state.ref = ''; state.files = null; state.blame = null
+    state.search = { field: 'message', text: '' }
+    $('#btn-refresh').disabled = false; $('#btn-fetch').disabled = !Object.keys(st.remotes || {}).length
+    renderRepoInfo()
+    loadRecents()
+    await Promise.all([loadRefs(), loadLog(false)])
+    render()
+  } catch (e) { toast(e.message, true) }
+  finally { $('#btn-open').disabled = false }
+}
+
+function renderRepoInfo() {
+  const st = state.status
+  if (!st) { $('#repo-info').innerHTML = ''; return }
+  const b = st.branch
+  $('#repo-info').innerHTML = `<span class="chip br" title="${esc(st.root)}">⎇ <b>${esc(b.head || 'HEAD détachée')}</b></span>
+    ${b.upstream ? `<span class="chip" title="Branche suivie">${esc(b.upstream)}</span>` : ''}
+    ${b.ahead ? `<span class="chip up" title="Commits locaux non poussés">↑ ${b.ahead}</span>` : ''}
+    ${b.behind ? `<span class="chip down" title="Commits distants non récupérés">↓ ${b.behind}</span>` : ''}
+    <span class="chip">${st.clean ? '✓ propre' : `${st.staged.length + st.unstaged.length + st.untracked.length + st.conflicts.length} changement(s)`}</span>`
+  const n = st.staged.length + st.unstaged.length + st.untracked.length + st.conflicts.length
+  $('#n-status').textContent = n || ''
+}
+
+async function refresh() {
+  if (!state.repo) return
+  try {
+    state.status = await call('status', { path: state.repo }, { timeout: 60000 })
+    renderRepoInfo()
+    await Promise.all([loadRefs(), loadLog(false)])
+    if (state.view === 'blame' && state.blame) await loadBlame(state.blame.path, state.blame.rev)
+    render(); toast('Actualisé')
+  } catch (e) { toast(e.message, true) }
+}
+
+async function loadRefs() {
+  try {
+    state.refs = await call('refs', { path: state.repo }, { timeout: 30000 })
+    $('#n-refs').textContent = state.refs.branches.length + state.refs.tags.length || ''
+    $('#n-stash').textContent = state.refs.stash.length || ''
+  } catch (e) { toast(e.message, true) }
+}
+
+async function loadLog(append) {
+  state.loading = true
+  try {
+    const res = await call('log', { path: state.repo, ref: state.ref, skip: append ? state.rows.filter((r) => r.sha).length : 0,
+      search: state.search.text ? state.search : null }, { timeout: 60000 })
+    state.rows = append ? [...state.rows, ...res.rows] : res.rows
+    state.more = res.more
+    state.emptyRepo = !!res.empty_repo
+  } catch (e) { toast(e.message, true); if (!append) state.rows = [] }
+  finally { state.loading = false }
+}
+
+async function loadRecents() {
+  try {
+    const { items } = await call('recents')
+    $('#recents').innerHTML = '<option value="">Récents…</option>' + items.map((r) => `<option value="${esc(r.path)}" ${r.exists ? '' : 'disabled'}>${esc(r.name)} — ${esc(r.path)}</option>`).join('')
+  } catch {}
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────────
+function graphHtml(g) {
+  return [...g].map((ch, i) => ch === ' ' ? ' ' : `<span class="g${Math.floor(i / 2) % 8}">${ch === '*' ? '●' : esc(ch)}</span>`).join('')
+}
+function refBadges(refs) {
+  return refs.map((r) => {
+    if (r.startsWith('HEAD -> ')) return `<span class="ref head">${esc(r.slice(8))}</span>`
+    if (r === 'HEAD') return '<span class="ref head">HEAD</span>'
+    if (r.startsWith('tag: ')) return `<span class="ref tag">🏷 ${esc(r.slice(5))}</span>`
+    if (state.refs?.remotes.some((x) => x.name === r) || r.endsWith('/HEAD')) return `<span class="ref remote">${esc(r)}</span>`
+    return `<span class="ref local">${esc(r)}</span>`
+  }).join('')
+}
+
+function render() {
+  $$('nav button[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === state.view))
+  if (!state.repo) return
+  const v = $('#view')
+  if (state.view === 'log') return renderLog(v)
+  if (state.view === 'status') return renderStatus(v)
+  if (state.view === 'refs') return renderRefs(v)
+  if (state.view === 'stash') return renderStash(v)
+  if (state.view === 'blame') return renderBlame(v)
+}
+
+function refOptions() {
+  const r = state.refs || { branches: [], remotes: [], tags: [] }
+  const opt = (x) => `<option value="${esc(x.name)}" ${state.ref === x.name ? 'selected' : ''}>${esc(x.name)}</option>`
+  return `<option value="">Toutes les branches</option><option value="HEAD" ${state.ref === 'HEAD' ? 'selected' : ''}>HEAD</option>
+    ${r.branches.length ? `<optgroup label="Branches locales">${r.branches.map(opt).join('')}</optgroup>` : ''}
+    ${r.remotes.length ? `<optgroup label="Branches distantes">${r.remotes.map(opt).join('')}</optgroup>` : ''}
+    ${r.tags.length ? `<optgroup label="Tags">${r.tags.map(opt).join('')}</optgroup>` : ''}`
+}
+
+function renderLog(v) {
+  const commits = state.rows.filter((r) => r.sha).length
+  v.innerHTML = `<div class="toolbar">
+      <select id="log-ref" title="Branche affichée">${refOptions()}</select>
+      <select id="log-field"><option value="message">Message</option><option value="author">Auteur</option><option value="file">Fichier</option><option value="code">Contenu modifié</option></select>
+      <input id="log-search" type="text" placeholder="Rechercher… (Entrée)" value="${esc(state.search.text)}" />
+      ${state.search.text ? '<button class="ghost" id="log-reset">Effacer</button>' : ''}
+      <span style="flex:1"></span><span class="muted">${commits} commit(s)${state.more ? '+' : ''}</span>
+    </div>
+    <div class="split"><div class="list" id="log-list"></div><div class="detail ${state.commit ? '' : 'hidden'}" id="detail"></div></div>`
+  $('#log-field').value = state.search.field
+  const list = $('#log-list')
+  if (state.emptyRepo) list.innerHTML = '<div class="placeholder">Ce dépôt ne contient encore aucun commit.</div>'
+  else if (!state.rows.length) list.innerHTML = `<div class="placeholder">${state.loading ? '<span class="spinner"></span>' : 'Aucun commit ne correspond.'}</div>`
+  else {
+    list.innerHTML = state.rows.map((r) => r.sha
+      ? `<div class="commit ${state.selected === r.sha ? 'sel' : ''}" data-sha="${r.sha}" title="${esc(r.subject)}">
+          <span class="graph">${graphHtml(r.graph)}</span><span class="sha">${r.sha.slice(0, 8)}</span>${refBadges(r.refs)}
+          <span class="subj">${esc(r.subject)}</span><span class="auth" title="${esc(r.email)}">${esc(r.author)}</span>
+          <span class="date" title="${fmtDate(r.time)}">${relDate(r.time)}</span></div>`
+      : `<div class="gline"><span class="graph">${graphHtml(r.graph)}</span></div>`).join('') +
+      (state.more ? '<div class="more"><button id="log-more">Charger plus</button></div>' : '')
+  }
+  if (state.commit) renderDetail($('#detail'), state.commit)
+  $('#log-ref').addEventListener('change', async (e) => { state.ref = e.target.value; await loadLog(false); render() })
+  $('#log-field').addEventListener('change', (e) => { state.search.field = e.target.value })
+  $('#log-search').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return
+    state.search = { field: $('#log-field').value, text: e.target.value.trim() }
+    await loadLog(false); render(); $('#log-search')?.focus()
+  })
+  $('#log-reset')?.addEventListener('click', async () => { state.search.text = ''; await loadLog(false); render() })
+  $('#log-more')?.addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.innerHTML = '<span class="spinner"></span>'
+    const top = list.scrollTop
+    await loadLog(true); render(); $('#log-list').scrollTop = top
+  })
+}
+
+async function selectCommit(sha, stayInView = true) {
+  state.selected = sha
+  $$('.commit').forEach((el) => el.classList.toggle('sel', el.dataset.sha === sha))
+  try {
+    state.commit = await call('commit', { path: state.repo, sha }, { timeout: 60000 })
+    state.closedFiles = new Set(state.commit.files.length > 15 ? state.commit.files.map((f) => f.path) : [])
+    if (!stayInView && state.view !== 'log' && state.view !== 'stash') state.view = 'log'
+    const d = $('#detail')
+    if (d) { d.classList.remove('hidden'); renderDetail(d, state.commit); d.scrollTop = 0 } else render()
+  } catch (e) { toast(e.message, true) }
+}
+
+function renderDetail(box, c) {
+  const [title, ...rest] = c.message.split('\n')
+  const body = rest.join('\n').trim()
+  box.innerHTML = `<div class="d-head">
+      <div style="display:flex;gap:8px;align-items:flex-start"><div class="msg" style="flex:1">${esc(title)}</div><button class="ghost" id="d-close" title="Fermer">✕</button></div>
+      ${body ? `<div class="body">${esc(body)}</div>` : ''}
+      <div>${refBadges(c.refs)}</div>
+      <div class="d-meta">
+        <span>Commit</span><span class="mono">${c.sha} <button class="ghost" data-copy="${c.sha}" style="padding:0 5px">⧉</button></span>
+        <span>Auteur</span><span>${esc(c.author)} &lt;${esc(c.email)}&gt; · ${fmtDate(c.time)}</span>
+        ${c.committer !== c.author || c.commit_time !== c.time ? `<span>Commité par</span><span>${esc(c.committer)} · ${fmtDate(c.commit_time)}</span>` : ''}
+        <span>Parent(s)</span><span>${c.parents.map((p) => `<a data-sha="${p}">${p.slice(0, 8)}</a>`).join(' ') || '—'}${c.parents.length > 1 ? ' <span class="muted">(fusion : diff par rapport au 1er parent)</span>' : ''}</span>
+      </div>
+      <div class="stats"><span>${c.stats.files} fichier(s)</span><span class="add">+${c.stats.add}</span><span class="del">−${c.stats.del}</span>
+        <span style="flex:1"></span><button class="ghost" id="d-toggle">${state.closedFiles.size ? 'Tout déplier' : 'Tout replier'}</button></div>
+    </div>
+    ${c.truncated ? '<div class="note">⚠ Diff tronqué (taille maximale atteinte, voir la configuration du module).</div>' : ''}
+    ${c.files.map((f, i) => `<div class="file ${state.closedFiles.has(f.path) ? 'closed' : ''}" data-i="${i}">
+      <div class="file-head" data-path="${esc(f.path)}"><span class="st st-${f.status}">${f.status}</span>
+        <span class="p" title="${esc(f.status === 'R' || f.status === 'C' ? `${f.old} → ${f.new}` : f.path)}">&lrm;${esc(f.status === 'R' || f.status === 'C' ? `${f.old} → ${f.new}` : f.path)}&lrm;</span>
+        <span class="add">+${f.add}</span><span class="del">−${f.del}</span></div>
+      <div class="diff">${diffHtml(f)}</div></div>`).join('') || '<div class="note">Aucune modification de fichier.</div>'}`
+}
+
+function diffHtml(f) {
+  if (f.binary) return '<div class="n">Fichier binaire</div>'
+  if (!f.lines.length) return `<div class="n">${f.status === 'R' ? 'Renommage sans modification' : 'Pas de contenu (fichier vide ou changement de mode)'}</div>`
+  return f.lines.map((l) => {
+    const cls = l.startsWith('@@') ? 'h' : l.startsWith('+') ? 'a' : l.startsWith('-') ? 'r' : l.startsWith('\\') ? 'n' : ''
+    return `<div class="${cls}">${esc(l) || ' '}</div>`
+  }).join('') + (f.truncated ? '<div class="n">… diff de ce fichier tronqué</div>' : '')
+}
+
+function renderStatus(v) {
+  const st = state.status
+  const block = (title, items, cls) => items.length ? `<h3>${title} <span>${items.length}</span></h3><table class="t">${items.map((x) =>
+    `<tr><td style="width:24px" class="st st-${x.code === '?' ? 'A' : (x.code || 'M')[0]}">${esc(x.code || '?')}</td>
+     <td class="m">${esc(x.orig ? `${x.orig} → ${x.path}` : x.path)}</td><td class="muted" style="width:120px">${esc(x.label || cls)}</td></tr>`).join('')}</table>` : ''
+  const b = st.branch
+  v.innerHTML = `<div class="toolbar"><b>Statut</b><span class="muted">${esc(st.root)}</span></div><div class="list section">
+    <table class="t" style="max-width:640px;margin-bottom:10px">
+      <tr><td class="muted" style="width:170px">Branche</td><td>${esc(b.head || 'HEAD détachée')} <span class="mono muted">${b.oid ? b.oid.slice(0, 10) : '(aucun commit)'}</span></td></tr>
+      <tr><td class="muted">Branche suivie</td><td>${esc(b.upstream || '— aucune')}</td></tr>
+      ${b.upstream ? `<tr><td class="muted">Avance / retard</td><td><span class="add">↑ ${b.ahead} en avance</span> · <span style="color:var(--warn)">↓ ${b.behind} en retard</span></td></tr>` : ''}
+      <tr><td class="muted">Dépôts distants</td><td>${Object.entries(st.remotes).map(([k, u]) => `<div><b>${esc(k)}</b> <span class="mono muted">${esc(u)}</span></div>`).join('') || '—'}</td></tr>
+      <tr><td class="muted">Commits (HEAD)</td><td>${st.commits}</td></tr>
+    </table>
+    ${st.clean ? '<div class="placeholder" style="height:auto">✓ Arbre de travail propre : rien à valider.</div>' : ''}
+    ${block('Conflits', st.conflicts, 'conflit')}${block('Indexés (prêts à valider)', st.staged)}
+    ${block('Modifiés non indexés', st.unstaged)}${block('Non suivis', st.untracked.map((x) => ({ ...x, code: '?', label: 'non suivi' })))}
+  </div>`
+}
+
+function renderRefs(v) {
+  const r = state.refs
+  if (!r) { v.innerHTML = '<div class="placeholder"><span class="spinner"></span></div>'; return }
+  const rows = (items, kind) => items.map((x) => `<tr class="click" data-ref="${esc(x.name)}">
+    <td>${kind === 'tag' ? '🏷' : kind === 'remote' ? '☁' : x.head ? '●' : '⎇'} <b>${esc(x.name)}</b>${x.head ? ' <span class="ref head">HEAD</span>' : ''}${x.annotated ? ' <span class="muted">(annoté)</span>' : ''}</td>
+    <td class="m muted">${esc(x.sha)}</td><td>${esc(x.upstream || '')}${x.track ? ` <span class="muted">[${esc(x.track.replace('ahead', 'avance').replace('behind', 'retard').replace('gone', 'disparue'))}]</span>` : ''}</td>
+    <td style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.subject)}</td><td class="muted" style="white-space:nowrap">${relDate(x.time)}</td></tr>`).join('')
+  const table = (title, items, kind) => `<h3>${title} <span>${items.length}</span></h3>${items.length ? `<table class="t"><tr><th>Nom</th><th>Commit</th><th>${kind === 'local' ? 'Suivi' : ''}</th><th>Dernier message</th><th>Date</th></tr>${rows(items, kind)}</table>` : '<p class="muted">Aucun.</p>'}`
+  v.innerHTML = `<div class="toolbar"><b>Branches & tags</b><span class="muted">Cliquez pour afficher l'historique</span></div><div class="list section">
+    ${table('Branches locales', r.branches, 'local')}${table('Branches distantes', r.remotes, 'remote')}${table('Tags', r.tags, 'tag')}</div>`
+}
+
+function renderStash(v) {
+  const s = state.refs?.stash || []
+  v.innerHTML = `<div class="toolbar"><b>Stash</b><span class="muted">Lecture seule</span></div>
+    <div class="split"><div class="list section">${s.length ? `<table class="t">${s.map((x) => `<tr class="click ${state.selected === x.ref ? 'sel' : ''}" data-stash="${esc(x.ref)}">
+      <td class="m" style="width:100px">${esc(x.ref)}</td><td>${esc(x.subject)}</td><td class="muted" style="width:120px">${relDate(x.time)}</td></tr>`).join('')}</table>`
+      : '<div class="placeholder">Aucune remise (stash).</div>'}</div>
+    <div class="detail ${state.commit && state.view === 'stash' && state.selected?.startsWith('stash@') ? '' : 'hidden'}" id="detail"></div></div>`
+  if (state.commit && state.selected?.startsWith('stash@')) renderDetail($('#detail'), state.commit)
+}
+
+function renderBlame(v) {
+  const b = state.blame
+  v.innerHTML = `<div class="toolbar">
+      <input id="bl-file" type="text" list="bl-files" placeholder="Fichier (chemin relatif au dépôt)" style="width:340px" class="mono" value="${esc(b?.path || '')}" />
+      <datalist id="bl-files">${(state.files || []).slice(0, 5000).map((f) => `<option value="${esc(f)}">`).join('')}</datalist>
+      <select id="bl-rev" title="Révision">${refOptions().replace('Toutes les branches', 'Copie de travail')}</select>
+      <button class="primary" id="bl-run">Blame</button><span class="muted" id="bl-info"></span></div>
+    <div class="list" id="bl-body"></div>`
+  $('#bl-rev').value = b?.rev || ''
+  const body = $('#bl-body')
+  if (!b) body.innerHTML = '<div class="placeholder"><div class="big">🔎</div><div>Choisissez un fichier pour voir, ligne par ligne, le dernier commit qui l’a modifiée.</div></div>'
+  else {
+    let prev = null, alt = false
+    $('#bl-info').textContent = `${b.lines.length} ligne(s)`
+    body.innerHTML = `<div class="blame">${b.lines.map((l, i) => {
+      const first = l.sha !== prev
+      if (first) alt = !alt
+      prev = l.sha
+      const uncommitted = /^0+$/.test(l.sha)
+      return `<div class="ln ${alt ? 'alt' : ''}"><div class="meta" ${uncommitted ? '' : `data-sha="${l.sha}"`} title="${esc(l.summary)}">${first ? (uncommitted ? 'Non validé' : `${l.sha.slice(0, 8)} ${esc(l.author)} · ${new Date(l.time * 1000).toLocaleDateString('fr-FR')}`) : ''}</div>
+        <div class="no">${i + 1}</div><div class="code">${esc(l.text) || ' '}</div></div>`
+    }).join('')}</div>`
+  }
+  const run = () => loadBlame($('#bl-file').value.trim(), $('#bl-rev').value)
+  $('#bl-run').addEventListener('click', run)
+  $('#bl-file').addEventListener('keydown', (e) => { if (e.key === 'Enter') run() })
+  $('#bl-rev').addEventListener('change', async (e) => { state.files = (await call('files', { path: state.repo, rev: e.target.value }, { timeout: 30000 }).catch(() => ({ files: [] }))).files; const f = $('#bl-file').value; renderBlame(v); $('#bl-file').value = f; $('#bl-rev').value = e.target.value })
+}
+
+async function loadBlame(file, rev) {
+  if (!file) { toast('Indiquez un fichier', true); return }
+  try {
+    state.blame = await call('blame', { path: state.repo, file, rev: rev || null }, { timeout: 120000 })
+    renderBlame($('#view'))
+  } catch (e) { toast(e.message, true) }
+}
+
+// ── Events ─────────────────────────────────────────────────────────────────
+$('#view').addEventListener('click', async (e) => {
+  const copy = e.target.closest('[data-copy]')
+  if (copy) { try { await navigator.clipboard.writeText(copy.dataset.copy); toast('SHA copié') } catch { toast('Copie impossible', true) } return }
+  if (e.target.closest('#d-close')) { state.commit = null; state.selected = null; $('#detail')?.classList.add('hidden'); $$('.commit.sel').forEach((x) => x.classList.remove('sel')); return }
+  if (e.target.closest('#d-toggle')) {
+    if (state.closedFiles.size) state.closedFiles.clear(); else state.closedFiles = new Set(state.commit.files.map((f) => f.path))
+    renderDetail($('#detail'), state.commit); return
+  }
+  const fh = e.target.closest('.file-head')
+  if (fh) { const p = fh.dataset.path; if (state.closedFiles.has(p)) state.closedFiles.delete(p); else state.closedFiles.add(p); fh.parentElement.classList.toggle('closed'); return }
+  const row = e.target.closest('.commit')
+  if (row) { selectCommit(row.dataset.sha); return }
+  const link = e.target.closest('a[data-sha], .meta[data-sha]')
+  if (link) {
+    if (state.view !== 'log') { state.view = 'log'; render() }
+    selectCommit(link.dataset.sha); return
+  }
+  const ref = e.target.closest('tr[data-ref]')
+  if (ref) { state.ref = ref.dataset.ref; state.search.text = ''; state.view = 'log'; await loadLog(false); render(); return }
+  const st = e.target.closest('tr[data-stash]')
+  if (st) {
+    state.selected = st.dataset.stash
+    try { state.commit = await call('commit', { path: state.repo, sha: st.dataset.stash }, { timeout: 60000 }); state.closedFiles = new Set(); renderStash($('#view')) }
+    catch (err) { toast(err.message, true) }
+  }
+})
+
+$$('nav button[data-view]').forEach((b) => b.addEventListener('click', async () => {
+  if (!state.repo) { toast("Ouvrez d'abord un dépôt", true); return }
+  const prev = state.view
+  state.view = b.dataset.view
+  if (state.view === 'stash' || (prev === 'stash' && state.view === 'log')) { state.commit = null; state.selected = null }
+  if (state.view === 'blame' && !state.files) state.files = (await call('files', { path: state.repo }, { timeout: 30000 }).catch(() => ({ files: [] }))).files
+  render()
+}))
+$('#btn-open').addEventListener('click', () => openRepo())
+$('#repo-path').addEventListener('keydown', (e) => { if (e.key === 'Enter') openRepo() })
+$('#recents').addEventListener('change', (e) => { if (e.target.value) openRepo(e.target.value); e.target.value = '' })
+$('#btn-refresh').addEventListener('click', refresh)
+$('#btn-fetch').addEventListener('click', async () => {
+  const btn = $('#btn-fetch')
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Fetch'
+  try { const r = await call('fetch', { path: state.repo }, { timeout: 200000 }); toast(`Fetch terminé (${r.duration_s} s)`); await refresh() }
+  catch (e) { toast(e.message, true) }
+  finally { btn.disabled = false; btn.textContent = 'Fetch' }
+})
+document.addEventListener('keydown', (e) => {
+  const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)
+  if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r')) { e.preventDefault(); refresh() }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && state.repo) {
+    e.preventDefault()
+    if (state.view !== 'log') { state.view = 'log'; render() }
+    $('#log-search')?.focus()
+  }
+  if (!typing && state.view === 'log' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    const shas = state.rows.filter((r) => r.sha).map((r) => r.sha)
+    if (!shas.length) return
+    e.preventDefault()
+    const i = shas.indexOf(state.selected)
+    const n = i < 0 ? 0 : Math.max(0, Math.min(shas.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+    selectCommit(shas[n])
+    document.querySelector(`.commit[data-sha="${shas[n]}"]`)?.scrollIntoView({ block: 'nearest' })
+  }
+  if (e.key === 'Escape' && state.commit) { state.commit = null; state.selected = null; render() }
+})
+
+;(async () => {
+  try { const r = await call('check'); $('#git-version').textContent = r.version }
+  catch (e) {
+    $('#view').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+    $('#btn-open').disabled = true
+    return
+  }
+  loadRecents()
+})()
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "id": "snippets",
+  "name": "Snippets",
+  "version": "1.0.0",
+  "description": "Bibliothèque de bouts de code et de commandes : recherche, langages, tags, favoris, coloration syntaxique, copie en un clic avec placeholders {{nom}}, import/export JSON.",
+  "category": "Développement",
+  "tags": [
+    "code",
+    "snippets",
+    "commandes",
+    "presse-papiers"
+  ],
+  "icon": "✂️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "clipboard"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

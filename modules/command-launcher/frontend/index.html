@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lanceur de commandes</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); padding: 0; }
+  input[type=color] { padding: 0 2px; height: 30px; width: 44px; cursor: pointer; }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .mono { font-family: var(--mono); }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 6px; }
+  #tabs { display: flex; gap: 3px; overflow-x: auto; flex: 1; min-width: 0; }
+  .gtab { padding: 4px 11px; border-radius: 6px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; white-space: nowrap; }
+  .gtab:hover { color: var(--text); }
+  .gtab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .gtab.drop { border-color: var(--accent); background: rgba(99,102,241,.15); color: #fff; }
+  .gtab .n { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  #search { width: 170px; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+               padding: 4px; z-index: 40; min-width: 210px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+
+  #body { flex: 1; min-height: 0; display: flex; }
+  #center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #grid { flex: 1; min-height: 80px; overflow-y: auto; padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+          gap: 10px; align-content: start; }
+  .tile { position: relative; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 9px;
+          padding: 10px 11px 9px; cursor: pointer; transition: .12s; display: flex; flex-direction: column; gap: 4px; min-height: 84px; user-select: none; }
+  .tile:hover { border-color: #3f3f46; border-left-color: var(--c); background: #1c1c20; transform: translateY(-1px); }
+  .tile.dragging { opacity: .4; }
+  .tile.over { outline: 2px dashed var(--accent); outline-offset: 2px; }
+  .tile .top { display: flex; align-items: center; gap: 8px; }
+  .tile .ic { font-size: 22px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 7px;
+              background: color-mix(in srgb, var(--c) 18%, transparent); flex-shrink: 0; }
+  .tile .nm { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile .ds { color: var(--muted); font-size: 11.5px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tile .meta { display: flex; gap: 5px; align-items: center; margin-top: auto; flex-wrap: wrap; }
+  .tag { font-size: 10.5px; padding: 1px 6px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+  .tag.p { color: var(--accent-h); border-color: rgba(99,102,241,.35); }
+  .tile .tools { position: absolute; top: 6px; right: 6px; display: none; gap: 2px; background: var(--surface); border-radius: 6px; }
+  .tile:hover .tools { display: flex; }
+  .tile .tools button { padding: 1px 6px; font-size: 12px; }
+  .tile .live { position: absolute; top: 8px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 1.2s infinite; }
+  .tile:hover .live { display: none; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .empty { grid-column: 1 / -1; color: var(--muted); text-align: center; padding: 40px 10px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .empty .big { font-size: 36px; }
+
+  #resizer { height: 6px; cursor: row-resize; flex-shrink: 0; border-top: 1px solid var(--border); background: var(--surface); }
+  #console { height: 42%; min-height: 110px; display: flex; flex-direction: column; background: var(--surface); }
+  .con-tabs { display: flex; gap: 3px; padding: 4px 8px; border-bottom: 1px solid var(--border); overflow-x: auto; flex-shrink: 0; align-items: center; }
+  .rtab { display: flex; align-items: center; gap: 6px; padding: 3px 6px 3px 9px; border-radius: 6px; cursor: pointer; color: var(--muted); border: 1px solid transparent; white-space: nowrap; font-size: 12px; }
+  .rtab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .rtab .x { padding: 0 4px; border: none; background: none; color: var(--muted); }
+  .st { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .st.running { background: var(--info); animation: pulse 1s infinite; } .st.ok { background: var(--ok); } .st.error, .st.failed { background: var(--err); }
+  .st.stopped { background: var(--muted); } .st.timeout { background: var(--warn); }
+  .con-head { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 12px; color: var(--muted); }
+  .con-head .cmdline { font-family: var(--mono); color: #c4c4cc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .pill { padding: 1px 8px; border-radius: 9px; font-size: 11.5px; font-weight: 600; }
+  .pill.running { background: rgba(56,189,248,.14); color: var(--info); } .pill.ok { background: rgba(34,197,94,.14); color: var(--ok); }
+  .pill.error, .pill.failed { background: rgba(239,68,68,.14); color: #fca5a5; } .pill.stopped { background: var(--surface2); color: #a1a1aa; }
+  .pill.timeout { background: rgba(245,158,11,.14); color: var(--warn); }
+  #out { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px; font-family: var(--mono); font-size: 12.5px; line-height: 1.45;
+         white-space: pre-wrap; word-break: break-word; background: #0b0b0e; }
+  #out .err { color: #f87171; } #out .sys { color: var(--warn); font-style: italic; }
+  .con-empty { color: var(--muted); font-family: system-ui, sans-serif; padding: 18px; text-align: center; }
+
+  #hist { width: 300px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; }
+  #hist .head { display: flex; align-items: center; padding: 9px 10px; gap: 6px; font-weight: 600; }
+  #hist-list { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .hitem { display: flex; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; align-items: center; }
+  .hitem:hover { background: var(--surface2); }
+  .hitem .b { flex: 1; min-width: 0; }
+  .hitem .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hitem .s { color: var(--muted); font-size: 11px; }
+  .none { color: var(--muted); text-align: center; padding: 20px 8px; font-size: 12px; }
+
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(720px, 95vw); max-height: 92vh; display: flex; flex-direction: column; }
+  .modal.sm { width: min(460px, 95vw); }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .modal-body { padding: 12px 14px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
+  .grid2 { display: grid; grid-template-columns: 120px 1fr; gap: 8px 10px; align-items: center; }
+  .grid2 > label { color: var(--muted); }
+  .grid2 input[type=text], .grid2 input[type=number], .grid2 select { width: 100%; }
+  .iconrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .iconrow input.ic { width: 54px; text-align: center; font-size: 16px; }
+  .emo { cursor: pointer; font-size: 17px; padding: 1px 3px; border-radius: 4px; }
+  .emo:hover { background: var(--surface2); }
+  .colors { display: flex; gap: 5px; align-items: center; }
+  .sw { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  .sw.on { border-color: #fff; }
+  textarea.code { width: 100%; min-height: 120px; resize: vertical; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; tab-size: 2; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+  .hint code, .modal code { font-family: var(--mono); color: var(--accent-h); font-size: 11.5px; }
+  .kv { display: flex; flex-direction: column; gap: 4px; }
+  .kv .r { display: flex; gap: 4px; }
+  .kv input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+  .pform { display: flex; flex-direction: column; gap: 8px; }
+  .pform label { color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .pform input { width: 100%; font-family: var(--mono); }
+  .glist { display: flex; flex-direction: column; gap: 5px; }
+  .glist .r { display: flex; gap: 5px; align-items: center; }
+  .glist input { flex: 1; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border);
+           padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 80vw; white-space: pre-line; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">▶️ Lanceur</span>
+  <div id="tabs"></div>
+  <input id="search" type="text" placeholder="Rechercher… (Ctrl+F)" spellcheck="false" />
+  <button id="btn-new" class="primary" title="Nouvelle commande (Ctrl+N)">＋ Commande</button>
+  <button id="btn-hist" title="Historique des exécutions">🕘</button>
+  <div class="menu"><button id="btn-menu" title="Plus d'options">⋯</button>
+    <div class="menu-list hidden" id="menu">
+      <button data-m="groups">🗂 Gérer les groupes…</button>
+      <button data-m="export">⬇ Exporter en JSON</button>
+      <button data-m="import">⬆ Importer un JSON…</button>
+    </div>
+  </div>
+  <input type="file" id="import-file" accept=".json,application/json" class="hidden" />
+</header>
+
+<div id="body">
+  <div id="center">
+    <div id="grid"></div>
+    <div id="resizer" title="Redimensionner"></div>
+    <section id="console">
+      <div class="con-tabs" id="con-tabs"></div>
+      <div class="con-head" id="con-head"></div>
+      <div id="out"><div class="con-empty">Cliquez sur une commande pour l'exécuter : sa sortie s'affichera ici en direct.</div></div>
+    </section>
+  </div>
+  <aside id="hist" class="hidden">
+    <div class="head">Historique <span class="spacer"></span><button class="ghost" id="hist-clear" title="Vider l'historique">🗑</button></div>
+    <div id="hist-list"></div>
+  </aside>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'command-launcher'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const INTERP = { cmd: 'cmd', powershell: 'PowerShell', python: 'Python', exe: 'Exécutable' }
+const STATUS = { running: 'En cours', ok: 'Succès', error: 'Erreur', stopped: 'Arrêté', timeout: 'Délai dépassé', failed: 'Échec' }
+const COLORS = ['#6366f1', '#38bdf8', '#22c55e', '#eab308', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#14b8a6', '#71717a']
+const EMOJIS = ['▶️', '⚡', '🛠️', '🌐', '📶', '📂', '💾', '📊', '🐍', '🌿', '🧹', '🔄', '🚀', '🔒', '🖥️', '📦', '🧪', '📝']
+const PARAM_RE = /\{\{\s*([A-Za-z_][A-Za-z0-9_\-]*)\s*(?:\|([^}]*))?\}\}/g
+
+const state = { commands: [], groups: [], group: localGet('cl-group') || '*', search: '', runs: new Map(), order: [], current: null, histOpen: false }
+
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+const fmtDur = (ms) => ms == null ? '' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60000)} min ${Math.round(ms % 60000 / 1000)} s`
+
+// ── Commands ────────────────────────────────────────────────────────────────
+async function load() {
+  try {
+    const r = await call('list')
+    state.commands = r.commands; state.groups = r.groups
+    if (state.group !== '*' && !state.groups.includes(state.group)) state.group = '*'
+    renderTabs(); renderGrid()
+  } catch (e) { toast(e.message, true) }
+}
+
+function renderTabs() {
+  const count = (g) => state.commands.filter((c) => g === '*' || c.group === g).length
+  $('#tabs').innerHTML = ['*', ...state.groups].map((g) =>
+    `<div class="gtab ${g === state.group ? 'active' : ''}" data-g="${esc(g)}">${g === '*' ? 'Toutes' : esc(g)}<span class="n">${count(g)}</span></div>`).join('')
+}
+$('#tabs').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-g]'); if (!t) return
+  state.group = t.dataset.g; localSet('cl-group', state.group); renderTabs(); renderGrid()
+})
+
+function visible() {
+  const q = state.search.trim().toLowerCase()
+  return state.commands.filter((c) => (state.group === '*' || c.group === state.group) &&
+    (!q || `${c.name} ${c.description} ${c.command} ${c.group}`.toLowerCase().includes(q)))
+}
+
+function renderGrid() {
+  const items = visible()
+  const running = new Set([...state.runs.values()].filter((r) => r.status === 'running').map((r) => r.command_id))
+  $('#grid').innerHTML = items.length ? items.map((c) => `
+    <div class="tile" draggable="${state.search ? 'false' : 'true'}" data-id="${esc(c._id)}" style="--c:${esc(c.color)}" title="${esc(c.command.slice(0, 400))}">
+      ${running.has(c._id) ? '<span class="live" title="En cours d\'exécution"></span>' : ''}
+      <div class="tools"><button class="ghost" data-t="edit" title="Modifier">✎</button><button class="ghost" data-t="dup" title="Dupliquer">⧉</button><button class="ghost" data-t="del" title="Supprimer">🗑</button></div>
+      <div class="top"><span class="ic">${esc(c.icon || '▶️')}</span><span class="nm">${esc(c.name)}</span></div>
+      ${c.description ? `<div class="ds">${esc(c.description)}</div>` : ''}
+      <div class="meta"><span class="tag">${INTERP[c.interpreter] || c.interpreter}</span>
+        ${c.params.length ? `<span class="tag p">${c.params.length} paramètre(s)</span>` : ''}
+        ${c.confirm ? '<span class="tag">confirmation</span>' : ''}
+        ${state.group === '*' ? `<span class="tag">${esc(c.group)}</span>` : ''}</div>
+    </div>`).join('')
+    : `<div class="empty"><div class="big">🗂</div><div>${state.search ? 'Aucune commande ne correspond à la recherche.' : 'Aucune commande dans ce groupe.'}</div>
+       <button class="primary" data-t="new">＋ Créer une commande</button></div>`
+}
+
+$('#grid').addEventListener('click', (e) => {
+  if (e.target.closest('[data-t="new"]')) return openEditor(null)
+  const tile = e.target.closest('.tile'); if (!tile) return
+  const cmd = state.commands.find((c) => c._id === tile.dataset.id)
+  const t = e.target.closest('[data-t]')?.dataset.t
+  if (t === 'edit') return openEditor(cmd)
+  if (t === 'dup') return openEditor({ ...cmd, _id: null, name: cmd.name + ' (copie)' })
+  if (t === 'del') return delCommand(cmd)
+  launch(cmd)
+})
+$('#grid').addEventListener('contextmenu', (e) => {
+  const tile = e.target.closest('.tile'); if (!tile) return
+  e.preventDefault(); openEditor(state.commands.find((c) => c._id === tile.dataset.id))
+})
+
+async function delCommand(cmd) {
+  if (!confirm(`Supprimer la commande « ${cmd.name} » ?`)) return
+  try { await call('delete', { id: cmd._id }); toast('Commande supprimée'); load() } catch (e) { toast(e.message, true) }
+}
+
+// Drag & drop: reorder tiles, or drop on a group tab to move.
+let dragId = null
+$('#grid').addEventListener('dragstart', (e) => {
+  const tile = e.target.closest('.tile'); if (!tile) return
+  dragId = tile.dataset.id; tile.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', dragId)
+})
+$('#grid').addEventListener('dragend', () => { dragId = null; $$('.tile').forEach((t) => t.classList.remove('dragging', 'over')); $$('.gtab').forEach((t) => t.classList.remove('drop')) })
+$('#grid').addEventListener('dragover', (e) => {
+  if (!dragId) return
+  const tile = e.target.closest('.tile'); e.preventDefault()
+  $$('.tile').forEach((t) => t.classList.toggle('over', t === tile && t.dataset.id !== dragId))
+})
+$('#grid').addEventListener('drop', async (e) => {
+  const tile = e.target.closest('.tile'); if (!dragId || !tile || tile.dataset.id === dragId) return
+  e.preventDefault()
+  const ids = state.commands.map((c) => c._id)
+  const from = ids.indexOf(dragId); ids.splice(from, 1)
+  ids.splice(ids.indexOf(tile.dataset.id) + (from <= ids.indexOf(tile.dataset.id) ? 1 : 0), 0, dragId)
+  state.commands.sort((a, b) => ids.indexOf(a._id) - ids.indexOf(b._id)); renderGrid()
+  try { await call('reorder', { ids }) } catch (err) { toast(err.message, true); load() }
+})
+$('#tabs').addEventListener('dragover', (e) => {
+  const t = e.target.closest('[data-g]'); if (!dragId || !t || t.dataset.g === '*') return
+  e.preventDefault(); $$('.gtab').forEach((x) => x.classList.toggle('drop', x === t))
+})
+$('#tabs').addEventListener('drop', async (e) => {
+  const t = e.target.closest('[data-g]'); if (!dragId || !t || t.dataset.g === '*') return
+  e.preventDefault()
+  try { await call('move', { id: dragId, group: t.dataset.g }); toast(`Déplacée dans « ${t.dataset.g} »`); load() } catch (err) { toast(err.message, true) }
+})
+
+$('#search').addEventListener('input', (e) => { state.search = e.target.value; renderGrid() })
+
+// ── Launch ──────────────────────────────────────────────────────────────────
+function paramsOf(cmd) {
+  const seen = new Map()
+  for (const text of [cmd.command, cmd.cwd, ...(cmd.env || []).map((x) => x.value)]) {
+    for (const m of String(text || '').matchAll(PARAM_RE)) if (!seen.has(m[1])) seen.set(m[1], (m[2] || '').trim())
+  }
+  return [...seen].map(([name, def]) => ({ name, default: def }))
+}
+
+async function launch(cmd, draft = false) {
+  const params = draft ? paramsOf(cmd) : cmd.params
+  let values = {}
+  if (params.length) {
+    values = await askParams(cmd, params)
+    if (!values) return
+  } else if (cmd.confirm && !confirm(`Exécuter « ${cmd.name} » ?\n\n${cmd.command.slice(0, 500)}`)) return
+  try {
+    const meta = await call('run', draft ? { command: cmd, params: values } : { id: cmd._id, params: values }, { timeout: 20000 })
+    addRun({ ...meta, output: [] }, true)
+  } catch (e) { toast(e.message, true) }
+}
+
+function askParams(cmd, params) {
+  return new Promise((resolve) => {
+    const saved = JSON.parse(localGet(`cl-params-${cmd._id}`) || '{}')
+    const bd = modal(`<div class="modal sm"><div class="modal-head">${esc(cmd.icon)} ${esc(cmd.name)}</div>
+      <form class="modal-body pform" id="pf">${params.map((p, i) => `<label>${esc(p.name)}
+        <input name="${esc(p.name)}" type="text" value="${esc(saved[p.name] ?? p.default)}" placeholder="${esc(p.default)}" spellcheck="false" ${i === 0 ? 'autofocus' : ''} /></label>`).join('')}
+        ${cmd.confirm ? '<div class="hint">⚠ Cette commande demande une confirmation.</div>' : ''}
+        <div class="hint">Les valeurs sont insérées telles quelles dans la commande (également disponibles en variables <code>LP_NOM</code>).</div>
+        <button type="submit" class="hidden"></button></form>
+      <div class="modal-foot"><span class="spacer"></span><button data-x>Annuler</button><button class="primary" data-ok>▶ Exécuter</button></div></div>`,
+      () => resolve(null))
+    const submit = () => {
+      const values = {}
+      $$('input', bd).forEach((i) => { values[i.name] = i.value })
+      if (cmd._id) localSet(`cl-params-${cmd._id}`, JSON.stringify(values))
+      bd.remove(); resolve(values)
+    }
+    $('#pf', bd).addEventListener('submit', (e) => { e.preventDefault(); submit() })
+    $('[data-ok]', bd).addEventListener('click', submit)
+    setTimeout(() => $('input', bd)?.select(), 0)
+  })
+}
+
+// ── Console ─────────────────────────────────────────────────────────────────
+function addRun(meta, select) {
+  const existing = state.runs.get(meta.run_id)
+  const run = existing ? Object.assign(existing, meta, { output: existing.output.length ? existing.output : meta.output || [] }) : { ...meta, output: meta.output || [] }
+  state.runs.set(meta.run_id, run)
+  if (!state.order.includes(meta.run_id)) state.order.push(meta.run_id)
+  while (state.order.length > 12) {
+    const old = state.order.find((id) => state.runs.get(id)?.status !== 'running')
+    if (!old) break
+    state.order.splice(state.order.indexOf(old), 1); state.runs.delete(old)
+  }
+  if (select || !state.current) state.current = meta.run_id
+  renderConsole(true); renderGrid()
+}
+
+window.ledroide.on(MODULE_ID, 'run:start', (d) => { if (!state.runs.has(d.run_id)) addRun({ ...d, output: [] }, false) })
+window.ledroide.on(MODULE_ID, 'run:output', (d) => {
+  const run = state.runs.get(d.run_id); if (!run) return
+  for (const [s, t] of d.chunks) {
+    const last = run.output[run.output.length - 1]
+    if (last && last[0] === s) last[1] += t; else run.output.push([s, t])
+  }
+  if (state.current === d.run_id) appendOut(d.chunks)
+})
+window.ledroide.on(MODULE_ID, 'run:end', (d) => {
+  const run = state.runs.get(d.run_id); if (!run) return
+  Object.assign(run, d)
+  renderConsoleTabs(); renderConsoleHead(); renderGrid()
+  if (state.histOpen) loadHistory()
+  if (d.run_id !== state.current) toast(`${d.name} : ${STATUS[d.status] || d.status}${d.code != null ? ` (code ${d.code})` : ''}`, d.status !== 'ok')
+})
+
+function renderConsole() { renderConsoleTabs(); renderConsoleHead(); renderOut() }
+function renderConsoleTabs() {
+  $('#con-tabs').innerHTML = state.order.length ? state.order.map((id) => {
+    const r = state.runs.get(id)
+    return `<div class="rtab ${id === state.current ? 'active' : ''}" data-r="${id}"><span class="st ${r.status}"></span>${esc(r.icon || '')} ${esc(r.name)}
+      ${r.status !== 'running' ? `<button class="x" data-close="${id}" title="Fermer">✕</button>` : ''}</div>`
+  }).join('') : '<span class="hint" style="padding:3px 4px">Console</span>'
+}
+function renderConsoleHead() {
+  const r = state.runs.get(state.current)
+  if (!r) { $('#con-head').innerHTML = '<span class="hint">Aucune exécution sélectionnée</span>'; return }
+  const dur = r.status === 'running' ? fmtDur(Date.now() - new Date(r.started).getTime()) : fmtDur(r.duration_ms)
+  $('#con-head').innerHTML = `<span class="pill ${r.status}">${STATUS[r.status] || r.status}</span>
+    ${r.code != null && r.status !== 'running' ? `<span>code <b style="color:var(--text)">${r.code}</b></span>` : ''}
+    <span id="dur">${dur}</span>
+    <span class="cmdline" title="${esc(r.display)}\n📁 ${esc(r.cwd)}">${esc(r.display)}</span>
+    <label style="display:flex;gap:4px;align-items:center;cursor:pointer"><input type="checkbox" id="autoscroll" ${state.autoscroll !== false ? 'checked' : ''} /> Défilement auto</label>
+    ${r.status === 'running' ? '<button class="danger" id="btn-stop" title="Arrêter (tue l\'arbre de processus) — Échap">■ Arrêter</button>'
+      : (r.command_id ? '<button id="btn-rerun" title="Relancer">↻ Relancer</button>' : '')}
+    <button class="ghost" id="btn-copy-out" title="Copier la sortie">Copier</button>`
+}
+function renderOut() {
+  const r = state.runs.get(state.current)
+  const out = $('#out')
+  if (!r) { out.innerHTML = '<div class="con-empty">Cliquez sur une commande pour l\'exécuter : sa sortie s\'affichera ici en direct.</div>'; return }
+  out.innerHTML = r.output.length ? r.output.map(([s, t]) => `<span class="${s}">${esc(t)}</span>`).join('')
+    : `<div class="con-empty">${r.status === 'running' ? 'En attente de sortie…' : 'Aucune sortie.'}</div>`
+  out.scrollTop = out.scrollHeight
+}
+function appendOut(chunks) {
+  const out = $('#out')
+  $('.con-empty', out)?.remove()
+  const atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 60
+  out.insertAdjacentHTML('beforeend', chunks.map(([s, t]) => `<span class="${s}">${esc(t)}</span>`).join(''))
+  if (state.autoscroll !== false && atBottom) out.scrollTop = out.scrollHeight
+}
+
+$('#con-tabs').addEventListener('click', (e) => {
+  const close = e.target.closest('[data-close]')
+  if (close) {
+    const id = close.dataset.close
+    state.order.splice(state.order.indexOf(id), 1); state.runs.delete(id)
+    if (state.current === id) state.current = state.order[state.order.length - 1] || null
+    return renderConsole()
+  }
+  const t = e.target.closest('[data-r]'); if (!t) return
+  state.current = t.dataset.r; renderConsole()
+})
+$('#con-head').addEventListener('click', async (e) => {
+  const r = state.runs.get(state.current); if (!r) return
+  if (e.target.id === 'btn-stop') stopRun(r)
+  else if (e.target.id === 'btn-rerun') { const c = state.commands.find((x) => x._id === r.command_id); if (c) launch(c); else toast('Commande supprimée', true) }
+  else if (e.target.id === 'btn-copy-out') {
+    const text = r.output.map((x) => x[1]).join('')
+    try { await navigator.clipboard.writeText(text) } catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove() }
+    toast('Sortie copiée')
+  }
+})
+$('#con-head').addEventListener('change', (e) => { if (e.target.id === 'autoscroll') state.autoscroll = e.target.checked })
+
+async function stopRun(r) {
+  if (!confirm(`Arrêter « ${r.name} » ? Le processus et ses sous-processus seront tués.`)) return
+  try { await call('stop', { run_id: r.run_id }, { timeout: 20000 }) } catch (e) { toast(e.message, true) }
+}
+
+setInterval(() => {
+  const r = state.runs.get(state.current)
+  if (r?.status === 'running') { const el = $('#dur'); if (el) el.textContent = fmtDur(Date.now() - new Date(r.started).getTime()) }
+}, 500)
+
+// Resizable console
+$('#resizer').addEventListener('mousedown', (e) => {
+  e.preventDefault()
+  const startY = e.clientY, startH = $('#console').offsetHeight, max = $('#center').offsetHeight - 90
+  const move = (ev) => { const h = Math.max(110, Math.min(max, startH + startY - ev.clientY)); $('#console').style.height = `${h}px` }
+  const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); localSet('cl-con-h', $('#console').style.height) }
+  document.addEventListener('mousemove', move); document.addEventListener('mouseup', up)
+})
+if (localGet('cl-con-h')) $('#console').style.height = localGet('cl-con-h')
+
+// ── History ─────────────────────────────────────────────────────────────────
+$('#btn-hist').addEventListener('click', () => { state.histOpen = !state.histOpen; $('#hist').classList.toggle('hidden', !state.histOpen); if (state.histOpen) loadHistory() })
+async function loadHistory() {
+  try {
+    const { items } = await call('history', { limit: 300 })
+    $('#hist-list').innerHTML = items.length ? items.map((h) => `
+      <div class="hitem" data-h="${esc(h._id)}" title="${esc(h.display)}"><span class="st ${h.status}"></span>
+        <div class="b"><div class="n">${esc(h.icon || '')} ${esc(h.name)}</div>
+        <div class="s">${new Date(h.started).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' })} · ${STATUS[h.status] || h.status}${h.code != null ? ` (${h.code})` : ''} · ${fmtDur(h.duration_ms)}</div></div></div>`).join('')
+      : '<div class="none">Aucune exécution enregistrée</div>'
+  } catch (e) { toast(e.message, true) }
+}
+$('#hist-list').addEventListener('click', async (e) => {
+  const it = e.target.closest('[data-h]'); if (!it) return
+  try {
+    const r = await call('history_get', { run_id: it.dataset.h })
+    addRun({ ...r, run_id: r.run_id || r._id }, true)
+  } catch (err) { toast(err.message, true) }
+})
+$('#hist-clear').addEventListener('click', async () => {
+  if (!confirm('Vider tout l\'historique des exécutions ?')) return
+  try { await call('history_clear'); loadHistory() } catch (e) { toast(e.message, true) }
+})
+
+// ── Modals ──────────────────────────────────────────────────────────────────
+function modal(html, onCancel) {
+  const bd = document.createElement('div')
+  bd.className = 'backdrop'; bd.innerHTML = html
+  document.body.appendChild(bd)
+  const cancel = () => { bd.remove(); onCancel?.() }
+  bd.addEventListener('mousedown', (e) => { if (e.target === bd) cancel() })
+  $$('[data-x]', bd).forEach((b) => b.addEventListener('click', cancel))
+  bd.cancel = cancel
+  return bd
+}
+
+function openEditor(cmd) {
+  const c = { name: '', icon: '▶️', color: '#6366f1', command: '', interpreter: 'cmd', cwd: '', env: [], confirm: false, timeout: 0,
+              group: state.group !== '*' ? state.group : (state.groups[0] || 'Général'), description: '', ...(cmd || {}) }
+  const editing = !!(cmd && cmd._id)
+  const bd = modal(`<div class="modal"><div class="modal-head">${editing ? 'Modifier la commande' : 'Nouvelle commande'}</div>
+    <div class="modal-body">
+      <div class="grid2">
+        <label>Nom</label><input type="text" id="e-name" maxlength="80" value="${esc(c.name)}" placeholder="ex. Vider le cache DNS" />
+        <label>Icône</label><div class="iconrow"><input type="text" class="ic" id="e-icon" maxlength="8" value="${esc(c.icon)}" />${EMOJIS.map((x) => `<span class="emo" data-emo="${x}">${x}</span>`).join('')}</div>
+        <label>Couleur</label><div class="colors">${COLORS.map((x) => `<span class="sw ${x === c.color ? 'on' : ''}" data-col="${x}" style="background:${x}"></span>`).join('')}<input type="color" id="e-color" value="${esc(c.color)}" /></div>
+        <label>Interpréteur</label><select id="e-interp">${Object.entries(INTERP).map(([k, v]) => `<option value="${k}" ${k === c.interpreter ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      </div>
+      <div><textarea id="e-cmd" class="code" spellcheck="false" placeholder="ipconfig /flushdns">${esc(c.command)}</textarea>
+        <div class="hint" id="e-hint"></div></div>
+      <div class="grid2">
+        <label>Dossier de travail</label><input type="text" id="e-cwd" class="mono" value="${esc(c.cwd)}" placeholder="Vide = dossier utilisateur · %USERPROFILE%\\Documents · {{dossier}}" spellcheck="false" />
+        <label>Groupe</label><input type="text" id="e-group" list="e-groups" maxlength="40" value="${esc(c.group)}" /><datalist id="e-groups">${state.groups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
+        <label>Description</label><input type="text" id="e-desc" maxlength="300" value="${esc(c.description)}" />
+        <label>Délai maximum</label><div style="display:flex;gap:8px;align-items:center"><input type="number" id="e-timeout" min="0" max="86400" value="${c.timeout}" style="width:100px" /><span class="hint">secondes (0 = valeur par défaut du module)</span></div>
+        <label>Options</label><label style="display:flex;gap:6px;align-items:center;color:var(--text);cursor:pointer"><input type="checkbox" id="e-confirm" ${c.confirm ? 'checked' : ''} /> Demander confirmation avant l'exécution</label>
+        <label style="align-self:start;padding-top:5px">Variables d'env.</label><div class="kv" id="e-env"></div>
+      </div>
+      <div class="hint">Paramètres : écrivez <code>{{nom}}</code> ou <code>{{nom|valeur par défaut}}</code> dans la commande, le dossier ou les variables : un formulaire les demandera à chaque exécution.</div>
+    </div>
+    <div class="modal-foot">${editing ? '<button class="danger" data-del>Supprimer</button>' : ''}<span class="spacer"></span>
+      <button data-test title="Exécuter sans enregistrer">▶ Tester</button><button data-x>Annuler</button><button class="primary" data-save>Enregistrer</button></div></div>`)
+  const env = (c.env || []).map((x) => ({ ...x }))
+  const renderEnv = () => {
+    $('#e-env', bd).innerHTML = env.map((x, i) => `<div class="r"><input data-i="${i}" data-f="key" value="${esc(x.key)}" placeholder="NOM" /><input data-i="${i}" data-f="value" value="${esc(x.value)}" placeholder="valeur" /><button class="ghost" data-envdel="${i}">✕</button></div>`).join('')
+      + '<div><button class="ghost" data-envadd style="padding:2px 8px">＋ Ajouter une variable</button></div>'
+  }
+  renderEnv()
+  const hints = { cmd: 'Exécuté par <code>cmd.exe /c</code> : redirections, <code>&amp;&amp;</code>, <code>%VAR%</code> disponibles. Plusieurs lignes = enchaînées avec <code>&amp;</code>.',
+    powershell: 'Script Windows PowerShell (sans profil, sortie UTF-8). Plusieurs lignes autorisées.',
+    python: 'Code Python exécuté avec <code>-c</code> (interpréteur configurable dans les paramètres du module).',
+    exe: 'Programme et arguments séparés par des espaces (guillemets pour grouper), sans shell : un paramètre reste un seul argument.' }
+  const updHint = () => {
+    const p = paramsOf({ command: $('#e-cmd', bd).value, cwd: $('#e-cwd', bd).value, env })
+    $('#e-hint', bd).innerHTML = hints[$('#e-interp', bd).value] + (p.length ? `<br>Paramètres détectés : ${p.map((x) => `<code>${esc(x.name)}</code>`).join(', ')}` : '')
+  }
+  updHint()
+  bd.addEventListener('input', (e) => {
+    if (e.target.dataset.f) env[+e.target.dataset.i][e.target.dataset.f] = e.target.value
+    if (e.target.id === 'e-color') $$('.sw', bd).forEach((s) => s.classList.remove('on'))
+    updHint()
+  })
+  $('#e-interp', bd).addEventListener('change', updHint)
+  bd.addEventListener('click', (e) => {
+    const em = e.target.closest('[data-emo]'); if (em) $('#e-icon', bd).value = em.dataset.emo
+    const sw = e.target.closest('[data-col]'); if (sw) { $('#e-color', bd).value = sw.dataset.col; $$('.sw', bd).forEach((s) => s.classList.toggle('on', s === sw)) }
+    if (e.target.closest('[data-envadd]')) { env.push({ key: '', value: '' }); renderEnv() }
+    const d = e.target.closest('[data-envdel]'); if (d) { env.splice(+d.dataset.envdel, 1); renderEnv(); updHint() }
+  })
+  const collect = () => ({
+    name: $('#e-name', bd).value.trim(), icon: $('#e-icon', bd).value.trim() || '▶️', color: $('#e-color', bd).value,
+    command: $('#e-cmd', bd).value, interpreter: $('#e-interp', bd).value, cwd: $('#e-cwd', bd).value.trim(),
+    env: env.filter((x) => x.key.trim()), confirm: $('#e-confirm', bd).checked, timeout: parseInt($('#e-timeout', bd).value, 10) || 0,
+    group: $('#e-group', bd).value.trim() || 'Général', description: $('#e-desc', bd).value.trim(),
+  })
+  $('[data-save]', bd).addEventListener('click', async () => {
+    const data = collect()
+    if (!data.name) return toast('Le nom est obligatoire', true)
+    if (!data.command.trim()) return toast('La commande est vide', true)
+    try { await call('save', { id: editing ? cmd._id : null, command: data }); bd.remove(); toast('Commande enregistrée'); load() }
+    catch (e) { toast(e.message, true) }
+  })
+  $('[data-test]', bd).addEventListener('click', () => {
+    const data = collect()
+    if (!data.command.trim()) return toast('La commande est vide', true)
+    launch({ ...data, name: data.name || 'Test', _id: null }, true)
+  })
+  $('[data-del]', bd)?.addEventListener('click', async () => { bd.remove(); await delCommand(cmd) })
+  bd.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); $('[data-save]', bd).click() } })
+  setTimeout(() => $('#e-name', bd).focus(), 0)
+}
+
+// ── Menu: groups, import, export ────────────────────────────────────────────
+$('#btn-menu').addEventListener('click', (e) => { e.stopPropagation(); $('#menu').classList.toggle('hidden') })
+document.addEventListener('click', () => $('#menu').classList.add('hidden'))
+$('#menu').addEventListener('click', async (e) => {
+  const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return
+  $('#menu').classList.add('hidden')
+  if (m === 'export') {
+    try {
+      const data = await call('export')
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+      a.download = `commandes-ledroide-${new Date().toISOString().slice(0, 10)}.json`
+      a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+      toast(`${data.commands.length} commande(s) exportée(s)`)
+    } catch (err) { toast(err.message, true) }
+  } else if (m === 'import') $('#import-file').click()
+  else if (m === 'groups') openGroups()
+})
+$('#import-file').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''
+  if (!f) return
+  let data
+  try { data = JSON.parse(await f.text()) } catch { return toast('Fichier JSON invalide', true) }
+  const n = Array.isArray(data) ? data.length : data?.commands?.length || 0
+  const replace = confirm(`${n} commande(s) dans le fichier.\n\nOK = REMPLACER toutes les commandes actuelles\nAnnuler = les AJOUTER aux commandes existantes`)
+  if (replace && !confirm('Confirmer le remplacement : toutes les commandes actuelles seront supprimées.')) return
+  try {
+    const r = await call('import', { data, mode: replace ? 'replace' : 'merge' }, { timeout: 30000 })
+    toast(`${r.imported} commande(s) importée(s)${r.skipped ? `, ${r.skipped} ignorée(s)\n${r.errors.join('\n')}` : ''}`, r.skipped > 0)
+    load()
+  } catch (err) { toast(err.message, true) }
+})
+
+function openGroups() {
+  const rows = state.groups.map((g) => ({ orig: g, name: g }))
+  const bd = modal(`<div class="modal sm"><div class="modal-head">Groupes</div>
+    <div class="modal-body"><div class="glist" id="g-list"></div>
+      <button class="ghost" id="g-add" style="align-self:flex-start">＋ Nouveau groupe</button>
+      <div class="hint">Renommez, réordonnez ou supprimez les groupes. Les commandes d'un groupe supprimé rejoignent le premier groupe.</div></div>
+    <div class="modal-foot"><span class="spacer"></span><button data-x>Annuler</button><button class="primary" data-ok>Enregistrer</button></div></div>`)
+  const render = () => {
+    $('#g-list', bd).innerHTML = rows.map((r, i) => `<div class="r"><input data-i="${i}" value="${esc(r.name)}" maxlength="40" />
+      <button class="ghost" data-up="${i}" ${i === 0 ? 'disabled' : ''}>▲</button><button class="ghost" data-down="${i}" ${i === rows.length - 1 ? 'disabled' : ''}>▼</button>
+      <button class="ghost danger" data-rm="${i}" ${rows.length <= 1 ? 'disabled' : ''}>✕</button></div>`).join('')
+  }
+  render()
+  bd.addEventListener('input', (e) => { if (e.target.dataset.i) rows[+e.target.dataset.i].name = e.target.value })
+  bd.addEventListener('click', (e) => {
+    const t = e.target.closest('button'); if (!t) return
+    if (t.id === 'g-add') { rows.push({ orig: null, name: 'Nouveau groupe' }); render(); $$('#g-list input', bd).pop().select() }
+    if (t.dataset.up) { const i = +t.dataset.up; [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; render() }
+    if (t.dataset.down) { const i = +t.dataset.down; [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]]; render() }
+    if (t.dataset.rm) {
+      const r = rows[+t.dataset.rm]; const n = state.commands.filter((c) => c.group === r.orig).length
+      if (n && !confirm(`Le groupe « ${r.orig} » contient ${n} commande(s) : elles seront déplacées dans le premier groupe. Continuer ?`)) return
+      rows.splice(+t.dataset.rm, 1); render()
+    }
+  })
+  $('[data-ok]', bd).addEventListener('click', async () => {
+    const groups = rows.map((r) => r.name.trim()).filter(Boolean)
+    if (new Set(groups).size !== groups.length) return toast('Deux groupes portent le même nom', true)
+    const renames = {}
+    rows.forEach((r) => { if (r.orig && r.name.trim() && r.orig !== r.name.trim()) renames[r.orig] = r.name.trim() })
+    try {
+      await call('groups_save', { groups, renames })
+      if (renames[state.group]) state.group = renames[state.group]
+      bd.remove(); toast('Groupes enregistrés'); load()
+    } catch (err) { toast(err.message, true) }
+  })
+}
+
+// ── Keyboard / init ─────────────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  const bd = document.querySelector('.backdrop')
+  if (e.key === 'Escape') {
+    if (bd) return bd.cancel?.()
+    const r = state.runs.get(state.current)
+    if (r?.status === 'running') stopRun(r)
+    return
+  }
+  if (bd) return
+  if (e.ctrlKey && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); openEditor(null) }
+  else if (e.ctrlKey && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); $('#search').focus(); $('#search').select() }
+})
+
+;(async () => {
+  await load()
+  try {
+    const { runs } = await call('active')
+    runs.forEach((r) => addRun(r, false))
+  } catch {}
+  renderConsole()
+})()
+</script>
+</body>
+</html>

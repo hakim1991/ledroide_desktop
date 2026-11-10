@@ -1,0 +1,52 @@
+{
+  "id": "command-launcher",
+  "name": "Lanceur de commandes",
+  "version": "1.0.0",
+  "description": "Boutons favoris pour lancer vos commandes (cmd, PowerShell, Python, exécutable) avec paramètres demandés à l'exécution, sortie en direct, arrêt, historique et groupes.",
+  "category": "Productivité",
+  "tags": [
+    "commandes",
+    "scripts",
+    "terminal",
+    "automatisation",
+    "powershell"
+  ],
+  "icon": "▶️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "process"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "default_timeout": {
+      "type": "integer",
+      "title": "Délai maximum par défaut (secondes, 0 = aucun)",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 86400
+    },
+    "history_size": {
+      "type": "integer",
+      "title": "Exécutions conservées dans l'historique",
+      "default": 100,
+      "minimum": 0,
+      "maximum": 2000
+    },
+    "python_path": {
+      "type": "string",
+      "title": "Interpréteur Python (vide = Python de l'application)",
+      "default": ""
+    }
+  }
+}

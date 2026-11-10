@@ -183,6 +183,62 @@
   font-size: .875rem;
 }
 
+/* ── Bulk selection ── */
+.cp-bulk {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .75rem;
+  padding: .6rem .85rem;
+  margin-bottom: .875rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border);
+  border-radius: 10px;
+}
+
+.cp-bulk-all {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: .8125rem;
+  color: var(--text-mid);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cp-bulk-count {
+  flex: 1;
+  font-size: .8rem;
+  color: var(--text-lo);
+}
+
+.cp-bulk-clear,
+.cp-bulk-install {
+  font-size: .8rem;
+  padding: .35rem .8rem;
+  gap: .4rem;
+}
+
+.cp-bulk-install:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.cp-bulk input[type="checkbox"],
+.cc-select {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cc.selectable { cursor: pointer; }
+.cc.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-surface));
+}
+
 .cp-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));

@@ -1,0 +1,30 @@
+{
+  "id": "disk-analyzer",
+  "name": "Analyseur de disque",
+  "version": "1.0.0",
+  "description": "Qu'est-ce qui occupe l'espace disque ? Analyse d'un lecteur ou d'un dossier : carte proportionnelle (treemap), arborescence triée, plus gros fichiers, répartition par extension, nettoyage du dossier temporaire.",
+  "category": "Système",
+  "tags": [
+    "disque",
+    "stockage",
+    "nettoyage",
+    "fichiers"
+  ],
+  "icon": "💽",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

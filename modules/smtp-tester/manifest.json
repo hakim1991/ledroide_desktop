@@ -1,0 +1,46 @@
+{
+  "id": "smtp-tester",
+  "name": "Testeur SMTP",
+  "version": "1.0.0",
+  "description": "Envoyez des e-mails de test (STARTTLS/SSL, authentification, HTML, pièce jointe) en voyant le dialogue SMTP, et capturez les mails de vos applications avec un faux serveur SMTP local.",
+  "category": "Réseau",
+  "tags": [
+    "smtp",
+    "email",
+    "test",
+    "capture"
+  ],
+  "icon": "✉️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "max_messages": {
+      "type": "integer",
+      "title": "Nombre maximal de mails capturés conservés",
+      "default": 200,
+      "minimum": 10,
+      "maximum": 5000
+    },
+    "max_size_mb": {
+      "type": "integer",
+      "title": "Taille max. d'un mail capturé (Mo)",
+      "default": 25,
+      "minimum": 1,
+      "maximum": 100
+    }
+  }
+}

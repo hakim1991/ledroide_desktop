@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecteur RSS</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .hidden { display: none !important; }
+
+  /* sidebar */
+  #side { width: 250px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .side-head { display: flex; align-items: center; gap: 6px; padding: 10px; border-bottom: 1px solid var(--border); }
+  .side-head h1 { font-size: 14px; font-weight: 600; flex: 1; }
+  #feeds { flex: 1; overflow-y: auto; padding: 6px; }
+  .nav { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border-radius: 6px; cursor: pointer; user-select: none; }
+  .nav:hover { background: var(--surface2); }
+  .nav.current { background: rgba(99,102,241,.16); }
+  .nav .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav .cnt { color: var(--accent-h); font-size: 11px; font-weight: 600; }
+  .nav .err { color: var(--err); }
+  .nav .more { visibility: hidden; padding: 0 5px; }
+  .nav:hover .more { visibility: visible; }
+  .nav.folder { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-top: 8px; }
+  .nav.folder .caret { width: 10px; display: inline-block; }
+  .nav.feed { padding-left: 16px; }
+  .nav.feed.has-unread .lbl { font-weight: 600; }
+  .favicon { width: 16px; height: 16px; border-radius: 3px; background: var(--surface2); color: var(--muted); font-size: 10px; display: inline-flex;
+             align-items: center; justify-content: center; flex-shrink: 0; font-weight: 700; }
+  .side-foot { padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 4px; flex-wrap: wrap; }
+  .side-foot button { flex: 1; font-size: 12px; padding: 4px 6px; }
+  .empty-side { color: var(--muted); text-align: center; padding: 24px 10px; font-size: 12px; line-height: 1.6; }
+
+  /* list */
+  #list-pane { width: 360px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .list-head { padding: 10px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .list-title { display: flex; align-items: center; gap: 6px; }
+  .list-title b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  .list-tools { display: flex; gap: 6px; }
+  .list-tools input { flex: 1; min-width: 0; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 4px 9px; }
+  .seg button.active { background: var(--surface2); color: var(--text); }
+  #items { flex: 1; overflow-y: auto; }
+  .item { padding: 9px 12px; border-bottom: 1px solid var(--border); cursor: pointer; position: relative; }
+  .item:hover { background: var(--surface); }
+  .item.current { background: rgba(99,102,241,.12); box-shadow: inset 3px 0 0 var(--accent); }
+  .item .meta { display: flex; gap: 6px; font-size: 11.5px; color: var(--muted); }
+  .item .meta .src { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .t { margin: 3px 0; line-height: 1.35; color: var(--muted); }
+  .item.unread .t { font-weight: 700; color: var(--text); }
+  .item.unread .meta .src::before { content: '● '; color: var(--accent-h); }
+  .item .s { color: var(--muted); font-size: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .star { color: var(--warn); }
+  .load-more { display: block; margin: 10px auto; }
+
+  /* reader */
+  #reader { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .r-head { padding: 14px 18px 10px; border-bottom: 1px solid var(--border); }
+  .r-head h2 { font-size: 18px; line-height: 1.3; margin-bottom: 6px; }
+  .r-head h2 a { color: var(--text); text-decoration: none; }
+  .r-head h2 a:hover { color: var(--accent-h); }
+  .r-meta { color: var(--muted); font-size: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .r-tools { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  #r-frame { flex: 1; width: 100%; border: 0; background: var(--bg); }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center;
+                 justify-content: center; gap: 6px; text-align: center; padding: 20px; }
+  .placeholder .big { font-size: 32px; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+
+  .progress { height: 2px; background: var(--accent); width: 0; transition: width .2s; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(460px, 94vw); display: flex; flex-direction: column; }
+  .modal-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .modal-body { padding: 12px 14px; display: grid; grid-template-columns: 90px 1fr; gap: 8px 10px; align-items: center; }
+  .modal-body label { color: var(--muted); font-size: 12px; }
+  .modal-body .hint { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; }
+  .modal-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .menu { position: fixed; z-index: 55; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 4px; min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+  .menu div { padding: 6px 10px; border-radius: 5px; cursor: pointer; }
+  .menu div:hover { background: var(--surface); }
+  .menu div.danger { color: #fca5a5; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+</style>
+</head>
+<body>
+<aside id="side">
+  <div class="side-head"><h1>📰 Flux</h1>
+    <button id="btn-refresh" class="ghost icon" title="Tout rafraîchir (R)">⟳</button>
+    <button id="btn-add" class="primary icon" title="Ajouter un flux (A)">＋</button>
+  </div>
+  <div class="progress" id="progress"></div>
+  <div id="feeds"></div>
+  <div class="side-foot">
+    <button id="btn-import" title="Importer un fichier OPML">Importer OPML</button>
+    <button id="btn-export" title="Exporter les abonnements en OPML">Exporter OPML</button>
+    <input id="opml-file" type="file" accept=".opml,.xml,text/xml,application/xml" class="hidden" />
+  </div>
+</aside>
+
+<section id="list-pane">
+  <div class="list-head">
+    <div class="list-title"><b id="list-title">Tous les articles</b>
+      <button id="btn-markall" class="ghost" title="Tout marquer comme lu (Maj+A)">✓ Tout lu</button></div>
+    <div class="list-tools">
+      <input id="search" type="text" placeholder="Rechercher… (/)" />
+      <div class="seg" id="filter">
+        <button data-f="all">Tous</button><button data-f="unread" class="active">Non lus</button><button data-f="starred">★</button>
+      </div>
+    </div>
+  </div>
+  <div id="items"></div>
+</section>
+
+<main id="reader"></main>
+
+<div id="modal" class="backdrop hidden">
+  <form class="modal" id="modal-form">
+    <div class="modal-head" id="modal-title">Ajouter un flux</div>
+    <div class="modal-body">
+      <label for="m-url" id="m-url-label">Adresse</label><input id="m-url" type="text" placeholder="https://exemple.com ou https://exemple.com/feed.xml" spellcheck="false" />
+      <label for="m-title" id="m-title-label" class="hidden">Titre</label><input id="m-title" type="text" class="hidden" />
+      <label for="m-folder">Dossier</label><input id="m-folder" type="text" list="folders-dl" placeholder="(aucun)" />
+      <datalist id="folders-dl"></datalist>
+      <p class="hint" id="m-hint">Vous pouvez saisir l'adresse d'un site : son flux RSS/Atom sera détecté automatiquement.</p>
+    </div>
+    <div class="modal-foot"><button type="button" id="m-cancel">Annuler</button><button type="submit" class="primary" id="m-ok">Ajouter</button></div>
+  </form>
+</div>
+<div id="menu" class="menu hidden"></div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'rss-reader'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const PAGE = 100
+
+const state = {
+  feeds: [], totals: { unread: 0, starred: 0, total: 0 },
+  scope: { kind: 'all' },           // all | starred | folder | feed
+  filter: 'unread', q: '',
+  items: [], more: false, current: null, article: null,
+  collapsed: new Set(), refreshing: false,
+}
+try { JSON.parse(localStorage.getItem('rss-collapsed') || '[]').forEach((f) => state.collapsed.add(f)) } catch { /* ignore */ }
+try { state.filter = localStorage.getItem('rss-filter') || 'unread' } catch { /* ignore */ }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2200)
+}
+function relDate(ts) {
+  const diff = Date.now() / 1000 - ts
+  if (diff < 60) return "à l'instant"
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`
+  if (diff < 7 * 86400) return `il y a ${Math.floor(diff / 86400)} j`
+  return new Date(ts * 1000).toLocaleDateString('fr-FR')
+}
+const initial = (s) => esc((String(s || '?').trim()[0] || '?').toUpperCase())
+
+// ── Sidebar ─────────────────────────────────────────────────────────────────
+function folders() { return [...new Set(state.feeds.map((f) => f.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr')) }
+function isCurrent(kind, val) { const s = state.scope; return s.kind === kind && (val === undefined || s.value === val) }
+
+function feedNav(f) {
+  return `<div class="nav feed ${f.unread ? 'has-unread' : ''} ${isCurrent('feed', f.id) ? 'current' : ''}" data-feed="${f.id}" title="${esc(f.url)}${f.last_error ? '\n⚠ ' + esc(f.last_error) : ''}">
+    <span class="favicon">${initial(f.title)}</span><span class="lbl">${esc(f.title || f.url)}</span>
+    ${f.last_error ? '<span class="err" title="' + esc(f.last_error) + '">⚠</span>' : ''}${f.unread ? `<span class="cnt">${f.unread}</span>` : ''}
+    <button class="ghost icon more" data-menu="${f.id}" title="Options">⋯</button></div>`
+}
+function renderSide() {
+  const t = state.totals
+  let html = `<div class="nav ${isCurrent('all') ? 'current' : ''}" data-scope="all"><span>📚</span><span class="lbl">Tous les articles</span>${t.unread ? `<span class="cnt">${t.unread}</span>` : ''}</div>
+    <div class="nav ${isCurrent('starred') ? 'current' : ''}" data-scope="starred"><span class="star">★</span><span class="lbl">Favoris</span>${t.starred ? `<span class="cnt">${t.starred}</span>` : ''}</div>`
+  if (!state.feeds.length) {
+    html += `<div class="empty-side">Aucun abonnement.<br>Cliquez sur <b>＋</b> pour ajouter un flux<br>ou importez un fichier OPML.</div>`
+  }
+  for (const folder of folders()) {
+    const feeds = state.feeds.filter((f) => f.folder === folder)
+    const unread = feeds.reduce((a, f) => a + f.unread, 0)
+    const closed = state.collapsed.has(folder)
+    html += `<div class="nav folder ${isCurrent('folder', folder) ? 'current' : ''}" data-folder="${esc(folder)}"><span class="caret" data-toggle="${esc(folder)}">${closed ? '▸' : '▾'}</span>
+      <span class="lbl">${esc(folder)}</span>${unread ? `<span class="cnt">${unread}</span>` : ''}<button class="ghost icon more" data-fmenu="${esc(folder)}" title="Options">⋯</button></div>`
+    if (!closed) html += feeds.map(feedNav).join('')
+  }
+  const loose = state.feeds.filter((f) => !f.folder)
+  if (loose.length && folders().length) html += '<div class="nav folder" style="cursor:default"><span class="lbl">Sans dossier</span></div>'
+  html += loose.map(feedNav).join('')
+  $('#feeds').innerHTML = html
+  $('#folders-dl').innerHTML = folders().map((f) => `<option value="${esc(f)}">`).join('')
+}
+
+async function loadFeeds() {
+  try {
+    const r = await call('feeds_list')
+    state.feeds = r.feeds; state.totals = r.totals
+    if (state.scope.kind === 'feed' && !state.feeds.some((f) => f.id === state.scope.value)) state.scope = { kind: 'all' }
+    renderSide(); renderListHead()
+  } catch (e) { toast(e.message, true) }
+}
+
+// ── Item list ───────────────────────────────────────────────────────────────
+function scopePayload() {
+  const s = state.scope
+  const p = { filter: s.kind === 'starred' ? 'starred' : state.filter, q: state.q }
+  if (s.kind === 'feed') p.feed_id = s.value
+  if (s.kind === 'folder') p.folder = s.value
+  return p
+}
+function scopeTitle() {
+  const s = state.scope
+  if (s.kind === 'starred') return '★ Favoris'
+  if (s.kind === 'folder') return '📁 ' + s.value
+  if (s.kind === 'feed') return state.feeds.find((f) => f.id === s.value)?.title || 'Flux'
+  return 'Tous les articles'
+}
+function renderListHead() {
+  $('#list-title').textContent = scopeTitle()
+  $$('#filter button').forEach((b) => b.classList.toggle('active', state.scope.kind === 'starred' ? b.dataset.f === 'starred' : b.dataset.f === state.filter))
+}
+function renderItems() {
+  const box = $('#items')
+  if (!state.items.length) {
+    const msg = state.q ? 'Aucun article ne correspond à la recherche.'
+      : !state.feeds.length ? 'Ajoutez un premier flux pour commencer.'
+      : state.scope.kind === 'starred' || state.filter === 'starred' ? 'Aucun favori. Appuyez sur <kbd>S</kbd> pour marquer un article.'
+      : state.filter === 'unread' ? 'Tout est lu ! 🎉' : 'Aucun article.'
+    box.innerHTML = `<div class="placeholder"><div class="big">📭</div><div>${msg}</div></div>`
+    return
+  }
+  box.innerHTML = state.items.map((it) => `<div class="item ${it.read ? '' : 'unread'} ${state.current === it.id ? 'current' : ''}" data-id="${it.id}">
+      <div class="meta"><span class="src">${esc(it.feed_title)}</span>${it.starred ? '<span class="star">★</span>' : ''}<span>${relDate(it.published)}</span></div>
+      <div class="t">${esc(it.title)}</div>${it.summary ? `<div class="s">${esc(it.summary)}</div>` : ''}</div>`).join('')
+    + (state.more ? '<button class="load-more" id="load-more">Charger plus d\'articles</button>' : '')
+}
+async function loadItems(append = false) {
+  try {
+    const r = await call('items_list', { ...scopePayload(), limit: PAGE, offset: append ? state.items.length : 0 })
+    state.items = append ? state.items.concat(r.items) : r.items
+    state.more = r.more
+    renderItems()
+    if (!append) $('#items').scrollTop = 0
+  } catch (e) { toast(e.message, true) }
+}
+function setScope(scope) {
+  state.scope = scope
+  state.current = null
+  renderSide(); renderListHead(); loadItems()
+}
+
+// ── Reader ──────────────────────────────────────────────────────────────────
+const FRAME_CSS = `body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#0f0f12;color:#d4d4dc;font-size:15px;line-height:1.65;
+  max-width:760px;margin:0 auto;padding:18px 22px 60px;word-wrap:break-word}a{color:#818cf8}img,video{max-width:100%;height:auto;border-radius:6px}
+  pre{background:#18181b;border:1px solid #27272a;border-radius:6px;padding:10px;overflow:auto;font-size:13px}code{font-family:'Cascadia Code',Consolas,monospace;font-size:.9em}
+  blockquote{border-left:3px solid #6366f1;margin:12px 0;padding:2px 14px;color:#a1a1aa}table{border-collapse:collapse;max-width:100%}td,th{border:1px solid #27272a;padding:4px 8px}
+  h1,h2,h3,h4{line-height:1.3;color:#f4f4f5}hr{border:0;border-top:1px solid #27272a}figure{margin:12px 0}figcaption{color:#71717a;font-size:13px}`
+
+function renderReader() {
+  const box = $('#reader')
+  const a = state.article
+  if (!a) {
+    box.innerHTML = `<div class="placeholder"><div class="big">📰</div><div>Sélectionnez un article pour le lire.</div>
+      <div><kbd>J</kbd> / <kbd>K</kbd> suivant / précédent · <kbd>S</kbd> favori · <kbd>M</kbd> lu / non lu · <kbd>O</kbd> ouvrir dans le navigateur · <kbd>R</kbd> rafraîchir</div></div>`
+    return
+  }
+  box.innerHTML = `<div class="r-head">
+      <h2>${a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer" data-ext="${esc(a.link)}">${esc(a.title)}</a>` : esc(a.title)}</h2>
+      <div class="r-meta"><span>${esc(a.feed_title)}</span>${a.author ? `<span>par ${esc(a.author)}</span>` : ''}<span>${new Date(a.published * 1000).toLocaleString('fr-FR')}</span></div>
+      <div class="r-tools">
+        <button id="r-star">${a.starred ? '★ Retirer des favoris' : '☆ Favori'}</button>
+        <button id="r-read">${a.read ? 'Marquer non lu' : 'Marquer lu'}</button>
+        ${a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer" data-ext="${esc(a.link)}"><button>↗ Ouvrir dans le navigateur</button></a>` : ''}
+      </div></div>`
+  const frame = document.createElement('iframe')
+  frame.id = 'r-frame'
+  frame.setAttribute('sandbox', 'allow-same-origin')
+  frame.setAttribute('referrerpolicy', 'no-referrer')
+  const csp = "default-src 'none'; img-src https: http: data:; media-src https: http:; style-src 'unsafe-inline'; font-src data:"
+  frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><style>${FRAME_CSS}</style></head>
+    <body>${a.content || `<p style="color:#71717a">${esc(a.summary || 'Pas de contenu dans le flux : ouvrez l\'article dans le navigateur.')}</p>`}</body></html>`
+  frame.addEventListener('load', () => {
+    try {
+      frame.contentDocument.addEventListener('click', (e) => {
+        const link = e.target.closest && e.target.closest('a[href]')
+        if (!link) return
+        e.preventDefault()
+        openExternal(link.href)
+      })
+    } catch { /* cross-origin: links stay inert */ }
+  })
+  box.appendChild(frame)
+}
+
+async function openExternal(url) {
+  if (!/^https?:\/\//i.test(url)) return toast('Lien non pris en charge', true)
+  try { await call('open_url', { url }) } catch (e) { toast(e.message, true) }
+}
+
+async function openItem(id) {
+  state.current = id
+  $$('#items .item').forEach((el) => el.classList.toggle('current', Number(el.dataset.id) === id))
+  try {
+    const a = await call('item_get', { id })
+    state.article = a
+    const it = state.items.find((x) => x.id === id)
+    if (it && !it.read) { it.read = 1; adjustUnread(it.feed_id, -1); renderItems() }
+    renderReader()
+    $(`#items .item[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest' })
+  } catch (e) { toast(e.message, true) }
+}
+function adjustUnread(feedId, delta) {
+  const f = state.feeds.find((x) => x.id === feedId)
+  if (f) f.unread = Math.max(0, f.unread + delta)
+  state.totals.unread = Math.max(0, state.totals.unread + delta)
+  renderSide()
+}
+async function toggleStar() {
+  const a = state.article
+  if (!a) return
+  try {
+    await call('item_mark', { id: a.id, starred: !a.starred })
+    a.starred = a.starred ? 0 : 1
+    state.totals.starred += a.starred ? 1 : -1
+    const it = state.items.find((x) => x.id === a.id)
+    if (it) it.starred = a.starred
+    renderItems(); renderReader(); renderSide()
+  } catch (e) { toast(e.message, true) }
+}
+async function toggleRead() {
+  const a = state.article
+  if (!a) return
+  try {
+    await call('item_mark', { id: a.id, read: !a.read })
+    a.read = a.read ? 0 : 1
+    const it = state.items.find((x) => x.id === a.id)
+    if (it) it.read = a.read
+    adjustUnread(a.feed_id, a.read ? -1 : 1)
+    renderItems(); renderReader()
+  } catch (e) { toast(e.message, true) }
+}
+function step(delta) {
+  if (!state.items.length) return
+  const i = state.items.findIndex((x) => x.id === state.current)
+  const next = state.items[i < 0 ? 0 : Math.max(0, Math.min(state.items.length - 1, i + delta))]
+  if (next && next.id !== state.current) openItem(next.id)
+}
+
+async function markAll() {
+  const s = state.scope
+  const payload = s.kind === 'feed' ? { feed_id: s.value } : s.kind === 'folder' ? { folder: s.value } : {}
+  const label = s.kind === 'all' || s.kind === 'starred' ? 'tous les articles' : `les articles de « ${scopeTitle().replace(/^📁 /, '')} »`
+  if (!confirm(`Marquer ${label} comme lus ?`)) return
+  try {
+    const r = await call('mark_all_read', payload)
+    toast(`${r.updated} article(s) marqué(s) comme lu(s)`)
+    await loadFeeds(); loadItems()
+  } catch (e) { toast(e.message, true) }
+}
+
+// ── Refresh ─────────────────────────────────────────────────────────────────
+async function refreshAll() {
+  if (state.refreshing) return
+  if (!state.feeds.length) return toast('Aucun flux à rafraîchir')
+  state.refreshing = true
+  $('#btn-refresh').innerHTML = '<span class="spinner"></span>'
+  $('#progress').style.width = '3%'
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'refresh_all', {}, { onProgress: (p) => { $('#progress').style.width = (p.percent || 0) + '%' } })
+    toast(r.errors.length ? `${r.new} nouvel(s) article(s) — ${r.errors.length} flux en erreur` : `${r.new} nouvel(s) article(s)`, r.errors.length > 0)
+  } catch (e) { toast(e.message, true) }
+  state.refreshing = false
+  $('#btn-refresh').textContent = '⟳'
+  setTimeout(() => ($('#progress').style.width = '0'), 400)
+  await loadFeeds(); loadItems()
+}
+async function refreshFeed(id) {
+  try {
+    const r = await call('feed_refresh', { id }, { timeout: 150000 })
+    toast(`${r.new} nouvel(s) article(s)`)
+  } catch (e) { toast(e.message, true) }
+  await loadFeeds(); loadItems()
+}
+
+// ── Modal (add / edit) ──────────────────────────────────────────────────────
+let modalMode = null
+function openModal(mode, feed) {
+  modalMode = { mode, feed }
+  const edit = mode === 'edit'
+  $('#modal-title').textContent = edit ? 'Modifier le flux' : 'Ajouter un flux'
+  $('#m-ok').textContent = edit ? 'Enregistrer' : 'Ajouter'
+  $('#m-url').value = edit ? feed.url : ''
+  $('#m-url').disabled = edit
+  $('#m-title').value = edit ? feed.title : ''
+  $('#m-folder').value = edit ? feed.folder : (state.scope.kind === 'folder' ? state.scope.value : '')
+  ;['#m-title', '#m-title-label'].forEach((s) => $(s).classList.toggle('hidden', !edit))
+  $('#m-hint').classList.toggle('hidden', edit)
+  $('#modal').classList.remove('hidden')
+  ;(edit ? $('#m-title') : $('#m-url')).focus()
+}
+function closeModal() {
+  $('#modal').classList.add('hidden'); modalMode = null
+  ;['#m-url', '#m-url-label'].forEach((x) => $(x).classList.remove('hidden'))
+}
+$('#modal-form').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const ok = $('#m-ok')
+  ok.disabled = true
+  try {
+    if (modalMode.mode === 'folder') {
+      const old = modalMode.folder, name = $('#m-folder').value.trim()
+      await call('folder_rename', { old, new: name })
+      if (state.scope.kind === 'folder' && state.scope.value === old) state.scope = name ? { kind: 'folder', value: name } : { kind: 'all' }
+      toast('Dossier renommé')
+    } else if (modalMode.mode === 'edit') {
+      await call('feed_update', { id: modalMode.feed.id, title: $('#m-title').value, folder: $('#m-folder').value })
+      toast('Flux modifié')
+    } else {
+      const url = $('#m-url').value.trim()
+      if (!url) { toast("Saisissez l'adresse du flux ou du site", true); return }
+      ok.innerHTML = '<span class="spinner"></span> Recherche…'
+      const r = await call('feed_add', { url, folder: $('#m-folder').value }, { timeout: 150000 })
+      toast(`${r.discovered ? 'Flux détecté et ajouté' : 'Flux ajouté'} : ${r.feed.title} (${r.new} articles)`)
+      closeModal()
+      await loadFeeds()
+      setScope({ kind: 'feed', value: r.feed.id })
+      return
+    }
+    closeModal()
+    await loadFeeds(); loadItems()
+  } catch (err) { toast(err.message, true) } finally { ok.disabled = false; ok.textContent = modalMode?.mode === 'edit' ? 'Enregistrer' : modalMode?.mode === 'folder' ? 'Renommer' : 'Ajouter' }
+})
+$('#m-cancel').addEventListener('click', closeModal)
+$('#modal').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal() })
+
+// ── Context menu ────────────────────────────────────────────────────────────
+function showMenu(x, y, entries) {
+  const m = $('#menu')
+  m.innerHTML = entries.map((e, i) => `<div data-i="${i}" class="${e.danger ? 'danger' : ''}">${e.label}</div>`).join('')
+  m.classList.remove('hidden')
+  m.style.left = Math.min(x, window.innerWidth - 200) + 'px'
+  m.style.top = Math.min(y, window.innerHeight - entries.length * 32 - 10) + 'px'
+  m.onclick = (ev) => { const d = ev.target.closest('[data-i]'); if (d) { m.classList.add('hidden'); entries[+d.dataset.i].run() } }
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('#menu') && !e.target.closest('[data-menu],[data-fmenu]')) $('#menu').classList.add('hidden') })
+
+function feedMenu(feed, x, y) {
+  showMenu(x, y, [
+    { label: '⟳ Rafraîchir', run: () => refreshFeed(feed.id) },
+    { label: '✓ Tout marquer comme lu', run: async () => { await call('mark_all_read', { feed_id: feed.id }); await loadFeeds(); loadItems() } },
+    { label: '✎ Renommer / déplacer…', run: () => openModal('edit', feed) },
+    ...(feed.site_url ? [{ label: '↗ Ouvrir le site', run: () => openExternal(feed.site_url) }] : []),
+    { label: '🗑 Se désabonner…', danger: true, run: async () => {
+      if (!confirm(`Se désabonner de « ${feed.title} » ? Ses articles (y compris les favoris) seront supprimés.`)) return
+      try { await call('feed_delete', { id: feed.id }); toast('Abonnement supprimé'); await loadFeeds(); loadItems() } catch (e) { toast(e.message, true) }
+    } },
+  ])
+}
+function folderMenu(folder, x, y) {
+  showMenu(x, y, [
+    { label: '✓ Tout marquer comme lu', run: async () => { await call('mark_all_read', { folder }); await loadFeeds(); loadItems() } },
+    { label: '✎ Renommer le dossier…', run: () => renameFolder(folder) },
+  ])
+}
+function renameFolder(folder) {
+  modalMode = { mode: 'folder', folder }
+  $('#modal-title').textContent = 'Renommer le dossier'
+  $('#m-ok').textContent = 'Renommer'
+  ;['#m-url', '#m-url-label', '#m-title', '#m-title-label', '#m-hint'].forEach((x) => $(x).classList.add('hidden'))
+  $('#m-folder').value = folder
+  $('#modal').classList.remove('hidden')
+  $('#m-folder').focus()
+}
+
+// ── OPML ────────────────────────────────────────────────────────────────────
+$('#btn-export').addEventListener('click', async () => {
+  try {
+    const r = await call('opml_export')
+    if (!r.count) return toast('Aucun abonnement à exporter')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([r.opml], { type: 'text/x-opml;charset=utf-8' }))
+    a.download = `abonnements-${new Date().toISOString().slice(0, 10)}.opml`
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    toast(`${r.count} abonnement(s) exporté(s)`)
+  } catch (e) { toast(e.message, true) }
+})
+$('#btn-import').addEventListener('click', () => $('#opml-file').click())
+$('#opml-file').addEventListener('change', async () => {
+  const file = $('#opml-file').files[0]
+  $('#opml-file').value = ''
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) return toast('Fichier OPML trop volumineux', true)
+  try {
+    const r = await call('opml_import', { text: await file.text() }, { timeout: 30000 })
+    toast(`${r.added} flux importé(s)${r.skipped ? `, ${r.skipped} ignoré(s) (doublons ou invalides)` : ''}`)
+    await loadFeeds()
+    if (r.added) refreshAll()
+  } catch (e) { toast(e.message, true) }
+})
+
+// ── Wiring ──────────────────────────────────────────────────────────────────
+$('#feeds').addEventListener('click', (e) => {
+  const menuBtn = e.target.closest('[data-menu]')
+  if (menuBtn) { e.stopPropagation(); const f = state.feeds.find((x) => x.id === Number(menuBtn.dataset.menu)); const r = menuBtn.getBoundingClientRect(); return feedMenu(f, r.left, r.bottom) }
+  const fMenu = e.target.closest('[data-fmenu]')
+  if (fMenu) { e.stopPropagation(); const r = fMenu.getBoundingClientRect(); return folderMenu(fMenu.dataset.fmenu, r.left, r.bottom) }
+  const toggle = e.target.closest('[data-toggle]')
+  if (toggle) {
+    const f = toggle.dataset.toggle
+    state.collapsed.has(f) ? state.collapsed.delete(f) : state.collapsed.add(f)
+    try { localStorage.setItem('rss-collapsed', JSON.stringify([...state.collapsed])) } catch { /* ignore */ }
+    return renderSide()
+  }
+  const el = e.target.closest('[data-scope],[data-folder],[data-feed]')
+  if (!el) return
+  if (el.dataset.scope) setScope({ kind: el.dataset.scope })
+  else if (el.dataset.folder !== undefined) setScope({ kind: 'folder', value: el.dataset.folder })
+  else setScope({ kind: 'feed', value: Number(el.dataset.feed) })
+})
+$('#feeds').addEventListener('contextmenu', (e) => {
+  const el = e.target.closest('[data-feed]')
+  if (el) { e.preventDefault(); feedMenu(state.feeds.find((x) => x.id === Number(el.dataset.feed)), e.clientX, e.clientY) }
+  const fo = e.target.closest('[data-folder]')
+  if (fo) { e.preventDefault(); folderMenu(fo.dataset.folder, e.clientX, e.clientY) }
+})
+$('#items').addEventListener('click', (e) => {
+  if (e.target.id === 'load-more') return loadItems(true)
+  const el = e.target.closest('[data-id]')
+  if (el) openItem(Number(el.dataset.id))
+})
+$('#reader').addEventListener('click', (e) => {
+  const ext = e.target.closest('[data-ext]')
+  if (ext) { e.preventDefault(); return openExternal(ext.dataset.ext) }
+  if (e.target.id === 'r-star') toggleStar()
+  if (e.target.id === 'r-read') toggleRead()
+})
+$$('#filter button').forEach((b) => b.addEventListener('click', () => {
+  if (state.scope.kind === 'starred' && b.dataset.f !== 'starred') state.scope = { kind: 'all' }
+  state.filter = b.dataset.f
+  try { localStorage.setItem('rss-filter', state.filter) } catch { /* ignore */ }
+  state.current = null
+  renderSide(); renderListHead(); loadItems()
+}))
+let searchTimer
+$('#search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.q = $('#search').value.trim(); loadItems() }, 250) })
+$('#btn-add').addEventListener('click', () => openModal('add'))
+$('#btn-refresh').addEventListener('click', refreshAll)
+$('#btn-markall').addEventListener('click', markAll)
+
+document.addEventListener('keydown', (e) => {
+  if (!$('#modal').classList.contains('hidden')) return
+  const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)
+  if (typing) { if (e.key === 'Escape') document.activeElement.blur(); return }
+  if (e.ctrlKey || e.altKey || e.metaKey) return
+  const k = e.key.toLowerCase()
+  if (k === 'j' || e.key === 'ArrowDown') { e.preventDefault(); step(1) }
+  else if (k === 'k' || e.key === 'ArrowUp') { e.preventDefault(); step(-1) }
+  else if (k === 's') toggleStar()
+  else if (k === 'm') toggleRead()
+  else if (k === 'o' && state.article?.link) openExternal(state.article.link)
+  else if (k === 'r') refreshAll()
+  else if (k === 'a' && e.shiftKey) markAll()
+  else if (k === 'a') openModal('add')
+  else if (e.key === '/') { e.preventDefault(); $('#search').focus() }
+})
+
+window.ledroide.on(MODULE_ID, 'refreshed', async (r) => {
+  if (state.refreshing) return
+  await loadFeeds()
+  if (r.new) { loadItems(); toast(`${r.new} nouvel(s) article(s)`) }
+})
+
+async function init() {
+  renderReader(); renderListHead()
+  await loadFeeds()
+  await loadItems()
+}
+init()
+</script>
+</body>
+</html>

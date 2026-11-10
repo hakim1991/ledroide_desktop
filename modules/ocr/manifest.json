@@ -1,0 +1,52 @@
+{
+  "id": "ocr",
+  "name": "OCR",
+  "version": "1.0.0",
+  "description": "Extrayez le texte d'images et de PDF scannés avec Tesseract : collage depuis le presse-papier, choix des langues, prétraitement, PDF multi-pages, boîtes des mots.",
+  "category": "Images & médias",
+  "tags": [
+    "ocr",
+    "texte",
+    "image",
+    "pdf",
+    "tesseract"
+  ],
+  "icon": "🔍",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "pytesseract>=0.3,<1",
+      "pypdfium2>=4,<6"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "tesseract_path": {
+      "type": "string",
+      "title": "Chemin de tesseract.exe (vide = détection automatique)",
+      "default": ""
+    },
+    "pdf_dpi": {
+      "type": "integer",
+      "title": "Résolution de rendu des PDF (DPI)",
+      "default": 300,
+      "minimum": 72,
+      "maximum": 600
+    },
+    "default_langs": {
+      "type": "string",
+      "title": "Langues par défaut (ex. fra+eng)",
+      "default": "fra+eng"
+    }
+  }
+}

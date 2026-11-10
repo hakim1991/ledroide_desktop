@@ -1,0 +1,47 @@
+{
+  "id": "git-viewer",
+  "name": "Git Viewer",
+  "version": "1.0.0",
+  "description": "Visionneuse en lecture seule d'un dépôt Git local : statut, historique paginé avec graphe des branches, recherche, détail des commits avec diff coloré, branches et tags, blame et stash.",
+  "category": "Développement",
+  "tags": [
+    "git",
+    "historique",
+    "diff",
+    "dépôt"
+  ],
+  "icon": "🌿",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "filesystem",
+    "process"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "page_size": {
+      "type": "integer",
+      "title": "Commits par page",
+      "default": 100,
+      "minimum": 20,
+      "maximum": 1000
+    },
+    "max_diff_kb": {
+      "type": "integer",
+      "title": "Taille max. d'un diff affiché (Ko)",
+      "default": 2048,
+      "minimum": 100,
+      "maximum": 20480
+    }
+  }
+}

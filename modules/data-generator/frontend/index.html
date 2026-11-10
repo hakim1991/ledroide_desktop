@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Générateur de données</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.icon { padding: 3px 7px; }
+  button.danger:hover:not(:disabled) { color: #fca5a5; border-color: rgba(239,68,68,.5); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  input.bad { border-color: var(--err); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px 12px; gap: 8px; }
+  .topbar { display: flex; align-items: center; gap: 8px; }
+  .topbar .grow { flex: 1; }
+  .topbar select { min-width: 200px; }
+  .pane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex;
+          flex-direction: column; min-height: 0; }
+  #fields-pane { flex: 1 1 55%; }
+  #preview-pane { flex: 1 1 45%; }
+  .pane-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  .pane-head .t { font-weight: 600; }
+  .pane-head .grow { flex: 1; }
+  .pane-body { flex: 1; min-height: 0; overflow: auto; }
+
+  .field { display: flex; gap: 6px; align-items: flex-start; padding: 7px 10px; border-bottom: 1px solid #1d1d21; }
+  .field:hover { background: rgba(255,255,255,.015); }
+  .field.err { background: rgba(239,68,68,.06); }
+  .field .moves { display: flex; flex-direction: column; }
+  .field .moves button { padding: 0 5px; font-size: 10px; line-height: 1.3; }
+  .field .fname { width: 160px; font-family: var(--mono); font-size: 12px; }
+  .field .ftype { width: 190px; }
+  .field .opts { flex: 1; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; min-width: 0; }
+  .opt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+  .opt input[type=number] { width: 84px; }
+  .opt input[type=date] { width: 135px; color-scheme: dark; }
+  .opt input.wide { width: 230px; font-family: var(--mono); font-size: 12px; }
+  .opt.null input { width: 56px; }
+  .empty { color: var(--muted); text-align: center; padding: 30px; }
+
+  #side { width: 300px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border);
+          display: flex; flex-direction: column; padding: 12px; gap: 12px; overflow-y: auto; }
+  .sec { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .form { display: grid; grid-template-columns: 110px 1fr; gap: 8px 10px; align-items: center; }
+  .form label { color: var(--muted); font-size: 12px; }
+  .form input, .form select { width: 100%; min-width: 0; }
+  .seed-row { display: flex; gap: 4px; }
+  .seed-row input { flex: 1; min-width: 0; font-family: var(--mono); }
+  .actions { display: flex; flex-direction: column; gap: 6px; }
+  .actions .row { display: flex; gap: 6px; }
+  .actions .row button { flex: 1; }
+  .progress { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .progress div { height: 100%; background: var(--accent); width: 0; transition: width .15s; }
+  .result { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .result b { font-weight: 600; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+
+  table.grid { border-collapse: separate; border-spacing: 0; font-family: var(--mono); font-size: 12px; min-width: 100%; }
+  table.grid th { position: sticky; top: 0; background: var(--surface2); text-align: left; padding: 5px 8px; font-weight: 600;
+                  border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); white-space: nowrap; }
+  table.grid td { padding: 4px 8px; border-bottom: 1px solid var(--border); border-right: 1px solid #1d1d21;
+                  max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.grid td.num { text-align: right; color: #fbbf24; }
+  table.grid td.bool { color: #c084fc; }
+  table.grid td.rn { color: var(--muted); text-align: right; }
+  .null { color: var(--muted); font-style: italic; }
+  .error-box { color: #fca5a5; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: 6px;
+               padding: 10px 12px; margin: 10px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+             border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<main id="main">
+  <div class="topbar">
+    <select id="schemas" title="Schémas enregistrés"></select>
+    <button id="btn-save" title="Enregistrer le schéma (Ctrl+S)">Enregistrer</button>
+    <button id="btn-del" class="ghost icon danger" title="Supprimer le schéma enregistré">🗑</button>
+    <span class="grow"></span>
+    <button id="btn-reset" class="ghost" title="Repartir d'un schéma d'exemple">Exemple</button>
+    <button id="btn-clear" class="ghost">Vider</button>
+  </div>
+
+  <section class="pane" id="fields-pane">
+    <div class="pane-head"><span class="t">Champs</span><span class="muted" id="fields-count"></span><span class="grow"></span>
+      <button id="btn-add" class="primary" title="Ajouter un champ (Ctrl+Maj+A)">＋ Champ</button></div>
+    <div class="pane-body" id="fields"></div>
+  </section>
+
+  <section class="pane" id="preview-pane">
+    <div class="pane-head"><span class="t">Aperçu</span><span class="muted" id="preview-info"></span><span class="grow"></span>
+      <button id="btn-preview" title="Rafraîchir l'aperçu (Ctrl+Entrée)">⟳ Aperçu</button></div>
+    <div class="pane-body" id="preview"></div>
+  </section>
+</main>
+
+<aside id="side">
+  <div class="sec">Génération</div>
+  <div class="form">
+    <label for="rows">Lignes</label><input id="rows" type="number" min="1" max="100000" value="1000" />
+    <label for="seed">Graine</label>
+    <div class="seed-row"><input id="seed" type="text" placeholder="aléatoire" title="Même graine + même schéma = mêmes données" /><button id="btn-dice" class="icon" title="Nouvelle graine aléatoire">🎲</button></div>
+    <label for="format">Format</label>
+    <select id="format"><option value="json">JSON</option><option value="csv">CSV</option><option value="sql">SQL INSERT</option><option value="ndjson">NDJSON</option></select>
+    <label for="table" class="f-sql">Table</label><input id="table" class="f-sql" type="text" value="donnees" />
+    <label for="delimiter" class="f-csv">Séparateur</label>
+    <select id="delimiter" class="f-csv"><option value=",">Virgule ,</option><option value=";">Point-virgule ;</option><option value="\t">Tabulation</option><option value="|">Barre |</option></select>
+    <label for="pretty" class="f-json">Indenté</label><span class="f-json"><input id="pretty" type="checkbox" checked /></span>
+  </div>
+  <div class="actions">
+    <button id="btn-gen" class="primary" title="Générer (Ctrl+G)">Générer</button>
+    <div id="progress-box" class="hidden">
+      <div class="progress"><div id="progress-bar"></div></div>
+      <div class="hint" id="progress-msg" style="margin-top:4px"></div>
+      <button id="btn-cancel" class="danger" style="margin-top:6px;width:100%">Annuler</button>
+    </div>
+  </div>
+  <div class="result hidden" id="result">
+    <div><b id="res-rows"></b> <span class="muted" id="res-meta"></span></div>
+    <div class="hint" id="res-seed"></div>
+    <div class="actions"><div class="row">
+      <button id="btn-download" class="primary">⬇ Télécharger</button>
+      <button id="btn-copy">⧉ Copier</button>
+    </div></div>
+  </div>
+  <div class="hint">
+    Le prénom, le nom, le nom complet et l'email d'une même ligne correspondent à la même personne ; la ville, le code postal et l'adresse complète sont cohérents entre eux.<br>
+    Les IBAN (clé RIB + clé IBAN) et les SIRET/SIREN (Luhn) générés sont <b>valides</b> mais fictifs.<br>
+    Regex : littéraux, <code>.</code>, <code>\d \w \s</code>, <code>[a-z0-9]</code>, <code>[^…]</code>, groupes <code>( | )</code>, <code>? * + {n} {n,m}</code>.
+  </div>
+</aside>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'data-generator'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const EXAMPLE = [
+  { name: 'id', type: 'sequence', options: {} },
+  { name: 'uuid', type: 'uuid', options: {} },
+  { name: 'prenom', type: 'first_name', options: {} },
+  { name: 'nom', type: 'last_name', options: {} },
+  { name: 'email', type: 'email', options: {} },
+  { name: 'telephone', type: 'phone_fr', options: {} },
+  { name: 'adresse', type: 'address_fr', options: {} },
+  { name: 'code_postal', type: 'postal_code', options: {} },
+  { name: 'ville', type: 'city', options: {} },
+  { name: 'inscrit_le', type: 'date', options: { start: '2022-01-01' } },
+  { name: 'actif', type: 'boolean', options: { true_pct: 80 } },
+]
+const state = {
+  types: [], byType: {}, maxRows: 100000,
+  fields: [], schemas: [], schemaId: '',
+  errorField: null, result: null, jobId: null,
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2000)
+}
+function fmtSize(n) {
+  const u = ['o', 'Ko', 'Mo', 'Go']
+  let i = 0
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
+  return (i ? n.toFixed(1) : n) + ' ' + u[i]
+}
+const fmtNum = (n) => Number(n).toLocaleString('fr-FR')
+
+function defaultsFor(type) {
+  const def = state.byType[type]
+  const o = {}
+  for (const opt of def ? def.options : []) if (opt.default !== '' && opt.default !== undefined) o[opt.key] = opt.default
+  return o
+}
+
+// ── Fields editor ───────────────────────────────────────────────────────────
+function typeSelect(cur) {
+  const groups = {}
+  for (const t of state.types) (groups[t.group] = groups[t.group] || []).push(t)
+  return Object.entries(groups).map(([g, ts]) => `<optgroup label="${esc(g)}">${ts.map((t) =>
+    `<option value="${t.type}" ${t.type === cur ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</optgroup>`).join('')
+}
+function optInput(i, opt, val) {
+  const v = val ?? ''
+  const attrs = `data-i="${i}" data-opt="${opt.key}"`
+  if (opt.kind === 'bool') return `<label class="opt"><input type="checkbox" ${attrs} ${val ? 'checked' : ''} /> ${esc(opt.label)}</label>`
+  if (opt.kind === 'select') return `<label class="opt">${esc(opt.label)} <select ${attrs}>${opt.choices.map(([k, l]) => `<option value="${k}" ${k === (val ?? opt.default) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`
+  if (opt.kind === 'number') return `<label class="opt">${esc(opt.label)} <input type="number" step="any" ${attrs} value="${esc(v)}" /></label>`
+  if (opt.kind === 'date') return `<label class="opt">${esc(opt.label)} <input type="date" ${attrs} value="${esc(v)}" /></label>`
+  return `<label class="opt">${esc(opt.label)} <input type="text" class="wide" spellcheck="false" ${attrs} value="${esc(v)}" /></label>`
+}
+function renderFields() {
+  const el = $('#fields')
+  $('#fields-count').textContent = state.fields.length ? `(${state.fields.length})` : ''
+  if (!state.fields.length) {
+    el.innerHTML = '<div class="empty">Aucun champ. Cliquez sur « ＋ Champ » ou chargez l\'exemple.</div>'
+    return
+  }
+  el.innerHTML = state.fields.map((f, i) => {
+    const def = state.byType[f.type]
+    return `<div class="field ${state.errorField === i ? 'err' : ''}" data-row="${i}">
+      <div class="moves"><button class="ghost" data-up="${i}" ${i === 0 ? 'disabled' : ''} title="Monter">▲</button><button class="ghost" data-down="${i}" ${i === state.fields.length - 1 ? 'disabled' : ''} title="Descendre">▼</button></div>
+      <input class="fname" data-i="${i}" data-k="name" value="${esc(f.name)}" placeholder="nom_colonne" spellcheck="false" />
+      <select class="ftype" data-i="${i}" data-k="type">${typeSelect(f.type)}</select>
+      <div class="opts">${(def ? def.options : []).map((o) => optInput(i, o, f.options[o.key])).join('')}
+        <label class="opt null" title="Pourcentage de valeurs NULL">NULL % <input type="number" min="0" max="100" data-i="${i}" data-opt="null_pct" value="${esc(f.options.null_pct ?? '')}" placeholder="0" /></label></div>
+      <button class="ghost icon" data-dup="${i}" title="Dupliquer">⧉</button>
+      <button class="ghost icon danger" data-del="${i}" title="Supprimer">✕</button>
+    </div>`
+  }).join('')
+}
+
+$('#fields').addEventListener('input', (e) => {
+  const el = e.target
+  const i = +el.dataset.i
+  if (Number.isNaN(i) || !state.fields[i]) return
+  const f = state.fields[i]
+  if (el.dataset.k === 'name') f.name = el.value
+  else if (el.dataset.k === 'type') { f.type = el.value; f.options = { ...defaultsFor(el.value), ...(f.options.null_pct ? { null_pct: f.options.null_pct } : {}) }; renderFields() }
+  else if (el.dataset.opt) {
+    const v = el.type === 'checkbox' ? el.checked : el.value
+    if (v === '') delete f.options[el.dataset.opt]
+    else f.options[el.dataset.opt] = el.type === 'number' ? Number(v) : v
+  }
+  schedulePreview()
+})
+$('#fields').addEventListener('click', (e) => {
+  const b = e.target.closest('button')
+  if (!b) return
+  const f = state.fields
+  if (b.dataset.del !== undefined) f.splice(+b.dataset.del, 1)
+  else if (b.dataset.dup !== undefined) { const src = f[+b.dataset.dup]; f.splice(+b.dataset.dup + 1, 0, { ...src, name: uniqueName(src.name), options: { ...src.options } }) }
+  else if (b.dataset.up !== undefined) { const i = +b.dataset.up; [f[i - 1], f[i]] = [f[i], f[i - 1]] }
+  else if (b.dataset.down !== undefined) { const i = +b.dataset.down; [f[i + 1], f[i]] = [f[i], f[i + 1]] }
+  else return
+  state.errorField = null
+  renderFields(); schedulePreview()
+})
+function uniqueName(base) {
+  const names = new Set(state.fields.map((f) => f.name))
+  base = base.replace(/_\d+$/, '') || 'champ'
+  let n = 2
+  while (names.has(`${base}_${n}`)) n++
+  return names.has(base) ? `${base}_${n}` : base
+}
+function addField() {
+  state.fields.push({ name: uniqueName('champ'), type: 'integer', options: defaultsFor('integer') })
+  renderFields(); schedulePreview()
+  const inputs = $$('.fname')
+  const last = inputs[inputs.length - 1]
+  last.focus(); last.select()
+}
+$('#btn-add').onclick = addField
+$('#btn-reset').onclick = () => {
+  if (state.fields.length && !confirm('Remplacer les champs actuels par le schéma d\'exemple ?')) return
+  loadFields(EXAMPLE); state.schemaId = ''; renderSchemas()
+}
+$('#btn-clear').onclick = () => {
+  if (state.fields.length && !confirm('Supprimer tous les champs ?')) return
+  state.fields = []; renderFields(); schedulePreview()
+}
+function loadFields(fields) {
+  state.fields = fields.map((f) => ({ name: f.name, type: f.type, options: { ...defaultsFor(f.type), ...(f.options || {}) } }))
+  state.errorField = null
+  renderFields(); schedulePreview()
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+function refreshFormatUi() {
+  const fmt = $('#format').value
+  for (const k of ['sql', 'csv', 'json']) $$('.f-' + k).forEach((el) => el.classList.toggle('hidden', fmt !== k))
+}
+$('#format').onchange = refreshFormatUi
+$('#btn-dice').onclick = () => { $('#seed').value = String(Math.floor(Math.random() * 2 ** 31)); schedulePreview() }
+$('#seed').addEventListener('input', schedulePreview)
+
+function settings() {
+  return {
+    fields: state.fields, seed: $('#seed').value.trim(), rows: +$('#rows').value,
+    format: $('#format').value, table: $('#table').value.trim(), delimiter: $('#delimiter').value,
+    pretty: $('#pretty').checked,
+  }
+}
+
+// ── Preview ────────────────────────────────────────────────────────────────
+let previewTimer, previewSeq = 0
+function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(runPreview, 350) }
+async function runPreview() {
+  clearTimeout(previewTimer)
+  const el = $('#preview')
+  if (!state.fields.length) { el.innerHTML = '<div class="empty">Ajoutez des champs pour voir un aperçu.</div>'; $('#preview-info').textContent = ''; return }
+  const seq = ++previewSeq
+  try {
+    const r = await call('preview', { fields: state.fields, seed: $('#seed').value.trim(), count: 20 })
+    if (seq !== previewSeq) return
+    if (state.errorField !== null) { state.errorField = null; renderFields() }
+    $('#preview-info').textContent = `20 premières lignes · graine ${$('#seed').value.trim() ? r.seed : 'aléatoire'}`
+    el.innerHTML = `<table class="grid"><thead><tr><th>#</th>${r.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${
+      r.rows.map((row, i) => `<tr><td class="rn">${i + 1}</td>${row.map((v) => {
+        if (v === null) return '<td><span class="null">NULL</span></td>'
+        if (typeof v === 'number') return `<td class="num">${esc(v)}</td>`
+        if (typeof v === 'boolean') return `<td class="bool">${v}</td>`
+        return `<td title="${esc(v)}">${esc(v)}</td>`
+      }).join('')}</tr>`).join('')}</tbody></table>`
+  } catch (e) {
+    if (seq !== previewSeq) return
+    $('#preview-info').textContent = ''
+    el.innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+    const fi = e.code === 'INVALID_SCHEMA' ? (e.message.match(/^Champ (\d+)/) || [])[1] : null
+    const idx = fi ? +fi - 1 : null
+    if (idx !== state.errorField) { state.errorField = idx; renderFields() }
+  }
+}
+$('#btn-preview').onclick = runPreview
+
+// ── Generation ─────────────────────────────────────────────────────────────
+async function generate() {
+  const s = settings()
+  if (!(s.rows >= 1 && s.rows <= state.maxRows)) { toast(`Nombre de lignes entre 1 et ${fmtNum(state.maxRows)}`, true); $('#rows').focus(); return }
+  try { await call('validate', s) } catch (e) { toast(e.message, true); runPreview(); return }
+  $('#btn-gen').disabled = true
+  $('#result').classList.add('hidden')
+  $('#progress-box').classList.remove('hidden')
+  $('#progress-bar').style.width = '0'
+  $('#progress-msg').textContent = 'Démarrage…'
+  state.result = null
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'generate', s, {
+      onStart: (id) => (state.jobId = id),
+      onProgress: (p) => { $('#progress-bar').style.width = (p.percent || 0) + '%'; $('#progress-msg').textContent = p.message || '' },
+    })
+    state.result = r
+    $('#res-rows').textContent = `${fmtNum(r.rows)} ligne(s)`
+    $('#res-meta').textContent = `· ${r.format.toUpperCase()} · ${fmtSize(r.size)}`
+    $('#res-seed').textContent = `Graine utilisée : ${r.seed} (à réutiliser pour régénérer les mêmes données)`
+    $('#result').classList.remove('hidden')
+    toast('Données générées')
+  } catch (e) {
+    toast(e.code === 'JOB_CANCELLED' ? 'Génération annulée' : e.message, e.code !== 'JOB_CANCELLED')
+  } finally {
+    state.jobId = null
+    $('#btn-gen').disabled = false
+    $('#progress-box').classList.add('hidden')
+  }
+}
+$('#btn-gen').onclick = generate
+$('#btn-cancel').onclick = () => { if (state.jobId) call('job:cancel', { job_id: state.jobId }).catch(() => {}) }
+$('#btn-download').onclick = () => {
+  const r = state.result
+  if (!r) return
+  const blob = new Blob([(r.format === 'csv' ? '﻿' : '') + r.content], { type: r.mime + ';charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = r.filename
+  document.body.appendChild(a); a.click()
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove() }, 1000)
+}
+$('#btn-copy').onclick = async () => {
+  const r = state.result
+  if (!r) return
+  if (r.size > 20 * 1024 * 1024 && !confirm(`Copier ${fmtSize(r.size)} dans le presse-papiers ? Cela peut être lent.`)) return
+  try { await navigator.clipboard.writeText(r.content); toast('Copié dans le presse-papiers') } catch { toast('Copie impossible', true) }
+}
+
+// ── Saved schemas ──────────────────────────────────────────────────────────
+function renderSchemas() {
+  $('#schemas').innerHTML = `<option value="">— Schéma non enregistré —</option>` + state.schemas.map((s) =>
+    `<option value="${s._id}" ${s._id === state.schemaId ? 'selected' : ''}>${esc(s.name)} (${s.fields.length} champs)</option>`).join('')
+  $('#btn-del').disabled = !state.schemaId
+}
+async function loadSchemas() {
+  try { state.schemas = (await call('schemas_list')).items } catch (e) { toast(e.message, true) }
+  renderSchemas()
+}
+$('#schemas').onchange = () => {
+  const s = state.schemas.find((x) => x._id === $('#schemas').value)
+  state.schemaId = s ? s._id : ''
+  renderSchemas()
+  if (!s) return
+  loadFields(s.fields)
+  $('#rows').value = s.rows; $('#seed').value = s.seed || ''; $('#format').value = s.format
+  $('#table').value = s.table || 'donnees'; $('#delimiter').value = s.delimiter || ','
+  refreshFormatUi()
+}
+async function saveSchema() {
+  const cur = state.schemas.find((x) => x._id === state.schemaId)
+  const name = prompt('Nom du schéma :', cur ? cur.name : '')
+  if (name === null) return
+  try {
+    const r = await call('schema_save', { ...settings(), id: cur && cur.name === name.trim() ? cur._id : undefined, name })
+    state.schemaId = r._id
+    toast('Schéma enregistré')
+    await loadSchemas()
+  } catch (e) { toast(e.message, true) }
+}
+$('#btn-save').onclick = saveSchema
+$('#btn-del').onclick = async () => {
+  const cur = state.schemas.find((x) => x._id === state.schemaId)
+  if (!cur || !confirm(`Supprimer le schéma « ${cur.name} » ?`)) return
+  try { await call('schema_delete', { id: cur._id }); state.schemaId = ''; toast('Schéma supprimé'); await loadSchemas() } catch (e) { toast(e.message, true) }
+}
+
+document.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase()
+  if (e.ctrlKey && k === 'enter') { e.preventDefault(); runPreview() }
+  else if (e.ctrlKey && k === 'g') { e.preventDefault(); if (!$('#btn-gen').disabled) generate() }
+  else if (e.ctrlKey && k === 's') { e.preventDefault(); saveSchema() }
+  else if (e.ctrlKey && e.shiftKey && k === 'a') { e.preventDefault(); addField() }
+})
+
+;(async () => {
+  try {
+    const r = await call('types')
+    state.types = r.types; state.maxRows = r.max_rows
+    state.byType = Object.fromEntries(r.types.map((t) => [t.type, t]))
+    $('#rows').max = r.max_rows
+  } catch (e) { toast('Backend indisponible : ' + e.message, true); return }
+  refreshFormatUi()
+  loadFields(EXAMPLE)
+  loadSchemas()
+})()
+</script>
+</body>
+</html>

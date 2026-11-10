@@ -1,0 +1,48 @@
+{
+  "id": "folder-sync",
+  "name": "Synchro de dossiers",
+  "version": "1.0.0",
+  "description": "Compare deux dossiers (nouveaux, modifiés, identiques, orphelins) puis les synchronise en copie, miroir (suppressions vers la corbeille) ou bidirectionnel, avec aperçu, filtres d'exclusion, journal et profils.",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "fichier",
+    "synchronisation",
+    "sauvegarde",
+    "comparaison"
+  ],
+  "icon": "🔁",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "filesystem"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "send2trash>=1.8,<2"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "mtime_tolerance_s": {
+      "type": "integer",
+      "title": "Tolérance sur les dates (secondes)",
+      "default": 2,
+      "minimum": 0,
+      "maximum": 3600
+    },
+    "journal_size": {
+      "type": "integer",
+      "title": "Exécutions conservées dans le journal",
+      "default": 50,
+      "minimum": 5,
+      "maximum": 500
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "encrypted-notes",
+  "name": "Notes chiffrées",
+  "version": "1.0.0",
+  "description": "Bloc-notes protégé par un mot de passe maître : chiffrement AES-256-GCM, clé dérivée par scrypt, verrouillage manuel et automatique. Mot de passe perdu = notes perdues.",
+  "category": "Sécurité",
+  "tags": [
+    "notes",
+    "chiffrement",
+    "mot de passe",
+    "coffre"
+  ],
+  "icon": "🔒",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "cryptography>=42,<51"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "auto_lock_minutes": {
+      "type": "integer",
+      "title": "Verrouillage automatique après inactivité (minutes, 0 = jamais)",
+      "default": 5,
+      "minimum": 0,
+      "maximum": 240
+    }
+  }
+}

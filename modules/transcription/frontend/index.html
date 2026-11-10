@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Transcription audio</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.danger:hover:not(:disabled) { color: var(--err); border-color: rgba(239,68,68,.4); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); padding: 0; }
+  .hidden { display: none !important; }
+  .mono { font-family: var(--mono); }
+  .spacer { flex: 1; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; }
+  .pill { padding: 2px 9px; border-radius: 10px; font-size: 11.5px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+  .pill.ok { color: var(--ok); border-color: rgba(34,197,94,.35); }
+  .pill.bad { color: var(--err); border-color: rgba(239,68,68,.35); }
+  .pill.warn { color: var(--warn); border-color: rgba(245,158,11,.35); }
+  .banner { margin: 10px 12px 0; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); color: #fca5a5;
+            border-radius: 8px; padding: 10px 12px; line-height: 1.5; flex-shrink: 0; }
+  .banner b { color: #fecaca; }
+
+  #app { flex: 1; min-height: 0; display: flex; }
+  #side { width: 310px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--surface); overflow-y: auto;
+          padding: 10px; display: flex; flex-direction: column; gap: 12px; }
+  .sec h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 6px; font-weight: 600;
+            display: flex; align-items: center; gap: 6px; }
+  #drop { border: 1.5px dashed #3f3f46; border-radius: 8px; padding: 14px 10px; text-align: center; color: var(--muted); cursor: pointer; transition: .12s; }
+  #drop:hover, #drop.over { border-color: var(--accent); color: var(--text); background: rgba(99,102,241,.06); }
+  #drop .big { font-size: 24px; }
+  .pathrow { display: flex; gap: 6px; margin-top: 6px; }
+  .pathrow input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+  .fileinfo { margin-top: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; display: flex; gap: 8px; align-items: center; }
+  .fileinfo .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fileinfo .s { color: var(--muted); font-size: 11.5px; }
+  audio { width: 100%; margin-top: 8px; height: 34px; }
+  .models { display: flex; flex-direction: column; gap: 5px; }
+  .model { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px;
+           background: var(--surface2); cursor: pointer; }
+  .model.on { border-color: var(--accent); background: rgba(99,102,241,.12); }
+  .model .nm { font-weight: 600; width: 58px; }
+  .model .d { flex: 1; min-width: 0; color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+  .model .sz { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; }
+  .model .cached { color: var(--ok); font-size: 11px; }
+  .model button { padding: 1px 6px; }
+  .dl-warn { margin-top: 6px; font-size: 11.5px; color: #fcd34d; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.3);
+             border-radius: 6px; padding: 6px 8px; line-height: 1.4; }
+  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .row > label:first-child { width: 80px; color: var(--muted); flex-shrink: 0; }
+  .row select, .row input[type=text] { flex: 1; min-width: 0; }
+  .seg-ctl { display: flex; flex: 1; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg-ctl button { flex: 1; border: none; border-radius: 0; padding: 4px 6px; }
+  .seg-ctl button.on { background: rgba(99,102,241,.22); color: #fff; }
+  label.cb { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  textarea.prompt { width: 100%; height: 54px; resize: vertical; font-size: 12px; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.4; margin-top: 4px; }
+  #go { width: 100%; padding: 8px; font-size: 13.5px; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .toolbar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+  .tab { padding: 4px 11px; border-radius: 5px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .meta { color: var(--muted); font-size: 12px; display: flex; gap: 12px; flex-wrap: wrap; padding: 6px 12px 0; }
+  .meta b { color: var(--text); font-weight: 600; }
+  #segs { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 10px 16px; }
+  .seg { display: flex; gap: 10px; padding: 5px 8px; border-radius: 6px; line-height: 1.5; cursor: pointer; }
+  .seg:hover { background: var(--surface2); }
+  .seg.playing { background: rgba(99,102,241,.14); }
+  .seg .ts { font-family: var(--mono); font-size: 11.5px; color: var(--accent-h); flex-shrink: 0; padding-top: 1px; width: 96px; }
+  .seg .tx { flex: 1; }
+  .seg.new { animation: flash 1s ease-out; }
+  @keyframes flash { from { background: rgba(99,102,241,.25); } to { background: transparent; } }
+  #plain { flex: 1; min-height: 0; margin: 8px 10px 10px; resize: none; font-size: 13.5px; line-height: 1.6; padding: 10px 12px; }
+  .placeholder { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 20px; }
+  .placeholder .big { font-size: 40px; }
+  #progress { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  #prog-msg { color: var(--muted); font-size: 12px; min-width: 220px; }
+
+  #hist { width: 270px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; }
+  #hist .head { padding: 10px; display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  #hist-list { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .hitem { padding: 7px 8px; border-radius: 6px; cursor: pointer; display: flex; gap: 6px; }
+  .hitem:hover { background: var(--surface2); }
+  .hitem.current { background: rgba(99,102,241,.14); }
+  .hitem .b { flex: 1; min-width: 0; }
+  .hitem .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hitem .s { color: var(--muted); font-size: 11px; }
+  .hitem .p { color: #a1a1aa; font-size: 11.5px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: 2px; }
+  .hitem .del { visibility: hidden; padding: 0 5px; align-self: flex-start; }
+  .hitem:hover .del { visibility: visible; }
+  .empty { color: var(--muted); text-align: center; padding: 24px 8px; font-size: 12px; }
+
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border);
+           padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">🎙️ Transcription audio</span>
+  <span id="pill-fw" class="pill">…</span>
+  <span id="pill-ff" class="pill">…</span>
+  <span class="spacer"></span>
+  <button id="btn-hist" title="Historique des transcriptions">🕘 Historique</button>
+</header>
+<div id="banner" class="banner hidden">
+  <b>Dépendance absente : faster-whisper.</b> Ce module a besoin de la bibliothèque Python <span class="mono">faster-whisper</span> (≈ 250 Mo avec ses dépendances).
+  Elle est normalement installée à l'activation du module : désactivez puis réactivez le module, ou installez-la depuis le menu <b>Bibliothèques</b>. L'historique et les exports restent disponibles.
+</div>
+
+<div id="app">
+  <aside id="side">
+    <div class="sec">
+      <h3>Fichier audio ou vidéo</h3>
+      <div id="drop"><div class="big">🎧</div><div><b>Déposez</b> un fichier ou <b>cliquez</b> pour choisir<br><span style="font-size:11.5px">MP3, WAV, M4A, OGG, FLAC, MP4, MKV, WEBM…</span></div></div>
+      <div class="pathrow"><input id="path" type="text" placeholder="…ou chemin d'un fichier local" spellcheck="false" /><button id="path-go">→</button></div>
+      <input id="file-input" type="file" class="hidden" accept="audio/*,video/*,.mkv,.m4a,.opus,.flac,.wma,.aac" />
+      <div id="fileinfo" class="fileinfo hidden"><span>🎵</span><div style="flex:1;min-width:0"><div class="n" id="fi-name"></div><div class="s" id="fi-meta"></div></div><button class="ghost" id="fi-clear" title="Retirer">✕</button></div>
+      <audio id="player" controls class="hidden"></audio>
+    </div>
+
+    <div class="sec">
+      <h3>Modèle <span class="spacer"></span><button class="ghost" id="open-models" style="padding:1px 6px;font-size:11px" title="Ouvrir le dossier des modèles">📁</button></h3>
+      <div class="models" id="models"></div>
+      <div class="dl-warn hidden" id="dl-warn"></div>
+    </div>
+
+    <div class="sec">
+      <h3>Options</h3>
+      <div class="row"><label>Langue</label><select id="lang"><option value="auto">Détection automatique</option></select></div>
+      <div class="row"><label>Tâche</label><div class="seg-ctl" id="task"><button data-v="transcribe" class="on">Transcrire</button><button data-v="translate" title="Traduire vers l'anglais">→ Anglais</button></div></div>
+      <div class="row"><label>Qualité</label><div class="seg-ctl" id="quality"><button data-v="precise" class="on" title="Beam search 5">Précise</button><button data-v="fast" title="Décodage glouton, ~2× plus rapide">Rapide</button></div></div>
+      <label class="cb" style="margin-bottom:8px"><input type="checkbox" id="vad" checked /> Ignorer les silences (VAD)</label>
+      <label style="color:var(--muted);display:block;margin-bottom:4px">Contexte / vocabulaire (facultatif)</label>
+      <textarea id="prompt" class="prompt" placeholder="Noms propres, sigles, sujet… ex. « Réunion LedroideDesktop, FastAPI, Electron »"></textarea>
+    </div>
+
+    <button id="go" class="primary" disabled>Transcrire</button>
+    <p class="hint" style="text-align:center;margin-top:-6px">Calcul local sur le CPU (int8). <kbd>Ctrl</kbd>+<kbd>Entrée</kbd> pour lancer</p>
+  </aside>
+
+  <main id="main">
+    <div id="progress" class="hidden"><span class="spinner"></span><span id="prog-msg">…</span><div class="bar"><div id="prog-bar"></div></div><button id="btn-cancel">Annuler</button></div>
+    <div class="toolbar">
+      <div class="tab active" data-view="segs">Segments</div>
+      <div class="tab" data-view="plain">Texte</div>
+      <span class="spacer"></span>
+      <label class="cb" id="follow-wrap" title="Suivre la lecture"><input type="checkbox" id="follow" checked /> Suivre</label>
+      <button id="btn-copy" disabled title="Copier le texte (Ctrl+Maj+C)">Copier</button>
+      <button data-exp="txt" disabled>TXT</button>
+      <button data-exp="txt-ts" disabled title="Texte avec horodatages">TXT horodaté</button>
+      <button data-exp="srt" disabled>SRT</button>
+      <button data-exp="vtt" disabled>VTT</button>
+    </div>
+    <div class="meta" id="meta"></div>
+    <div id="segs"><div class="placeholder"><div class="big">🎙️</div><div>Choisissez un fichier audio ou vidéo puis cliquez sur <b>Transcrire</b>.</div>
+      <div style="font-size:12px">Les segments s'affichent au fil de la transcription. Cliquez sur un segment pour l'écouter.</div></div></div>
+    <textarea id="plain" class="hidden" readonly></textarea>
+  </main>
+
+  <aside id="hist" class="hidden">
+    <div class="head">Historique <span class="spacer"></span><button class="ghost danger" id="hist-clear" title="Vider l'historique">🗑</button></div>
+    <div id="hist-list"></div>
+  </aside>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'transcription'
+const CHUNK = 1024 * 1024
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const fmtSize = (n) => n < 1048576 ? `${(n / 1024).toFixed(0)} Ko` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} Mo` : `${(n / 1073741824).toFixed(2)} Go`
+const fmtMb = (mb) => mb >= 1000 ? `${(mb / 1024).toFixed(1)} Go` : `${mb} Mo`
+function fmtTs(s) {
+  s = Math.max(0, s || 0)
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = Math.floor(s % 60)
+  return (h ? `${h}:${String(m).padStart(2, '0')}` : `${String(m).padStart(2, '0')}`) + `:${String(sec).padStart(2, '0')}`
+}
+
+const state = { status: null, model: 'small', source: null, file: null, objectUrl: null, running: false, jobId: null,
+                segments: [], result: null, histId: null, task: 'transcribe', quality: 'precise' }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+
+// ── Status / models ─────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const st = await call('status', {}, { timeout: 30000 })
+    state.status = st
+    $('#pill-fw').className = 'pill ' + (st.faster_whisper ? 'ok' : 'bad')
+    $('#pill-fw').textContent = st.faster_whisper ? 'faster-whisper ✓' : 'faster-whisper absent'
+    $('#pill-ff').className = 'pill ' + (st.ffmpeg ? 'ok' : 'warn')
+    $('#pill-ff').textContent = st.ffmpeg ? `ffmpeg ✓ (${st.ffmpeg_source})` : 'ffmpeg absent'
+    $('#pill-ff').title = st.ffmpeg ? st.ffmpeg : 'Sans ffmpeg, le décodage est fait par faster-whisper (PyAV)'
+    $('#banner').classList.toggle('hidden', st.faster_whisper)
+    if ($('#lang').options.length === 1) $('#lang').insertAdjacentHTML('beforeend', st.languages.map((l) => `<option value="${l.code}">${esc(l.name)}</option>`).join(''))
+    renderModels()
+  } catch (e) { toast(e.message, true) }
+}
+
+function renderModels() {
+  const models = state.status?.models || []
+  $('#models').innerHTML = models.map((m) => `
+    <div class="model ${m.id === state.model ? 'on' : ''}" data-model="${m.id}">
+      <input type="radio" name="model" ${m.id === state.model ? 'checked' : ''} />
+      <span class="nm">${esc(m.label)}</span>
+      <span class="d">${esc(m.hint)}<br>${m.cached ? '<span class="cached">✓ téléchargé</span>' : 'à télécharger'}</span>
+      <span class="sz">~${fmtMb(m.size_mb)}</span>
+      ${m.cached ? `<button class="ghost danger" data-del-model="${m.id}" title="Supprimer le modèle du disque (${m.disk_mb} Mo)">🗑</button>` : ''}
+    </div>`).join('')
+  const m = models.find((x) => x.id === state.model)
+  const warn = $('#dl-warn')
+  warn.classList.toggle('hidden', !m || m.cached)
+  if (m && !m.cached) warn.innerHTML = `⬇ Premier usage : le modèle <b>${esc(m.label)}</b> (~${fmtMb(m.size_mb)}) sera téléchargé depuis Hugging Face puis conservé en cache. Connexion internet requise une seule fois.`
+  updateGo()
+}
+
+$('#models').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del-model]')
+  if (del) {
+    e.stopPropagation()
+    const id = del.dataset.delModel
+    if (!confirm(`Supprimer le modèle « ${id} » du disque ? Il sera re-téléchargé au prochain usage.`)) return
+    try { const r = await call('delete_model', { model: id }); state.status.models = r.models; renderModels(); toast('Modèle supprimé') }
+    catch (err) { toast(err.message, true) }
+    return
+  }
+  const el = e.target.closest('[data-model]')
+  if (el && !state.running) { state.model = el.dataset.model; renderModels() }
+})
+$('#open-models').addEventListener('click', () => call('open_models_dir').catch((e) => toast(e.message, true)))
+
+function segCtl(id, key) {
+  $(id).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return
+    state[key] = b.dataset.v
+    $$(`${id} button`).forEach((x) => x.classList.toggle('on', x === b))
+  })
+}
+segCtl('#task', 'task'); segCtl('#quality', 'quality')
+
+// ── Source ──────────────────────────────────────────────────────────────────
+function b64(buf) {
+  const bytes = new Uint8Array(buf); let s = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+  return btoa(s)
+}
+
+async function loadFile(file) {
+  if (!file || state.running) return
+  try {
+    let info
+    if (file.path) {
+      info = await call('open_path', { path: file.path })
+    } else {
+      showProgress(true, 'Envoi du fichier…', 0)
+      const begin = await call('upload_begin', { name: file.name, size: file.size })
+      for (let off = 0; off < file.size; off += CHUNK) {
+        const part = await file.slice(off, off + CHUNK).arrayBuffer()
+        await call('upload_chunk', { upload_id: begin.upload_id, offset: off, data: b64(part) }, { timeout: 60000 })
+        showProgress(true, `Envoi du fichier… ${Math.min(100, Math.round((off + CHUNK) / file.size * 100))} %`, (off + CHUNK) / file.size * 100)
+      }
+      info = await call('upload_end', { upload_id: begin.upload_id })
+    }
+    setSource(info, file)
+  } catch (e) { toast(e.message, true) } finally { if (!state.running) showProgress(false) }
+}
+
+async function loadPath(path) {
+  path = path.trim(); if (!path) return
+  try { setSource(await call('open_path', { path }), null) } catch (e) { toast(e.message, true) }
+}
+
+function setSource(info, file) {
+  if (state.source?.file_id) call('upload_discard', { file_id: state.source.file_id }).catch(() => {})
+  state.source = info.file_id ? { file_id: info.file_id } : { path: info.path }
+  state.file = info
+  $('#fileinfo').classList.remove('hidden')
+  $('#fi-name').textContent = info.name; $('#fi-name').title = info.path || info.name
+  $('#fi-meta').textContent = fmtSize(info.size)
+  if (state.objectUrl) URL.revokeObjectURL(state.objectUrl)
+  state.objectUrl = file ? URL.createObjectURL(file) : null
+  const player = $('#player')
+  player.classList.toggle('hidden', !state.objectUrl)
+  if (state.objectUrl) player.src = state.objectUrl; else player.removeAttribute('src')
+  updateGo()
+}
+
+$('#fi-clear').addEventListener('click', () => {
+  if (state.running) return
+  if (state.source?.file_id) call('upload_discard', { file_id: state.source.file_id }).catch(() => {})
+  state.source = state.file = null
+  if (state.objectUrl) URL.revokeObjectURL(state.objectUrl)
+  state.objectUrl = null
+  $('#player').classList.add('hidden'); $('#player').removeAttribute('src')
+  $('#fileinfo').classList.add('hidden'); updateGo()
+})
+
+const drop = $('#drop')
+drop.addEventListener('click', () => $('#file-input').click())
+$('#file-input').addEventListener('change', (e) => { loadFile(e.target.files[0]); e.target.value = '' })
+;['dragenter', 'dragover'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over') }))
+;['dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); if (t === 'drop' || !e.relatedTarget) drop.classList.remove('over') }))
+document.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f) loadFile(f) })
+$('#path-go').addEventListener('click', () => loadPath($('#path').value))
+$('#path').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadPath($('#path').value) })
+
+// ── Transcription ───────────────────────────────────────────────────────────
+function updateGo() {
+  const ok = state.status?.faster_whisper && state.source && !state.running
+  $('#go').disabled = !ok
+  $('#go').title = !state.status?.faster_whisper ? 'faster-whisper n\'est pas installé' : !state.source ? 'Choisissez un fichier' : 'Transcrire (Ctrl+Entrée)'
+}
+
+function showProgress(on, msg, pct) {
+  $('#progress').classList.toggle('hidden', !on)
+  if (msg != null) $('#prog-msg').textContent = msg
+  if (pct != null) $('#prog-bar').style.width = `${Math.min(100, pct)}%`
+  $('#btn-cancel').classList.toggle('hidden', !state.running)
+}
+
+window.ledroide.on(MODULE_ID, 'transcription:segment', (d) => {
+  if (!state.running || (state.jobId && d.job_id !== state.jobId)) return
+  state.segments.push(d.segment)
+  appendSeg(d.segment, true)
+  updateExportBtns()
+})
+window.ledroide.on(MODULE_ID, 'transcription:info', (d) => {
+  if (!state.running || (state.jobId && d.job_id !== state.jobId)) return
+  renderMeta({ language: d.language, language_probability: d.language_probability, duration: d.duration, model: state.model })
+})
+
+async function start() {
+  if ($('#go').disabled) return
+  state.running = true; state.jobId = null; state.segments = []; state.result = null; state.histId = null
+  renderSegments(); renderMeta(null); updateGo(); markHist()
+  showProgress(true, 'Démarrage…', 0)
+  try {
+    const res = await window.ledroide.run(MODULE_ID, 'transcribe', {
+      source: state.source, model: state.model, language: $('#lang').value, task: state.task,
+      quality: state.quality, vad: $('#vad').checked, prompt: $('#prompt').value,
+    }, {
+      onStart: (id) => { state.jobId = id },
+      onProgress: (p) => showProgress(true, p.message || '', p.percent ?? 0),
+    })
+    setResult(res)
+    toast(res.segments.length ? `Transcription terminée : ${res.segments.length} segment(s) en ${res.elapsed_s} s` : 'Aucune parole détectée', !res.segments.length)
+    loadHistory()
+  } catch (e) {
+    toast(e.code === 'JOB_CANCELLED' ? 'Transcription annulée' : e.message, e.code !== 'JOB_CANCELLED')
+  } finally {
+    state.running = false; state.jobId = null
+    showProgress(false); updateGo(); updateExportBtns()
+    loadStatus()
+  }
+}
+$('#go').addEventListener('click', start)
+$('#btn-cancel').addEventListener('click', () => { if (state.jobId) window.ledroide.cancel(MODULE_ID, state.jobId).catch(() => {}) })
+
+function setResult(res) {
+  state.result = res
+  state.segments = res.segments || []
+  state.histId = res._id || null
+  renderSegments(); renderMeta(res); updateExportBtns(); markHist()
+}
+
+function renderMeta(r) {
+  if (!r) { $('#meta').innerHTML = ''; return }
+  const lang = state.status?.languages.find((l) => l.code === r.language)?.name || r.language
+  $('#meta').innerHTML = [
+    r.name ? `<span><b>${esc(r.name)}</b></span>` : '',
+    r.duration ? `<span>Durée <b>${fmtTs(r.duration)}</b></span>` : '',
+    lang ? `<span>Langue <b>${esc(lang)}</b>${r.language_probability ? ` (${Math.round(r.language_probability * 100)} %)` : ''}</span>` : '',
+    r.model ? `<span>Modèle <b>${esc(r.model)}</b></span>` : '',
+    r.task === 'translate' ? '<span>Traduit en anglais</span>' : '',
+    r.elapsed_s ? `<span>Calcul ${r.elapsed_s} s${r.duration ? ` (×${(r.duration / r.elapsed_s).toFixed(1)} temps réel)` : ''}</span>` : '',
+  ].join('')
+}
+
+function segHtml(s, i, isNew) {
+  return `<div class="seg${isNew ? ' new' : ''}" data-i="${i}" data-start="${s.start}" data-end="${s.end}" title="Cliquer pour écouter · double-clic pour copier">
+    <span class="ts">${fmtTs(s.start)} → ${fmtTs(s.end)}</span><span class="tx">${esc(s.text)}</span></div>`
+}
+function renderSegments() {
+  const box = $('#segs')
+  if (!state.segments.length) {
+    box.innerHTML = state.running ? '<div class="placeholder"><span class="spinner"></span><div>Les segments apparaîtront ici au fil de la transcription…</div></div>'
+      : '<div class="placeholder"><div class="big">🎙️</div><div>Choisissez un fichier audio ou vidéo puis cliquez sur <b>Transcrire</b>.</div></div>'
+  } else box.innerHTML = state.segments.map((s, i) => segHtml(s, i, false)).join('')
+  $('#plain').value = plainText()
+}
+function appendSeg(s, isNew) {
+  const box = $('#segs')
+  if (state.segments.length === 1) box.innerHTML = ''
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40
+  box.insertAdjacentHTML('beforeend', segHtml(s, state.segments.length - 1, isNew))
+  if (atBottom) box.scrollTop = box.scrollHeight
+  $('#plain').value = plainText()
+}
+function plainText() {
+  let out = '', last = null
+  for (const s of state.segments) {
+    if (last !== null) out += s.start - last > 2 ? '\n\n' : ' '
+    out += s.text; last = s.end
+  }
+  return out
+}
+
+$('#segs').addEventListener('click', (e) => {
+  const el = e.target.closest('.seg'); if (!el) return
+  const p = $('#player')
+  if (!state.objectUrl) return
+  p.currentTime = +el.dataset.start; p.play().catch(() => {})
+})
+$('#segs').addEventListener('dblclick', async (e) => {
+  const el = e.target.closest('.seg'); if (!el) return
+  await copy(state.segments[+el.dataset.i]?.text || ''); toast('Segment copié')
+})
+$('#player').addEventListener('timeupdate', () => {
+  const t = $('#player').currentTime
+  let cur = null
+  $$('#segs .seg').forEach((el) => {
+    const on = t >= +el.dataset.start && t < +el.dataset.end
+    el.classList.toggle('playing', on); if (on) cur = el
+  })
+  if (cur && $('#follow').checked && !$('#player').paused) cur.scrollIntoView({ block: 'nearest' })
+})
+
+$$('.tab').forEach((t) => t.addEventListener('click', () => {
+  $$('.tab').forEach((x) => x.classList.toggle('active', x === t))
+  $('#segs').classList.toggle('hidden', t.dataset.view !== 'segs')
+  $('#plain').classList.toggle('hidden', t.dataset.view !== 'plain')
+}))
+
+function updateExportBtns() {
+  const has = state.segments.length > 0
+  $$('[data-exp]').forEach((b) => (b.disabled = !has || state.running))
+  $('#btn-copy').disabled = !has
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text) }
+  catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove() }
+}
+$('#btn-copy').addEventListener('click', async () => { await copy(plainText()); toast('Texte copié') })
+
+$$('[data-exp]').forEach((b) => b.addEventListener('click', async () => {
+  const kind = b.dataset.exp
+  try {
+    const r = await call('export', { segments: state.segments, format: kind === 'txt-ts' ? 'txt' : kind, timestamps: kind === 'txt-ts' })
+    const base = (state.result?.name || state.file?.name || 'transcription').replace(/\.[^.]+$/, '')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([r.content], { type: `${r.mime};charset=utf-8` }))
+    a.download = `${base}.${r.ext}`
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  } catch (e) { toast(e.message, true) }
+}))
+
+// ── History ─────────────────────────────────────────────────────────────────
+$('#btn-hist').addEventListener('click', () => { $('#hist').classList.toggle('hidden'); if (!$('#hist').classList.contains('hidden')) loadHistory() })
+async function loadHistory() {
+  if ($('#hist').classList.contains('hidden')) return
+  try {
+    const { items } = await call('history_list')
+    $('#hist-list').innerHTML = items.length ? items.map((h) => `
+      <div class="hitem" data-id="${esc(h._id)}"><div class="b">
+        <div class="n">${esc(h.name)}</div>
+        <div class="s">${new Date(h.created).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · ${fmtTs(h.duration)} · ${esc(h.model)} · ${esc(h.language || '?')}</div>
+        <div class="p">${esc(h.preview)}</div></div>
+        <button class="ghost del" data-del="${esc(h._id)}" title="Supprimer">✕</button></div>`).join('')
+      : '<div class="empty">Aucune transcription enregistrée</div>'
+    markHist()
+  } catch (e) { toast(e.message, true) }
+}
+function markHist() { $$('.hitem').forEach((el) => el.classList.toggle('current', el.dataset.id === state.histId)) }
+$('#hist-list').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del]')
+  if (del) {
+    if (!confirm('Supprimer cette transcription de l\'historique ?')) return
+    await call('history_delete', { id: del.dataset.del }).catch((err) => toast(err.message, true))
+    return loadHistory()
+  }
+  const it = e.target.closest('.hitem'); if (!it || state.running) return
+  try { setResult(await call('history_get', { id: it.dataset.id })) } catch (err) { toast(err.message, true) }
+})
+$('#hist-clear').addEventListener('click', async () => {
+  if (!confirm('Vider tout l\'historique des transcriptions ?')) return
+  await call('history_clear').catch((e) => toast(e.message, true)); loadHistory()
+})
+
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); start() }
+  else if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c') && state.segments.length) { e.preventDefault(); copy(plainText()).then(() => toast('Texte copié')) }
+})
+
+loadStatus()
+</script>
+</body>
+</html>

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Encodeur / Décodeur</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.mini { padding: 1px 6px; font-size: 11.5px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  .hidden { display: none !important; }
+
+  #side { width: 230px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  #side .head { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  #side .head .t { font-weight: 600; font-size: 14px; }
+  #palette { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .group { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 10px 6px 4px; }
+  .op { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 6px; cursor: pointer; user-select: none; }
+  .op:hover { background: var(--surface2); }
+  .op .lbl { flex: 1; }
+  .op .dirs { display: flex; gap: 3px; visibility: hidden; }
+  .op:hover .dirs { visibility: visible; }
+  .op .dirs button { padding: 0 6px; font-size: 11px; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px 12px; gap: 8px; }
+  .pipeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border);
+              border-radius: 8px; padding: 7px 8px; min-height: 42px; }
+  .pipeline .lead { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
+  .step { display: inline-flex; align-items: center; gap: 2px; background: var(--surface2); border: 1px solid var(--border);
+          border-radius: 6px; padding: 2px 3px 2px 8px; }
+  .step.err { border-color: var(--err); background: rgba(239,68,68,.1); }
+  .step .n { color: var(--muted); font-family: var(--mono); font-size: 11px; margin-right: 4px; }
+  .step .d { font-size: 11px; padding: 0 5px; border-radius: 4px; margin-left: 4px; cursor: pointer; }
+  .step .d.encode { color: #86efac; background: rgba(34,197,94,.12); }
+  .step .d.decode { color: #fcd34d; background: rgba(245,158,11,.12); }
+  .step .d.apply { color: var(--accent-h); background: rgba(99,102,241,.12); cursor: default; }
+  .step button { padding: 0 5px; border: none; background: transparent; color: var(--muted); font-size: 12px; }
+  .step button:hover:not(:disabled) { color: var(--text); background: transparent; }
+  .arrow { color: var(--muted); }
+  .pipeline .sp { flex: 1; }
+  .empty-pipe { color: var(--muted); font-size: 12px; }
+
+  .editors { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; }
+  .pane-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .pane-head .lbl { font-weight: 600; flex: 1; }
+  .pane textarea { flex: 1; min-height: 0; border: none; border-radius: 0; background: transparent; resize: none; padding: 10px;
+                   font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .pane textarea:focus { border: none; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; padding: 5px 10px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11.5px; }
+  .stats b { color: var(--text); font-weight: 600; font-family: var(--mono); }
+  .error-box { color: #fca5a5; background: rgba(239,68,68,.08); border-top: 1px solid rgba(239,68,68,.3); padding: 7px 10px; white-space: pre-wrap; font-size: 12.5px; }
+  .busy { color: var(--muted); font-size: 11.5px; }
+  .opts { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+  .opts label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .placeholder { color: var(--muted); }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="head">
+    <div class="t">🔣 Encodeur / Décodeur</div>
+    <input id="filter" type="text" placeholder="Filtrer… (Ctrl+K)" spellcheck="false" />
+    <div class="hint" style="color:var(--muted);font-size:11.5px">Clic : remplacer · <kbd>Maj</kbd>+clic : ajouter à la chaîne</div>
+  </div>
+  <div id="palette"></div>
+</aside>
+
+<main id="main">
+  <div class="pipeline" id="pipeline"></div>
+  <div class="opts">
+    <label><input type="checkbox" id="opt-live" checked /> En direct</label>
+    <label><input type="checkbox" id="opt-upper" /> Hexadécimal en majuscules</label>
+    <label><input type="checkbox" id="opt-hexsep" /> Octets hex séparés par des espaces</label>
+    <span style="flex:1"></span>
+    <span class="busy hidden" id="busy">calcul…</span>
+  </div>
+  <div class="editors">
+    <section class="pane">
+      <div class="pane-head"><span class="lbl">Entrée</span>
+        <button class="ghost" id="btn-paste">Coller</button>
+        <button class="ghost" id="btn-clear">Effacer</button></div>
+      <textarea id="input" spellcheck="false" placeholder="Tapez ou collez du texte…"></textarea>
+      <div class="stats" id="stats-in"></div>
+    </section>
+    <section class="pane">
+      <div class="pane-head"><span class="lbl">Sortie</span>
+        <button class="ghost" id="btn-swap" title="Utiliser la sortie comme entrée (Ctrl+E)">⇄ Vers l'entrée</button>
+        <button class="ghost" id="btn-invert" title="Inverser la chaîne (ordre et sens) pour revenir au texte d'origine">↺ Chaîne inverse</button>
+        <button id="btn-copy" title="Copier (Ctrl+Maj+C)">Copier</button></div>
+      <textarea id="output" spellcheck="false" readonly placeholder="Le résultat apparaît ici."></textarea>
+      <div class="error-box hidden" id="err"></div>
+      <div class="stats" id="stats-out"></div>
+    </section>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'encoder-decoder'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+
+// ==TRANSFORMS-START==
+const OPTS = { upperHex: false, hexSep: false }
+const utf8Enc = new TextEncoder()
+const utf8Dec = new TextDecoder('utf-8', { fatal: true })
+const toBytes = (s) => utf8Enc.encode(s)
+function fromBytes(bytes) {
+  try { return utf8Dec.decode(bytes) } catch { throw new Error('Les octets décodés ne forment pas du texte UTF-8 valide') }
+}
+const hexByte = (b) => { const h = b.toString(16).padStart(2, '0'); return OPTS.upperHex ? h.toUpperCase() : h }
+
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+function base32Encode(s) {
+  const bytes = toBytes(s)
+  let bits = 0, value = 0, out = ''
+  for (const b of bytes) {
+    value = (value << 8) | b; bits += 8
+    while (bits >= 5) { out += B32[(value >>> (bits - 5)) & 31]; bits -= 5 }
+  }
+  if (bits > 0) out += B32[(value << (5 - bits)) & 31]
+  while (out.length % 8) out += '='
+  return out
+}
+function base32Decode(s) {
+  const clean = s.replace(/\s+/g, '').toUpperCase().replace(/=+$/, '')
+  let bits = 0, value = 0
+  const out = []
+  for (let i = 0; i < clean.length; i++) {
+    const idx = B32.indexOf(clean[i])
+    if (idx < 0) throw new Error(`Caractère Base32 invalide « ${clean[i]} » (position ${i + 1})`)
+    value = ((value << 5) | idx) & 0xffff; bits += 5
+    if (bits >= 8) { out.push((value >>> (bits - 8)) & 255); bits -= 8 }
+  }
+  if ([1, 3, 6].includes(clean.length % 8)) throw new Error('Longueur Base32 invalide (texte tronqué ?)')
+  return fromBytes(new Uint8Array(out))
+}
+
+function base64Encode(s) {
+  const bytes = toBytes(s)
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(bin)
+}
+function base64Decode(s) {
+  let clean = s.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '')
+  if (/[^A-Za-z0-9+/]/.test(clean)) throw new Error(`Caractère Base64 invalide « ${clean.match(/[^A-Za-z0-9+/]/)[0]} »`)
+  if (clean.length % 4 === 1) throw new Error('Longueur Base64 invalide (texte tronqué ?)')
+  clean += '='.repeat((4 - (clean.length % 4)) % 4)
+  const bin = atob(clean)
+  return fromBytes(Uint8Array.from(bin, (c) => c.charCodeAt(0)))
+}
+
+function hexEncode(s) { return [...toBytes(s)].map(hexByte).join(OPTS.hexSep ? ' ' : '') }
+function hexDecode(s) {
+  const clean = s.replace(/0x|\\x/gi, '').replace(/[\s:,-]+/g, '')
+  const bad = clean.match(/[^0-9a-fA-F]/)
+  if (bad) throw new Error(`Caractère hexadécimal invalide « ${bad[0]} »`)
+  if (clean.length % 2) throw new Error('Nombre impair de chiffres hexadécimaux')
+  const out = new Uint8Array(clean.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16)
+  return fromBytes(out)
+}
+
+function binEncode(s) { return [...toBytes(s)].map((b) => b.toString(2).padStart(8, '0')).join(' ') }
+function binDecode(s) {
+  const clean = s.replace(/[\s,]+/g, '')
+  const bad = clean.match(/[^01]/)
+  if (bad) throw new Error(`Caractère binaire invalide « ${bad[0]} » (seuls 0 et 1 sont acceptés)`)
+  if (clean.length % 8) throw new Error(`Le nombre de bits (${clean.length}) n'est pas un multiple de 8`)
+  const out = new Uint8Array(clean.length / 8)
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 8, 8), 2)
+  return fromBytes(out)
+}
+
+function unicodeEncode(s) {
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if ((c < 0x20 && c !== 10 && c !== 13 && c !== 9) || c > 0x7e || c === 0x5c) {
+      const h = c.toString(16).padStart(4, '0')
+      out += '\\u' + (OPTS.upperHex ? h.toUpperCase() : h)
+    } else out += s[i]
+  }
+  return out
+}
+function unicodeDecode(s) {
+  return s.replace(/\\u\{([0-9a-fA-F]{1,6})\}|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})|\\U([0-9a-fA-F]{8})/g, (m, cp, u4, x2, u8) => {
+    const n = parseInt(cp || u4 || x2 || u8, 16)
+    if (n > 0x10ffff) throw new Error(`Point de code hors limites : ${m}`)
+    return cp || u8 ? String.fromCodePoint(n) : String.fromCharCode(n)
+  })
+}
+
+const rot13 = (s) => s.replace(/[a-zA-Z]/g, (c) => {
+  const base = c <= 'Z' ? 65 : 97
+  return String.fromCharCode(((c.charCodeAt(0) - base + 13) % 26) + base)
+})
+
+const HTML_BASIC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+const htmlEncode = (s) => s.replace(/[&<>"']/g, (c) => HTML_BASIC[c])
+function htmlEncodeAll(s) {
+  let out = ''
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)
+    out += HTML_BASIC[ch] || (cp > 0x7e ? `&#x${cp.toString(16).toUpperCase()};` : ch)
+  }
+  return out
+}
+const NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', copy: '©', reg: '®', euro: '€', hellip: '…', mdash: '—', ndash: '–', laquo: '«', raquo: '»' }
+let entityEl = null
+function htmlDecode(s) {
+  return s.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g, (m, body) => {
+    if (body[0] === '#') {
+      const n = body[1] === 'x' || body[1] === 'X' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)
+      return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m
+    }
+    if (NAMED[body] !== undefined) return NAMED[body]
+    if (typeof document === 'undefined') return m
+    entityEl = entityEl || document.createElement('textarea')
+    entityEl.innerHTML = m
+    return entityEl.value
+  })
+}
+
+function urlDecode(s, plus) {
+  const src = plus ? s.replace(/\+/g, ' ') : s
+  try { return decodeURIComponent(src) } catch {
+    const bad = src.match(/%(?![0-9a-fA-F]{2})|(?:%[0-9a-fA-F]{2})+/g)
+    throw new Error('Séquence %XX invalide ou UTF-8 incomplet' + (bad ? ` près de « ${bad[0]} »` : ''))
+  }
+}
+function urlFullDecode(s) {
+  try { return decodeURI(s) } catch { throw new Error('Séquence %XX invalide ou UTF-8 incomplet') }
+}
+function urlEncodeStrict(s) {
+  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+}
+
+function splitWords(line) {
+  return line
+    .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, '$1 $2')
+    .replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, '$1 $2')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+}
+const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+const perLine = (fn) => (s) => s.split('\n').map(fn).join('\n')
+const CASES = {
+  camel: perLine((l) => splitWords(l).map((w, i) => (i ? cap(w) : w.toLowerCase())).join('')),
+  pascal: perLine((l) => splitWords(l).map(cap).join('')),
+  snake: perLine((l) => splitWords(l).map((w) => w.toLowerCase()).join('_')),
+  kebab: perLine((l) => splitWords(l).map((w) => w.toLowerCase()).join('-')),
+  constant: perLine((l) => splitWords(l).map((w) => w.toUpperCase()).join('_')),
+  dot: perLine((l) => splitWords(l).map((w) => w.toLowerCase()).join('.')),
+  title: (s) => s.toLowerCase().replace(/(^|[^\p{L}\p{N}'’])(\p{L})/gu, (m, p, c) => p + c.toUpperCase()),
+  sentence: (s) => s.toLowerCase().replace(/(^\s*|[.!?]\s+)(\p{L})/gu, (m, p, c) => p + c.toUpperCase()),
+  lower: (s) => s.toLowerCase(),
+  upper: (s) => s.toUpperCase(),
+  swap: (s) => [...s].map((c) => (c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase())).join(''),
+  reverse: (s) => {
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) return [...new Intl.Segmenter('fr', { granularity: 'grapheme' }).segment(s)].map((x) => x.segment).reverse().join('')
+    return [...s].reverse().join('')
+  },
+}
+
+const TRANSFORMS = [
+  { id: 'url', group: 'Web', label: 'URL (composant)', encode: urlEncodeStrict, decode: (s) => urlDecode(s, false) },
+  { id: 'url-form', group: 'Web', label: 'URL formulaire (+)', encode: (s) => urlEncodeStrict(s).replace(/%20/g, '+'), decode: (s) => urlDecode(s, true) },
+  { id: 'url-full', group: 'Web', label: 'URL complète', encode: encodeURI, decode: urlFullDecode },
+  { id: 'html', group: 'Web', label: 'Entités HTML', encode: htmlEncode, decode: htmlDecode },
+  { id: 'html-all', group: 'Web', label: 'Entités HTML (tout non-ASCII)', encode: htmlEncodeAll, decode: htmlDecode },
+  { id: 'idna', group: 'Web', label: 'IDNA (domaine)', backend: 'idna' },
+  { id: 'punycode', group: 'Web', label: 'Punycode (brut)', backend: 'punycode' },
+  { id: 'base64', group: 'Octets', label: 'Base64', encode: base64Encode, decode: base64Decode },
+  { id: 'base32', group: 'Octets', label: 'Base32', encode: base32Encode, decode: base32Decode },
+  { id: 'hex', group: 'Octets', label: 'Hexadécimal', encode: hexEncode, decode: hexDecode },
+  { id: 'bin', group: 'Octets', label: 'Binaire', encode: binEncode, decode: binDecode },
+  { id: 'qp', group: 'Octets', label: 'Quoted-printable', backend: 'qp' },
+  { id: 'unicode', group: 'Texte', label: 'Échappements Unicode \\uXXXX', encode: unicodeEncode, decode: unicodeDecode },
+  { id: 'rot13', group: 'Texte', label: 'ROT13', encode: rot13, decode: rot13 },
+  { id: 'camel', group: 'Casse', label: 'camelCase', apply: CASES.camel },
+  { id: 'pascal', group: 'Casse', label: 'PascalCase', apply: CASES.pascal },
+  { id: 'snake', group: 'Casse', label: 'snake_case', apply: CASES.snake },
+  { id: 'kebab', group: 'Casse', label: 'kebab-case', apply: CASES.kebab },
+  { id: 'constant', group: 'Casse', label: 'CONSTANT_CASE', apply: CASES.constant },
+  { id: 'dot', group: 'Casse', label: 'dot.case', apply: CASES.dot },
+  { id: 'title', group: 'Casse', label: 'Titre (Chaque Mot)', apply: CASES.title },
+  { id: 'sentence', group: 'Casse', label: 'Phrase (Début en majuscule)', apply: CASES.sentence },
+  { id: 'lower', group: 'Casse', label: 'minuscules', apply: CASES.lower },
+  { id: 'upper', group: 'Casse', label: 'MAJUSCULES', apply: CASES.upper },
+  { id: 'swap', group: 'Casse', label: 'iNVERSER la casse', apply: CASES.swap },
+  { id: 'reverse', group: 'Casse', label: 'Texte à l\'envers', apply: CASES.reverse },
+]
+const BY_ID = Object.fromEntries(TRANSFORMS.map((t) => [t.id, t]))
+
+async function runStep(step, text, backendCall) {
+  const t = BY_ID[step.op]
+  if (!t) throw new Error(`Transformation inconnue : ${step.op}`)
+  if (t.apply) return t.apply(text)
+  if (t.backend) return (await backendCall('transform', { op: t.backend, direction: step.dir, text }, { timeout: 20000 })).text
+  return step.dir === 'decode' ? t.decode(text) : t.encode(text)
+}
+
+function stats(s) {
+  let graphemes = null
+  if (typeof Intl !== 'undefined' && Intl.Segmenter && s.length < 500000) {
+    graphemes = 0
+    for (const _ of new Intl.Segmenter('fr', { granularity: 'grapheme' }).segment(s)) graphemes++
+  }
+  return {
+    chars: [...s].length,
+    graphemes,
+    bytes: utf8Enc.encode(s).length,
+    words: (s.match(/[\p{L}\p{N}][\p{L}\p{N}'’_-]*/gu) || []).length,
+    lines: s === '' ? 0 : s.split(/\r\n|\r|\n/).length,
+  }
+}
+// ==TRANSFORMS-END==
+
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const LS_KEY = 'encoder-decoder:prefs'
+const DIR_LABEL = { encode: 'encoder', decode: 'décoder', apply: 'appliquer' }
+
+const state = (() => {
+  const def = { steps: [{ op: 'url', dir: 'encode' }], live: true, upperHex: false, hexSep: false, input: '' }
+  try { return { ...def, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') } } catch { return def }
+})()
+state.steps = (state.steps || []).filter((s) => BY_ID[s.op])
+function save() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ steps: state.steps, live: state.live, upperHex: state.upperHex, hexSep: state.hexSep, input: $('#input').value.slice(0, 20000) })) } catch { /* storage unavailable */ }
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2200)
+}
+
+// ── Palette ─────────────────────────────────────────────────────────────────
+function renderPalette() {
+  const q = $('#filter').value.trim().toLowerCase()
+  let html = '', group = ''
+  for (const t of TRANSFORMS) {
+    if (q && !t.label.toLowerCase().includes(q) && !t.id.includes(q)) continue
+    if (t.group !== group) { group = t.group; html += `<div class="group">${esc(group)}</div>` }
+    const dirs = t.apply ? '' : `<span class="dirs"><button data-dir="encode" title="Encoder">enc</button><button data-dir="decode" title="Décoder">déc</button></span>`
+    html += `<div class="op" data-op="${t.id}" title="${t.apply ? 'Appliquer' : 'Clic : encoder'}"><span class="lbl">${esc(t.label)}</span>${dirs}</div>`
+  }
+  $('#palette').innerHTML = html || '<div class="group">Aucun résultat</div>'
+  $$('#palette .op').forEach((el) => {
+    el.onclick = (e) => {
+      const t = BY_ID[el.dataset.op]
+      const dir = t.apply ? 'apply' : (e.target.dataset.dir || 'encode')
+      const step = { op: t.id, dir }
+      if (e.shiftKey) state.steps.push(step)
+      else state.steps = [step]
+      renderPipeline(); run()
+    }
+  })
+}
+
+// ── Pipeline ────────────────────────────────────────────────────────────────
+function renderPipeline(errIndex = -1) {
+  const p = $('#pipeline')
+  const steps = state.steps.map((s, i) => {
+    const t = BY_ID[s.op]
+    return `${i ? '<span class="arrow">→</span>' : ''}<span class="step ${i === errIndex ? 'err' : ''}" data-i="${i}">
+      <span class="n">${i + 1}</span>${esc(t.label)}
+      <span class="d ${s.dir}" data-a="flip" title="${s.dir === 'apply' ? '' : 'Inverser le sens'}">${DIR_LABEL[s.dir]}</span>
+      <button data-a="left" title="Avancer" ${i === 0 ? 'disabled' : ''}>◂</button>
+      <button data-a="right" title="Reculer" ${i === state.steps.length - 1 ? 'disabled' : ''}>▸</button>
+      <button data-a="del" title="Retirer">✕</button></span>`
+  }).join('')
+  p.innerHTML = `<span class="lead">Chaîne</span>${steps || '<span class="empty-pipe">Aucune étape : choisissez une transformation à gauche (Maj+clic pour enchaîner).</span>'}
+    <span class="sp"></span>${state.steps.length ? '<button class="ghost mini" data-a="clear">Vider</button>' : ''}`
+  p.querySelectorAll('[data-a]').forEach((b) => (b.onclick = () => {
+    const el = b.closest('.step'), i = el ? +el.dataset.i : -1, a = b.dataset.a
+    if (a === 'clear') state.steps = []
+    else if (a === 'del') state.steps.splice(i, 1)
+    else if (a === 'flip' && state.steps[i].dir !== 'apply') state.steps[i].dir = state.steps[i].dir === 'encode' ? 'decode' : 'encode'
+    else if (a === 'left' && i > 0) [state.steps[i - 1], state.steps[i]] = [state.steps[i], state.steps[i - 1]]
+    else if (a === 'right' && i < state.steps.length - 1) [state.steps[i + 1], state.steps[i]] = [state.steps[i], state.steps[i + 1]]
+    else return
+    renderPipeline(); run()
+  }))
+}
+
+// ── Run ─────────────────────────────────────────────────────────────────────
+function renderStats(el, s) {
+  const st = stats(s)
+  el.innerHTML = `<span><b>${st.chars.toLocaleString('fr-FR')}</b> caractères</span>` +
+    (st.graphemes !== null && st.graphemes !== st.chars ? `<span><b>${st.graphemes.toLocaleString('fr-FR')}</b> graphèmes</span>` : '') +
+    `<span><b>${st.bytes.toLocaleString('fr-FR')}</b> octets UTF-8</span><span><b>${st.words.toLocaleString('fr-FR')}</b> mots</span>` +
+    `<span><b>${st.lines.toLocaleString('fr-FR')}</b> lignes</span>`
+}
+
+let runSeq = 0
+async function run(force = false) {
+  const input = $('#input').value
+  renderStats($('#stats-in'), input)
+  save()
+  if (!state.live && !force) return
+  const seq = ++runSeq
+  let text = input, errIndex = -1, error = null
+  $('#busy').classList.remove('hidden')
+  for (let i = 0; i < state.steps.length; i++) {
+    try { text = await runStep(state.steps[i], text, call) } catch (e) {
+      errIndex = i
+      const s = state.steps[i]
+      error = `Étape ${i + 1} (${BY_ID[s.op].label}, ${DIR_LABEL[s.dir]}) : ${e.message}`
+      break
+    }
+    if (seq !== runSeq) return
+  }
+  if (seq !== runSeq) return
+  $('#busy').classList.add('hidden')
+  renderPipeline(errIndex)
+  $('#err').classList.toggle('hidden', !error)
+  $('#err').textContent = error || ''
+  $('#output').value = error ? '' : text
+  renderStats($('#stats-out'), error ? '' : text)
+}
+
+let runTimer
+function scheduleRun() { clearTimeout(runTimer); runTimer = setTimeout(run, 120) }
+
+function invertPipeline() {
+  if (state.steps.some((s) => s.dir === 'apply')) { toast('Les conversions de casse ne sont pas réversibles', true); return }
+  state.steps = state.steps.slice().reverse().map((s) => ({ ...s, dir: s.dir === 'encode' ? 'decode' : 'encode' }))
+  $('#input').value = $('#output').value
+  renderPipeline(); run(true)
+  toast('Chaîne inversée : la sortie précédente est décodée')
+}
+
+async function copyOut() {
+  const v = $('#output').value
+  if (!v) { toast('Rien à copier', true); return }
+  try { await navigator.clipboard.writeText(v); toast('Sortie copiée') } catch { toast('Copie impossible', true) }
+}
+
+$('#input').addEventListener('input', scheduleRun)
+$('#filter').addEventListener('input', renderPalette)
+$('#filter').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { const first = $('#palette .op'); if (first) first.dispatchEvent(new MouseEvent('click', { shiftKey: e.shiftKey })) }
+})
+$('#opt-live').onchange = (e) => { state.live = e.target.checked; save(); if (state.live) run() }
+$('#opt-upper').onchange = (e) => { state.upperHex = OPTS.upperHex = e.target.checked; run(true) }
+$('#opt-hexsep').onchange = (e) => { state.hexSep = OPTS.hexSep = e.target.checked; run(true) }
+$('#btn-copy').onclick = copyOut
+$('#btn-swap').onclick = () => { $('#input').value = $('#output').value; run(true) }
+$('#btn-invert').onclick = invertPipeline
+$('#btn-clear').onclick = () => { $('#input').value = ''; run(true); $('#input').focus() }
+$('#btn-paste').onclick = async () => {
+  try { $('#input').value = await navigator.clipboard.readText(); run(true) } catch { toast('Lecture du presse-papiers refusée : utilisez Ctrl+V', true) }
+}
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#filter').focus(); $('#filter').select() }
+  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); run(true) }
+  if (e.ctrlKey && e.key.toLowerCase() === 'e') { e.preventDefault(); $('#btn-swap').click() }
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); copyOut() }
+})
+
+OPTS.upperHex = !!state.upperHex; OPTS.hexSep = !!state.hexSep
+$('#opt-live').checked = state.live; $('#opt-upper').checked = OPTS.upperHex; $('#opt-hexsep').checked = OPTS.hexSep
+$('#input').value = state.input || 'Héllo wörld — https://exemple.fr/?q=café&x=1 😀'
+renderPalette(); renderPipeline(); run(true)
+$('#input').focus()
+</script>
+</body>
+</html>

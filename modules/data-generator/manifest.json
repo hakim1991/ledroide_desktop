@@ -1,0 +1,31 @@
+{
+  "id": "data-generator",
+  "name": "Générateur de données",
+  "version": "1.0.0",
+  "description": "Générez des données de test réalistes (identités, adresses et téléphones français, IBAN et SIRET valides, dates, lorem ipsum, regex…) jusqu'à 100 000 lignes, avec graine reproductible et export JSON, CSV, SQL ou NDJSON.",
+  "category": "Développement",
+  "tags": [
+    "données",
+    "test",
+    "mock",
+    "csv",
+    "sql"
+  ],
+  "icon": "🎲",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

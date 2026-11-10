@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from core import settings
 from core.errors import LedroideError, error_body
 from core.ipc import Connection, WsCall, WsEvent, WsResponse
+from core.packages import run_pip
 
 log = logging.getLogger("ledroide.registry")
 
@@ -93,6 +94,7 @@ class ModuleRegistry:
         self._configs: dict[str, dict] = _read_json(settings.CONFIGS_FILE, {})
         self._state: dict = _read_json(settings.STATE_FILE, {"active_modules": []})
         self._meta: dict[str, dict] = _read_json(settings.DATA_DIR / "module_meta.json", {})
+        self._dirs: dict[str, Path] = {}
         self._instances: dict[str, Any] = {}
         self._routes: dict[str, list] = {}
         self._lock = asyncio.Lock()
@@ -118,6 +120,7 @@ class ModuleRegistry:
     async def load_all(self):
         settings.MODULES_DIR.mkdir(exist_ok=True)
         settings.AVAILABLE_DIR.mkdir(exist_ok=True)
+        settings.USER_MODULES_DIR.mkdir(parents=True, exist_ok=True)
         self._scan()
 
         for mod_id in list(self._state.get("active_modules", [])):
@@ -141,25 +144,39 @@ class ModuleRegistry:
         log.info("hot_reload: %d new module(s)", len(new_ids))
         return {"new_modules": new_ids, "total": len(self._modules)}
 
+    def module_dir(self, module_id: str) -> Path:
+        return self._dirs.get(module_id) or settings.MODULES_DIR / module_id
+
     def _scan(self) -> list[str]:
         new_ids: list[str] = []
-        for module_dir in sorted(settings.MODULES_DIR.iterdir()):
-            manifest_path = module_dir / "manifest.json"
-            if not module_dir.is_dir() or not manifest_path.exists():
+        removed = set(self._state.get("removed_bundled", []))
+        seen: set[str] = set()
+        # User-installed modules first: they take precedence over a bundled copy.
+        for root, bundled in ((settings.USER_MODULES_DIR, False), (settings.MODULES_DIR, True)):
+            if not root.is_dir():
                 continue
-            manifest = _read_json(manifest_path, None)
-            if not manifest or not MODULE_ID_RE.match(str(manifest.get("id", ""))):
-                log.warning("ignored %s: invalid manifest", module_dir.name)
-                continue
-            if manifest["id"] != module_dir.name:
-                log.warning("ignored %s: manifest id '%s' differs from folder name", module_dir.name, manifest["id"])
-                continue
-            current = self._modules.get(manifest["id"])
-            if current is None or current["status"] == "available":
-                manifest["status"] = "installed"
-                self._modules[manifest["id"]] = manifest
-                new_ids.append(manifest["id"])
-                log.info("loaded manifest: %s", manifest["id"])
+            for module_dir in sorted(root.iterdir()):
+                manifest_path = module_dir / "manifest.json"
+                if not module_dir.is_dir() or not manifest_path.exists():
+                    continue
+                manifest = _read_json(manifest_path, None)
+                if not manifest or not MODULE_ID_RE.match(str(manifest.get("id", ""))):
+                    log.warning("ignored %s: invalid manifest", module_dir.name)
+                    continue
+                mod_id = manifest["id"]
+                if mod_id != module_dir.name:
+                    log.warning("ignored %s: manifest id '%s' differs from folder name", module_dir.name, mod_id)
+                    continue
+                if mod_id in seen:
+                    continue
+                seen.add(mod_id)
+                status = "available" if bundled and mod_id in removed else "installed"
+                current = self._modules.get(mod_id)
+                if current is None or (current["status"] == "available" and status == "installed"):
+                    self._modules[mod_id] = {**manifest, "status": status, "bundled": bundled}
+                    self._dirs[mod_id] = module_dir
+                    new_ids.append(mod_id)
+                    log.info("loaded manifest: %s", mod_id)
 
         catalog = _read_json(settings.AVAILABLE_DIR / "catalog.json", {})
         for mod in catalog.get("modules", []):
@@ -251,7 +268,17 @@ class ModuleRegistry:
         if mod["status"] != "available":
             return {"status": mod["status"], "id": module_id}
 
-        target = settings.MODULES_DIR / module_id
+        if mod.get("bundled"):
+            self._state["removed_bundled"] = [m for m in self._state.get("removed_bundled", []) if m != module_id]
+            self._save_state()
+            mod["status"] = "installed"
+            log.info("restored bundled %s", module_id)
+            return {"status": "installed", "id": module_id}
+
+        settings.USER_MODULES_DIR.mkdir(parents=True, exist_ok=True)
+        target = settings.USER_MODULES_DIR / module_id
+        if target.exists():
+            await asyncio.to_thread(_rmtree_force, target)
         source_dir = settings.AVAILABLE_DIR / module_id
         archive = mod.get("archive")
         if source_dir.is_dir() and (source_dir / "manifest.json").exists():
@@ -269,9 +296,26 @@ class ModuleRegistry:
         if not manifest or manifest.get("id") != module_id:
             _rmtree_force(target)
             raise LedroideError("INVALID_PACKAGE", "Le paquet ne contient pas de manifest.json valide", 422)
-        self._modules[module_id] = {**manifest, "status": "installed"}
+        self._modules[module_id] = {**manifest, "status": "installed", "bundled": False}
+        self._dirs[module_id] = target
         log.info("installed %s", module_id)
         return {"status": "installed", "id": module_id}
+
+    async def install_many(self, module_ids: list[str]) -> dict:
+        """Installs one after the other: a failure is reported and does not stop the batch."""
+        ids = list(dict.fromkeys(module_ids))
+        results: list[dict] = []
+        for index, module_id in enumerate(ids):
+            await self.broadcast(SYSTEM_CHANNEL, "modules:install", {"id": module_id, "index": index, "total": len(ids)})
+            try:
+                results.append(await self.install(module_id))
+            except LedroideError as exc:
+                results.append({"id": module_id, "status": "error", "error": exc.message, "code": exc.code})
+            except Exception as exc:
+                log.exception("install of %s failed", module_id)
+                results.append({"id": module_id, "status": "error", "error": str(exc), "code": "INSTALL_FAILED"})
+        installed = sum(r["status"] == "installed" for r in results)
+        return {"results": results, "installed": installed, "failed": len(results) - installed}
 
     @staticmethod
     def _extract_archive(archive: Path, target: Path):
@@ -291,13 +335,25 @@ class ModuleRegistry:
             raise LedroideError("MODULE_NOT_INSTALLED", f"Module '{module_id}' non installé", 409)
         await self.deactivate(module_id)
 
-        module_dir = (settings.MODULES_DIR / module_id).resolve()
-        if module_dir.parent != settings.MODULES_DIR.resolve():
+        # Bundled modules live in the install dir, which is never written to:
+        # uninstalling one only hides it, and the choice survives app updates.
+        if mod.get("bundled"):
+            removed = self._state.setdefault("removed_bundled", [])
+            if module_id not in removed:
+                removed.append(module_id)
+            self._save_state()
+            mod["status"] = "available"
+            log.info("hid bundled %s", module_id)
+            return {"status": "uninstalled", "id": module_id}
+
+        module_dir = self.module_dir(module_id).resolve()
+        if module_dir.parent != settings.USER_MODULES_DIR.resolve():
             raise LedroideError("INVALID_MODULE_ID", "Chemin de module invalide", 400)
         if module_dir.exists():
             await asyncio.to_thread(_rmtree_force, module_dir)
             log.info("deleted %s", module_dir)
         self._modules.pop(module_id, None)
+        self._dirs.pop(module_id, None)
         self._scan()
         return {"status": "uninstalled", "id": module_id}
 
@@ -311,19 +367,11 @@ class ModuleRegistry:
                 raise LedroideError("INVALID_DEPENDENCY", f"Dépendance invalide : {dep}", 422)
 
         await self.broadcast(SYSTEM_CHANNEL, "deps:start", {"module_id": module_id, "packages": deps})
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "--no-input", *deps,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        lines: list[str] = []
-        assert proc.stdout is not None
-        async for raw in proc.stdout:
-            line = raw.decode(errors="replace").rstrip()
-            lines.append(line)
+
+        async def emit(line: str):
             await self.broadcast(SYSTEM_CHANNEL, "deps:log", {"module_id": module_id, "line": line})
-        ok = (await proc.wait()) == 0
-        importlib.invalidate_caches()
+
+        ok, lines = await run_pip(["install", *deps], emit)
         await self.broadcast(SYSTEM_CHANNEL, "deps:end", {"module_id": module_id, "ok": ok})
         log.info("pip install %s for %s: %s", deps, module_id, "OK" if ok else "FAILED")
         return {"ok": ok, "output": "\n".join(lines[-200:])}
@@ -399,7 +447,7 @@ class ModuleRegistry:
         self._routes.setdefault(module_id, []).extend(added)
 
     def _mount_frontend(self, module_id: str):
-        frontend_dir = settings.MODULES_DIR / module_id / "frontend"
+        frontend_dir = self.module_dir(module_id) / "frontend"
         if frontend_dir.exists():
             self._track_routes(module_id, lambda: self.app.mount(
                 f"/modules/{module_id}/frontend",
@@ -426,7 +474,7 @@ class ModuleRegistry:
                 log.exception("shutdown failed for %s", module_id)
 
     async def _load_backend(self, module_id: str):
-        module_dir = settings.MODULES_DIR / module_id
+        module_dir = self.module_dir(module_id)
         backend_dir = module_dir / "backend"
         entry = self._modules[module_id].get("entry", {}).get("backend", "backend/main.py")
         entry_file = (module_dir / entry).resolve()

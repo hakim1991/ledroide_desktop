@@ -13,7 +13,7 @@ log = logging.getLogger("ledroide.env")
 ENV_FILE = settings.DATA_DIR / "env.json"
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
 # Overriding these would break the backend, pip or the Electron/Python handshake.
-PROTECTED = {"PATH", "PYTHONPATH", "PYTHONHOME", "SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP"}
+PROTECTED = {"PATH", "PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE", "SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP"}
 
 
 class EnvVar(BaseModel):

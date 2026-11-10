@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Formulaires PDF</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.danger:hover:not(:disabled) { color: #fca5a5; border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 3px 7px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; min-width: 0; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); padding: 0; }
+  input[type=color] { padding: 1px 2px; height: 28px; width: 48px; }
+  textarea { resize: vertical; line-height: 1.45; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+
+  #side { width: 250px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  .side-head { padding: 12px 12px 8px; display: flex; align-items: center; gap: 6px; }
+  .side-head b { flex: 1; font-size: 13px; }
+  .side-search { padding: 0 10px 8px; }
+  .side-search input { width: 100%; }
+  #tpl-list { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .item { display: flex; flex-direction: column; gap: 2px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+  .item:hover { background: var(--surface2); }
+  .item.current { background: rgba(99,102,241,.14); }
+  .item .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .item .sub { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side-empty { color: var(--muted); text-align: center; padding: 24px 8px; font-size: 12px; }
+  .side-foot { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; gap: 6px; }
+  .side-foot button { flex: 1; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .topbar .title { font-weight: 600; font-size: 14px; flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .title .dirty { color: var(--warn); margin-left: 6px; font-size: 12px; font-weight: 400; }
+  .tabs { display: flex; gap: 2px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab { padding: 5px 12px; border-radius: 6px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+  .tab .n { color: var(--accent-h); font-size: 11px; margin-left: 4px; }
+  #view { flex: 1; overflow: auto; padding: 16px 18px 40px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  .empty { color: var(--muted); height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+  .empty .big { font-size: 40px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h3 { font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .card h3 .sp { flex: 1; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  .grid .full { grid-column: 1 / -1; }
+  .fl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .fl > label, .fl > .lab { color: var(--muted); font-size: 12px; }
+  .fl > label .req { color: var(--err); margin-left: 2px; }
+  .fl input:not([type=checkbox]):not([type=radio]):not([type=color]), .fl select, .fl textarea { width: 100%; }
+  .fl .help { color: var(--muted); font-size: 11px; }
+  .fl.invalid input, .fl.invalid textarea, .fl.invalid select { border-color: var(--err); }
+  .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .radios { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 4px 0; }
+  .sec { grid-column: 1 / -1; font-size: 13px; font-weight: 700; color: var(--accent-h); padding-top: 8px;
+         border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .para { grid-column: 1 / -1; color: var(--muted); font-size: 12px; background: var(--bg); border: 1px dashed var(--border);
+          border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; }
+  .sigbox { border: 1px dashed #3f3f46; border-radius: 6px; height: 56px; display: flex; align-items: flex-end;
+            padding: 6px 8px; color: var(--muted); font-size: 11px; font-style: italic; }
+  .pb { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 11px; border-top: 1px dashed #3f3f46; padding-top: 4px; }
+
+  table.dt { width: 100%; border-collapse: collapse; }
+  table.dt th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11.5px; padding: 4px; border-bottom: 1px solid var(--border); }
+  table.dt td { padding: 3px; }
+  table.dt td input { width: 100%; }
+  table.dt td.num input, table.dt th.num { text-align: right; }
+  table.dt td.act { width: 30px; }
+  table.dt tfoot td { font-weight: 700; padding: 6px 4px; border-top: 1px solid var(--border); }
+  table.dt tfoot td.num { text-align: right; font-family: var(--mono); }
+
+  .actions-bar { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+  .actions-bar .sp { flex: 1; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  .hint code, code { font-family: var(--mono); color: var(--accent-h); font-size: 11.5px; }
+
+  .fields-list { display: flex; flex-direction: column; gap: 8px; }
+  .fcard { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  .fcard.open { border-color: #3f3f46; }
+  .fcard.drag-over { border-color: var(--accent); }
+  .frow { display: flex; align-items: center; gap: 6px; padding: 7px 8px; }
+  .frow .grip { cursor: grab; color: var(--muted); padding: 0 3px; user-select: none; }
+  .frow .ty { font-size: 11px; color: var(--accent-h); background: rgba(99,102,241,.12); border-radius: 4px; padding: 2px 6px; width: 92px; text-align: center; flex-shrink: 0; }
+  .frow input.flabel { flex: 1; }
+  .frow input.fkey { width: 130px; font-family: var(--mono); font-size: 12px; }
+  .frow select { width: 124px; flex-shrink: 0; }
+  .fdetail { border-top: 1px solid var(--border); padding: 10px 12px 12px; }
+  .add-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .cols-editor td { padding: 2px 3px; }
+  .cols-editor input[type=text] { width: 100%; }
+  .cols-editor input[type=number] { width: 64px; }
+
+  .logo-box { display: flex; gap: 12px; align-items: center; }
+  .logo-prev { width: 120px; height: 60px; border: 1px dashed #3f3f46; border-radius: 6px; display: flex; align-items: center;
+               justify-content: center; background: #fff; overflow: hidden; color: #71717a; font-size: 11px; }
+  .logo-prev img { max-width: 100%; max-height: 100%; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .chip { font-family: var(--mono); font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+          padding: 2px 8px; cursor: pointer; color: var(--accent-h); }
+  .chip:hover { border-color: var(--accent); }
+
+  .mini-page { width: 200px; aspect-ratio: 210 / 297; background: #fff; border-radius: 3px; position: relative; color: #222; font-size: 6px;
+               box-shadow: 0 4px 18px rgba(0,0,0,.4); flex-shrink: 0; overflow: hidden; }
+  .mini-page.land { width: 260px; aspect-ratio: 297 / 210; }
+  .mp-head { position: absolute; left: 7%; right: 7%; top: 4%; display: flex; gap: 5px; align-items: flex-start; padding-bottom: 3px; }
+  .mp-head .t { flex: 1; } .mp-head .t b { font-size: 8px; display: block; }
+  .mp-head img { max-height: 22px; max-width: 40%; }
+  .mp-foot { position: absolute; left: 7%; right: 7%; bottom: 3%; display: flex; justify-content: space-between; color: #777; border-top: .5px solid #ccc; padding-top: 2px; }
+  .mp-body { position: absolute; left: 7%; right: 7%; top: 22%; bottom: 10%; display: flex; flex-direction: column; gap: 4px; }
+  .mp-line { height: 3px; background: #e5e5ea; border-radius: 2px; }
+
+  table.docs { width: 100%; border-collapse: collapse; }
+  table.docs td, table.docs th { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+  table.docs th { color: var(--muted); font-weight: 600; font-size: 11.5px; }
+  table.docs td.a { text-align: right; white-space: nowrap; }
+  table.docs tr.gone td:first-child { color: var(--muted); text-decoration: line-through; }
+
+  .progress { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+  .progress > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .err-list { color: #fca5a5; font-size: 12px; margin-top: 8px; max-height: 160px; overflow: auto; }
+  table.csv { border-collapse: collapse; font-size: 12px; margin-top: 8px; display: block; overflow: auto; max-height: 220px; }
+  table.csv td, table.csv th { border: 1px solid var(--border); padding: 3px 6px; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  table.csv th.ok { color: var(--ok); } table.csv th.no { color: var(--muted); text-decoration: line-through; }
+
+  .menu { position: relative; }
+  .menu-pop { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface2); border: 1px solid var(--border);
+              border-radius: 8px; padding: 4px; min-width: 190px; z-index: 20; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-pop button { display: block; width: 100%; text-align: left; background: transparent; border-color: transparent; }
+  .menu-pop button:hover { background: var(--surface); }
+
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; opacity: 0; pointer-events: none;
+           transition: opacity .2s; z-index: 50; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+          border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<aside id="side">
+  <div class="side-head"><b>Modèles</b>
+    <button class="primary icon" id="btn-new" title="Nouveau modèle">＋ Nouveau</button>
+  </div>
+  <div class="side-search"><input id="search" type="search" placeholder="Rechercher…" /></div>
+  <div id="tpl-list"></div>
+  <div class="side-foot">
+    <button id="btn-import" title="Importer un modèle (.json)">Importer</button>
+    <button id="btn-folder" title="Ouvrir le dossier des PDF">Dossier PDF</button>
+  </div>
+  <input type="file" id="import-file" accept=".json,application/json" class="hidden" />
+</aside>
+
+<main id="main">
+  <div id="no-tpl" class="empty">
+    <div class="big">🧾</div>
+    <div>Choisissez un modèle à gauche ou créez-en un nouveau.</div>
+    <button class="primary" id="btn-new2">Créer un modèle</button>
+  </div>
+  <div id="editor" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div class="topbar">
+      <div class="title"><span id="tpl-title"></span><span class="dirty hidden" id="dirty">● modifié</span></div>
+      <button id="btn-save" title="Enregistrer le modèle (Ctrl+S)">Enregistrer</button>
+      <button id="btn-preview" title="Générer un aperçu et l'ouvrir (Ctrl+P)">Aperçu</button>
+      <button class="primary" id="btn-generate" title="Générer le PDF (Ctrl+Entrée)">Générer le PDF</button>
+      <div class="menu">
+        <button class="icon" id="btn-more" title="Plus d'actions">⋯</button>
+        <div class="menu-pop hidden" id="more-pop">
+          <button data-act="download">Télécharger le PDF</button>
+          <button data-act="duplicate">Dupliquer le modèle</button>
+          <button data-act="export">Exporter le modèle (.json)</button>
+          <button data-act="clear">Vider le formulaire</button>
+          <button data-act="delete" class="danger">Supprimer le modèle</button>
+        </div>
+      </div>
+    </div>
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-tab="fill">Remplir</div>
+      <div class="tab" data-tab="fields">Champs<span class="n" id="n-fields"></span></div>
+      <div class="tab" data-tab="hf">En-tête &amp; pied de page</div>
+      <div class="tab" data-tab="layout">Mise en page</div>
+      <div class="tab" data-tab="batch">Lot (CSV)</div>
+      <div class="tab" data-tab="docs">Documents<span class="n" id="n-docs"></span></div>
+    </div>
+    <div id="view"></div>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'pdf-forms'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, el = document) => el.querySelector(s)
+const $$ = (s, el = document) => [...el.querySelectorAll(s)]
+
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag)
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue
+    if (k === 'class') el.className = v
+    else if (k === 'style') el.style.cssText = v
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v)
+    else if (k === 'value') el.value = v
+    else if (k === 'checked') el.checked = !!v
+    else if (k === 'html') el.innerHTML = v
+    else el.setAttribute(k, v === true ? '' : v)
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid))
+  return el
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+
+const TYPES = {
+  section: { label: 'Section', icon: '§', data: false },
+  text: { label: 'Texte', data: true },
+  textarea: { label: 'Texte long', data: true },
+  number: { label: 'Nombre', data: true },
+  date: { label: 'Date', data: true },
+  email: { label: 'E-mail', data: true },
+  phone: { label: 'Téléphone', data: true },
+  select: { label: 'Liste', data: true },
+  radio: { label: 'Choix unique', data: true },
+  checkbox: { label: 'Case à cocher', data: true },
+  table: { label: 'Tableau', data: true },
+  signature: { label: 'Signature', data: true },
+  paragraph: { label: 'Paragraphe', data: false },
+  spacer: { label: 'Espace', data: false },
+  pagebreak: { label: 'Saut de page', data: false },
+}
+const INLINE = new Set(['text', 'textarea', 'number', 'date', 'email', 'phone', 'select', 'radio', 'checkbox'])
+const FONTS = [['arial', 'Arial'], ['calibri', 'Calibri'], ['segoe', 'Segoe UI'], ['verdana', 'Verdana'], ['times', 'Times New Roman'], ['georgia', 'Georgia'], ['helvetica', 'Helvetica (intégrée, sans € ni œ)']]
+
+const state = { list: [], tpl: null, id: null, values: {}, dirty: false, tab: 'fill', open: new Set(), docs: [], csv: null, busy: false, lastInput: null }
+
+function blankTemplate() {
+  return {
+    name: 'Nouveau modèle', description: '', doc_title: '{{template}}', file_name: '{{doc_title}} {{date}}',
+    page: { format: 'A4', orientation: 'P', margin: 15, font: 'arial', font_size: 10, accent: '#4f46e5', style: 'stacked', hide_empty: false, show_title: true },
+    header: { enabled: true, logo: '', logo_height: 18, logo_position: 'left', title: 'Votre société', subtitle: '', text: '', align: 'L', line: true, first_page_only: false },
+    footer: { enabled: true, left: '', center: '', right: 'Page {{page}} / {{pages}}', line: true },
+    fields: [
+      { key: 'nom', label: 'Nom', type: 'text', required: true, width: 'half' },
+      { key: 'date_doc', label: 'Date', type: 'date', width: 'half' },
+      { key: 'commentaire', label: 'Commentaire', type: 'textarea' },
+    ],
+  }
+}
+function newField(type) {
+  const f = { key: '', label: TYPES[type].label, type, required: false, width: 'full', options: [], placeholder: '', help: '', text: '', decimals: 2, unit: '', columns: [], min_rows: 1, default: null }
+  if (TYPES[type].data) { f.key = uniqueKey(slug(f.label)); f._autoKey = true }
+  if (type === 'select' || type === 'radio') f.options = ['Option 1', 'Option 2']
+  if (type === 'table') f.columns = [{ label: 'Désignation', type: 'text', width: 3, total: false, decimals: null }, { label: 'Montant', type: 'number', width: 1, total: true, decimals: null }]
+  if (type === 'paragraph') { f.label = ''; f.text = 'Texte libre. Utilisez {{cle}} pour insérer une valeur et **gras** pour mettre en valeur.' }
+  if (type === 'section') f.label = 'Nouvelle section'
+  if (type === 'spacer' || type === 'pagebreak') f.label = ''
+  return f
+}
+function slug(s) {
+  let k = (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
+  if (!k || /^[0-9]/.test(k)) k = 'champ_' + k
+  return k.replace(/_+$/, '') || 'champ'
+}
+function uniqueKey(base, except) {
+  const used = new Set((state.tpl?.fields || []).filter(f => f !== except && TYPES[f.type]?.data).map(f => f.key))
+  let k = base, n = 2
+  while (used.has(k)) k = `${base}_${n++}`
+  return k
+}
+
+function setDirty(v = true) {
+  state.dirty = v
+  $('#dirty').classList.toggle('hidden', !v)
+  $('#tpl-title').textContent = state.tpl?.name || ''
+  $('#n-fields').textContent = state.tpl ? state.tpl.fields.filter(f => TYPES[f.type]?.data).length : ''
+}
+
+async function loadList() {
+  try { state.list = (await call('templates_list')).items } catch (e) { toast(e.message, true) }
+  renderList()
+}
+function renderList() {
+  const q = $('#search').value.trim().toLowerCase()
+  const items = state.list.filter(t => !q || t.name.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q))
+  const box = $('#tpl-list')
+  box.replaceChildren()
+  if (!items.length) { box.append(h('div', { class: 'side-empty' }, state.list.length ? 'Aucun résultat' : 'Aucun modèle')); return }
+  for (const t of items) {
+    box.append(h('div', { class: 'item' + (t._id === state.id ? ' current' : ''), title: t.description || t.name, onclick: () => openTemplate(t._id) },
+      h('div', { class: 'lbl' }, t.name), h('div', { class: 'sub' }, `${t.fields} champ${t.fields > 1 ? 's' : ''}${t.description ? ' · ' + t.description : ''}`)))
+  }
+}
+
+async function confirmLeave() {
+  if (!state.dirty) return true
+  return confirm('Le modèle a des modifications non enregistrées. Les abandonner ?')
+}
+
+async function openTemplate(id) {
+  if (id === state.id) return
+  if (!(await confirmLeave())) return
+  try {
+    const r = await call('template_get', { id })
+    state.tpl = r.template
+    state.id = id
+    state.values = initialValues(r.template, r.draft)
+    state.open.clear()
+    state.csv = null
+    showEditor()
+    setDirty(false)
+    renderList()
+    loadDocs()
+    render()
+  } catch (e) { toast(e.message, true) }
+}
+
+function initialValues(tpl, draft) {
+  const v = {}
+  for (const f of tpl.fields) {
+    if (!TYPES[f.type]?.data || f.type === 'signature') continue
+    if (draft && f.key in draft) v[f.key] = draft[f.key]
+    else if (f.type === 'checkbox') v[f.key] = !!f.default
+    else if (f.type === 'table') v[f.key] = Array.from({ length: Math.max(f.min_rows, 1) }, () => f.columns.map(() => ''))
+    else v[f.key] = f.default == null ? '' : String(f.default)
+  }
+  return v
+}
+
+function showEditor() {
+  $('#no-tpl').classList.add('hidden')
+  $('#editor').classList.remove('hidden')
+}
+
+async function newTemplate(tpl) {
+  if (!(await confirmLeave())) return
+  try {
+    const r = await call('template_save', { template: tpl || blankTemplate() })
+    await loadList()
+    state.id = null
+    state.dirty = false
+    await openTemplate(r.template._id)
+    if (!tpl) switchTab('fields')
+    toast('Modèle créé')
+  } catch (e) { toast(e.message, true) }
+}
+
+async function saveTemplate() {
+  if (!state.tpl) return false
+  try {
+    const r = await call('template_save', { template: state.tpl })
+    state.tpl = r.template
+    setDirty(false)
+    await loadList()
+    toast('Modèle enregistré')
+    return true
+  } catch (e) { toast(e.message, true); return false }
+}
+
+let draftTimer
+function valuesChanged() {
+  clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => { if (state.id) call('draft_save', { template_id: state.id, values: state.values }).catch(() => {}) }, 700)
+}
+
+function switchTab(tab) {
+  state.tab = tab
+  $$('#tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab))
+  render()
+}
+
+function render() {
+  const view = $('#view')
+  const y = view.scrollTop
+  view.replaceChildren(h('div', { class: 'wrap' }, ({ fill: renderFill, fields: renderFields, hf: renderHF, layout: renderLayout, batch: renderBatch, docs: renderDocs })[state.tab]()))
+  view.scrollTop = y
+}
+
+// ── Remplir ────────────────────────────────────────────────────────────────
+function checkRequired() {
+  const missing = []
+  for (const f of state.tpl.fields) {
+    if (!f.required || !TYPES[f.type]?.data || f.type === 'signature' || f.type === 'checkbox') continue
+    const v = state.values[f.key]
+    const empty = f.type === 'table' ? !(v || []).some(r => r.some(c => String(c).trim())) : !String(v ?? '').trim()
+    if (empty) missing.push(f)
+  }
+  return missing
+}
+
+function parseNum(s) {
+  const t = String(s ?? '').replace(/[\s  ]/g, '').replace(',', '.')
+  return t === '' ? null : Number(t)
+}
+function fmtNum(n, d) { return n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) }
+
+function renderFill() {
+  const tpl = state.tpl
+  if (!tpl.fields.length) return h('div', { class: 'empty', style: 'height:300px' }, h('div', { class: 'big' }, '📝'), 'Ce modèle n\'a pas encore de champ.', h('button', { class: 'primary', onclick: () => switchTab('fields') }, 'Ajouter des champs'))
+  const grid = h('div', { class: 'grid' })
+  for (const f of tpl.fields) {
+    if (f.type === 'section') { grid.append(h('div', { class: 'sec' }, f.label)); continue }
+    if (f.type === 'paragraph') { grid.append(h('div', { class: 'para', title: 'Paragraphe (les {{variables}} seront remplacées)' }, f.text)); continue }
+    if (f.type === 'spacer') continue
+    if (f.type === 'pagebreak') { grid.append(h('div', { class: 'pb' }, '— saut de page —')); continue }
+    grid.append(fieldInput(f))
+  }
+  return h('div', {},
+    h('div', { class: 'card' }, grid),
+    h('div', { class: 'actions-bar' },
+      h('span', { class: 'hint' }, 'Les valeurs sont conservées automatiquement en brouillon. ', h('code', {}, 'Ctrl+Entrée'), ' génère le PDF.'),
+      h('span', { class: 'sp' }),
+      h('button', { onclick: () => preview() }, 'Aperçu'),
+      h('button', { class: 'primary', onclick: () => generate() }, 'Générer le PDF')))
+}
+
+function fieldInput(f) {
+  const wrap = h('div', { class: 'fl' + (f.width === 'full' || f.type === 'table' || f.type === 'textarea' ? ' full' : ''), 'data-key': f.key })
+  const id = 'f_' + f.key
+  const lab = h('label', { for: id }, f.label || f.key, f.required && f.type !== 'checkbox' && f.type !== 'signature' ? h('span', { class: 'req' }, '*') : null)
+  const set = v => { state.values[f.key] = v; wrap.classList.remove('invalid'); valuesChanged() }
+  const val = state.values[f.key]
+  let input
+  switch (f.type) {
+    case 'textarea':
+      input = h('textarea', { id, rows: 4, placeholder: f.placeholder, value: val ?? '', oninput: e => set(e.target.value) }); break
+    case 'number':
+      input = h('input', { id, type: 'text', inputmode: 'decimal', placeholder: f.placeholder || (f.unit ? `en ${f.unit}` : ''), value: val ?? '', oninput: e => set(e.target.value) }); break
+    case 'date':
+      input = h('input', { id, type: 'date', value: val ?? '', oninput: e => set(e.target.value) }); break
+    case 'email':
+      input = h('input', { id, type: 'email', placeholder: f.placeholder, value: val ?? '', oninput: e => set(e.target.value) }); break
+    case 'phone':
+      input = h('input', { id, type: 'tel', placeholder: f.placeholder, value: val ?? '', oninput: e => set(e.target.value) }); break
+    case 'select':
+      input = h('select', { id, onchange: e => set(e.target.value) }, h('option', { value: '' }, '—'), f.options.map(o => h('option', { value: o }, o)))
+      input.value = val ?? ''; break
+    case 'radio':
+      input = h('div', { class: 'radios' }, f.options.map(o => h('label', { class: 'check' }, h('input', { type: 'radio', name: id, checked: val === o, onchange: () => set(o) }), o))); break
+    case 'checkbox':
+      return h('div', { class: 'fl' + (f.width === 'full' ? ' full' : '') }, h('label', { class: 'check', style: 'margin-top:18px' },
+        h('input', { type: 'checkbox', checked: !!val, onchange: e => set(e.target.checked) }), f.label || f.key), f.help ? h('div', { class: 'help' }, f.help) : null)
+    case 'signature':
+      input = h('div', { class: 'sigbox' }, f.text || 'Zone de signature (à signer sur le document imprimé)'); break
+    case 'table':
+      input = tableInput(f, set); break
+    default:
+      input = h('input', { id, type: 'text', placeholder: f.placeholder, value: val ?? '', oninput: e => set(e.target.value) })
+  }
+  wrap.append(lab, input)
+  if (f.help) wrap.append(h('div', { class: 'help' }, f.help))
+  return wrap
+}
+
+function tableInput(f, set) {
+  const rows = state.values[f.key] = (state.values[f.key] || []).map(r => f.columns.map((_, i) => r[i] ?? ''))
+  const box = h('div', {})
+  const draw = () => {
+    const totals = f.columns.map((c, i) => c.type === 'number' && c.total ? rows.reduce((s, r) => s + (parseNum(r[i]) || 0), 0) : null)
+    const anyTotal = totals.some(t => t != null)
+    const t = h('table', { class: 'dt' },
+      h('thead', {}, h('tr', {}, f.columns.map(c => h('th', { class: c.type === 'number' ? 'num' : '', style: `width:${(c.width / f.columns.reduce((s, x) => s + x.width, 0) * 100).toFixed(1)}%` }, c.label)), h('th', {}))),
+      h('tbody', {}, rows.map((r, ri) => h('tr', {},
+        f.columns.map((c, ci) => h('td', { class: c.type === 'number' ? 'num' : '' }, h('input', {
+          type: 'text', value: r[ci], inputmode: c.type === 'number' ? 'decimal' : null,
+          oninput: e => { r[ci] = e.target.value; set(rows); if (c.type === 'number') updTotals() },
+          onkeydown: e => { if (e.key === 'Enter' && !e.ctrlKey && ri === rows.length - 1) { e.preventDefault(); rows.push(f.columns.map(() => '')); set(rows); draw(); $$('tbody tr:last-child input', box)[0]?.focus() } },
+        }))),
+        h('td', { class: 'act' }, h('button', { class: 'ghost icon', title: 'Supprimer la ligne', onclick: () => { rows.splice(ri, 1); set(rows); draw() } }, '✕'))))),
+      anyTotal ? h('tfoot', {}, h('tr', {}, f.columns.map((c, i) => h('td', { class: totals[i] != null ? 'num' : '', 'data-tot': i }, totals[i] != null ? '' : (i === 0 ? 'Total' : ''))), h('td', {}))) : null)
+    box.replaceChildren(t, h('div', { class: 'actions-bar' }, h('button', { onclick: () => { rows.push(f.columns.map(() => '')); set(rows); draw() } }, '＋ Ligne'), h('span', { class: 'hint' }, 'Entrée sur la dernière ligne en ajoute une.')))
+    updTotals()
+  }
+  const updTotals = () => {
+    f.columns.forEach((c, i) => {
+      const cell = box.querySelector(`tfoot td[data-tot="${i}"]`)
+      if (!cell || !(c.type === 'number' && c.total)) return
+      const s = rows.reduce((a, r) => a + (parseNum(r[i]) || 0), 0)
+      cell.textContent = (isNaN(s) ? '—' : fmtNum(s, c.decimals ?? f.decimals)) + (f.unit ? ' ' + f.unit : '')
+    })
+  }
+  draw()
+  return box
+}
+
+function markMissing(missing) {
+  if (state.tab !== 'fill') switchTab('fill')
+  for (const f of missing) $(`.fl[data-key="${CSS.escape(f.key)}"]`)?.classList.add('invalid')
+  const first = $(`.fl[data-key="${CSS.escape(missing[0].key)}"]`)
+  first?.scrollIntoView({ block: 'center' })
+  first?.querySelector('input,textarea,select')?.focus()
+  toast('Champs obligatoires : ' + missing.map(f => f.label || f.key).join(', '), true)
+}
+
+function payloadFor(extra = {}) {
+  return { template_id: state.id, template: state.tpl, values: state.values, ...extra }
+}
+
+async function withBusy(btn, fn) {
+  if (state.busy) return
+  state.busy = true
+  const old = btn?.innerHTML
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>' }
+  try { return await fn() } finally { state.busy = false; if (btn) { btn.disabled = false; btn.innerHTML = old } }
+}
+
+async function generate() {
+  const missing = checkRequired()
+  if (missing.length) return markMissing(missing)
+  await withBusy($('#btn-generate'), async () => {
+    try {
+      const r = await call('generate', payloadFor(), { timeout: 60000 })
+      toast(`PDF créé : ${r.file_name} (${r.pages} page${r.pages > 1 ? 's' : ''})${r.opened ? '' : ' — ' + r.path}`)
+      loadDocs()
+    } catch (e) { handleGenError(e) }
+  })
+}
+
+async function preview() {
+  await withBusy($('#btn-preview'), async () => {
+    try {
+      const r = await call('preview', payloadFor({ values: { ...state.values }, open: true }), { timeout: 60000 })
+      toast(`Aperçu ouvert (${r.pages} page${r.pages > 1 ? 's' : ''})`)
+    } catch (e) { handleGenError(e) }
+  })
+}
+
+async function download() {
+  const missing = checkRequired()
+  if (missing.length) return markMissing(missing)
+  await withBusy(null, async () => {
+    try {
+      const r = await call('generate', payloadFor({ download: true }), { timeout: 60000 })
+      const bin = atob(r.pdf_b64)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      saveBlob(new Blob([bytes], { type: 'application/pdf' }), r.file_name)
+    } catch (e) { handleGenError(e) }
+  })
+}
+
+function handleGenError(e) {
+  if (e.code === 'REQUIRED_FIELDS') {
+    const missing = checkRequired()
+    if (missing.length) return markMissing(missing)
+  }
+  toast(e.message, true)
+}
+
+function saveBlob(blob, name) {
+  const a = h('a', { href: URL.createObjectURL(blob), download: name })
+  document.body.append(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+}
+
+// ── Champs ─────────────────────────────────────────────────────────────────
+let dragIdx = null
+function renderFields() {
+  const tpl = state.tpl
+  const list = h('div', { class: 'fields-list' })
+  tpl.fields.forEach((f, i) => list.append(fieldCard(f, i)))
+  if (!tpl.fields.length) list.append(h('div', { class: 'side-empty' }, 'Aucun champ — ajoutez-en avec les boutons ci-dessous.'))
+  return h('div', {},
+    h('div', { class: 'hint', style: 'margin-bottom:10px' }, 'Glissez ⠿ pour réordonner. La ', h('b', {}, 'clé'), ' sert de variable : ', h('code', {}, '{{cle}}'), ' dans le titre, l\'en-tête, le pied de page, les paragraphes et le nom du fichier. Pour un tableau avec colonne totalisée : ', h('code', {}, '{{cle_total}}'), '.'),
+    list,
+    h('div', { class: 'add-bar' }, Object.entries(TYPES).map(([t, d]) => h('button', { onclick: () => { tpl.fields.push(newField(t)); state.open.add(tpl.fields.at(-1)); onStructChange() } }, '＋ ' + d.label))))
+}
+
+function onStructChange() {
+  setDirty()
+  syncValuesToTemplate()
+  render()
+}
+function syncValuesToTemplate() {
+  const init = initialValues(state.tpl, state.values)
+  state.values = init
+}
+
+function fieldCard(f, i) {
+  const tpl = state.tpl
+  const isData = TYPES[f.type].data
+  const open = state.open.has(f)
+  const card = h('div', { class: 'fcard' + (open ? ' open' : ''), draggable: 'false' })
+  const grip = h('span', { class: 'grip', title: 'Glisser pour déplacer', onmousedown: () => card.setAttribute('draggable', 'true') }, '⠿')
+  card.addEventListener('dragstart', e => { dragIdx = i; e.dataTransfer.effectAllowed = 'move' })
+  card.addEventListener('dragend', () => { card.setAttribute('draggable', 'false'); $$('.fcard').forEach(c => c.classList.remove('drag-over')) })
+  card.addEventListener('dragover', e => { if (dragIdx == null) return; e.preventDefault(); card.classList.add('drag-over') })
+  card.addEventListener('dragleave', () => card.classList.remove('drag-over'))
+  card.addEventListener('drop', e => {
+    e.preventDefault()
+    if (dragIdx == null || dragIdx === i) return
+    const [m] = tpl.fields.splice(dragIdx, 1)
+    tpl.fields.splice(i, 0, m)
+    dragIdx = null
+    onStructChange()
+  })
+  const typeSel = h('select', { title: 'Type', onchange: e => {
+    const nf = newField(e.target.value)
+    const keep = { label: f.label || nf.label, key: TYPES[e.target.value].data ? (f.key || nf.key) : '', required: f.required, width: f.width }
+    Object.assign(f, nf, keep)
+    if (TYPES[f.type].data && !f.key) f.key = uniqueKey(slug(f.label), f)
+    onStructChange()
+  } }, Object.entries(TYPES).map(([t, d]) => h('option', { value: t }, d.label)))
+  typeSel.value = f.type
+  const keyIn = isData ? h('input', { class: 'fkey', value: f.key, placeholder: 'cle', title: 'Clé (variable {{cle}})',
+    oninput: e => { f.key = e.target.value.trim(); f._keyEdited = true; setDirty() },
+    onchange: e => { const k = slug(e.target.value); f.key = uniqueKey(k, f); e.target.value = f.key; setDirty() } }) : null
+  const labelIn = f.type === 'spacer' || f.type === 'pagebreak' ? h('span', { class: 'muted', style: 'flex:1' }, TYPES[f.type].label)
+    : h('input', { class: 'flabel', value: f.label, placeholder: f.type === 'paragraph' ? '(libellé non imprimé)' : 'Libellé',
+      oninput: e => {
+        f.label = e.target.value
+        if (isData && f._autoKey && !f._keyEdited && keyIn) { f.key = uniqueKey(slug(f.label), f); keyIn.value = f.key }
+        setDirty()
+      } })
+  const row = h('div', { class: 'frow' }, grip, typeSel, labelIn, keyIn,
+    INLINE.has(f.type) || f.type === 'signature' ? (() => { const s = h('select', { title: 'Largeur', onchange: e => { f.width = e.target.value; setDirty() } }, h('option', { value: 'full' }, 'Pleine'), h('option', { value: 'half' }, 'Demi')); s.value = f.width; return s })() : null,
+    isData && f.type !== 'signature' && f.type !== 'checkbox' ? h('label', { class: 'check', title: 'Obligatoire' }, h('input', { type: 'checkbox', checked: f.required, onchange: e => { f.required = e.target.checked; setDirty() } }), 'Requis') : null,
+    h('button', { class: 'ghost icon', title: 'Monter', disabled: i === 0, onclick: () => { [tpl.fields[i - 1], tpl.fields[i]] = [tpl.fields[i], tpl.fields[i - 1]]; onStructChange() } }, '↑'),
+    h('button', { class: 'ghost icon', title: 'Descendre', disabled: i === tpl.fields.length - 1, onclick: () => { [tpl.fields[i + 1], tpl.fields[i]] = [tpl.fields[i], tpl.fields[i + 1]]; onStructChange() } }, '↓'),
+    h('button', { class: 'ghost icon', title: 'Options', onclick: () => { open ? state.open.delete(f) : state.open.add(f); render() } }, open ? '▴' : '▾'),
+    h('button', { class: 'ghost icon', title: 'Dupliquer', onclick: () => { const c = structuredClone(f); delete c._keyEdited; if (TYPES[c.type].data) c.key = uniqueKey(c.key || 'champ'); tpl.fields.splice(i + 1, 0, c); onStructChange() } }, '⧉'),
+    h('button', { class: 'ghost icon danger', title: 'Supprimer', onclick: () => { if (f.type !== 'spacer' && f.type !== 'pagebreak' && !confirm(`Supprimer « ${f.label || TYPES[f.type].label} » ?`)) return; tpl.fields.splice(i, 1); onStructChange() } }, '✕'))
+  card.append(row)
+  if (open) card.append(fieldDetail(f))
+  return card
+}
+
+function fl(label, input, cls = '', help) {
+  return h('div', { class: 'fl ' + cls }, h('div', { class: 'lab' }, label), input, help ? h('div', { class: 'help' }, help) : null)
+}
+function bindText(obj, key, attrs = {}, tag = 'input') {
+  const el = h(tag, { ...attrs, value: obj[key] ?? '', oninput: e => { obj[key] = e.target.value; setDirty() } })
+  el.addEventListener('focus', () => (state.lastInput = { el, obj, key }))
+  return el
+}
+function bindNum(obj, key, attrs = {}) {
+  return h('input', { type: 'number', ...attrs, value: obj[key] ?? '', oninput: e => { const n = parseFloat(e.target.value); if (!isNaN(n)) { obj[key] = n; setDirty() } } })
+}
+function bindBool(obj, key, label, after) {
+  return h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!obj[key], onchange: e => { obj[key] = e.target.checked; setDirty(); after?.() } }), label)
+}
+function bindSelect(obj, key, opts, after) {
+  const s = h('select', { onchange: e => { obj[key] = e.target.value; setDirty(); after?.() } }, opts.map(([v, l]) => h('option', { value: v }, l)))
+  s.value = obj[key]
+  return s
+}
+
+function fieldDetail(f) {
+  const g = h('div', { class: 'grid' })
+  if (['text', 'textarea', 'number', 'email', 'phone'].includes(f.type)) g.append(fl('Texte d\'exemple (placeholder)', bindText(f, 'placeholder')))
+  if (TYPES[f.type].data && !['table', 'signature'].includes(f.type)) {
+    if (f.type === 'checkbox') g.append(fl('Valeur par défaut', h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!f.default, onchange: e => { f.default = e.target.checked; setDirty(); syncValuesToTemplate() } }), 'Cochée')))
+    else g.append(fl('Valeur par défaut', h('input', { type: f.type === 'date' ? 'date' : 'text', value: f.default ?? '', oninput: e => { f.default = e.target.value || null; setDirty() } })))
+  }
+  if (TYPES[f.type].data && f.type !== 'signature') g.append(fl('Aide (affichée sous le champ)', bindText(f, 'help')))
+  if (f.type === 'select' || f.type === 'radio') {
+    g.append(fl('Options (une par ligne)', h('textarea', { rows: 4, value: f.options.join('\n'), oninput: e => { f.options = e.target.value.split('\n').map(s => s.trim()).filter(Boolean); setDirty() }, onchange: () => syncValuesToTemplate() }), 'full'))
+  }
+  if (f.type === 'number' || f.type === 'table') {
+    g.append(fl('Décimales', bindNum(f, 'decimals', { min: 0, max: 6, step: 1 })), fl('Unité (ex. €, kg)', bindText(f, 'unit', { maxlength: 12 })))
+  }
+  if (f.type === 'table') {
+    g.append(fl('Lignes vides au départ', bindNum(f, 'min_rows', { min: 0, max: 50, step: 1 })))
+    g.append(h('div', { class: 'full' }, columnsEditor(f)))
+  }
+  if (f.type === 'paragraph') g.append(fl('Texte', bindText(f, 'text', { rows: 5 }, 'textarea'), 'full', 'Variables {{cle}}, **gras**, __italique__. Le texte est justifié.'))
+  if (f.type === 'signature') g.append(fl('Mention dans le cadre', bindText(f, 'text', { placeholder: 'Lu et approuvé' })))
+  if (f.type === 'section') g.append(h('div', { class: 'hint full' }, 'Titre de section, imprimé en couleur d\'accent avec un filet.'))
+  if (f.type === 'spacer' || f.type === 'pagebreak') g.append(h('div', { class: 'hint full' }, f.type === 'spacer' ? 'Ajoute un espace vertical.' : 'Force le passage à une nouvelle page.'))
+  return h('div', { class: 'fdetail' }, g)
+}
+
+function columnsEditor(f) {
+  const box = h('div', {})
+  const draw = () => {
+    box.replaceChildren(h('div', { class: 'lab muted', style: 'font-size:12px;margin-bottom:4px' }, 'Colonnes'),
+      h('table', { class: 'cols-editor' },
+        h('tr', { class: 'muted', style: 'font-size:11px' }, h('td', {}, 'Libellé'), h('td', {}, 'Type'), h('td', {}, 'Largeur relative'), h('td', {}, 'Décimales'), h('td', {}, 'Total'), h('td', {})),
+        f.columns.map((c, i) => h('tr', {},
+          h('td', {}, h('input', { type: 'text', value: c.label, oninput: e => { c.label = e.target.value; setDirty() } })),
+          h('td', {}, bindSelect(c, 'type', [['text', 'Texte'], ['number', 'Nombre']], draw)),
+          h('td', {}, bindNum(c, 'width', { min: 0.2, max: 10, step: 0.1 })),
+          h('td', {}, c.type === 'number' ? h('input', { type: 'number', min: 0, max: 6, placeholder: String(f.decimals), value: c.decimals ?? '', oninput: e => { c.decimals = e.target.value === '' ? null : parseInt(e.target.value, 10); setDirty() } }) : null),
+          h('td', {}, c.type === 'number' ? h('input', { type: 'checkbox', checked: c.total, onchange: e => { c.total = e.target.checked; setDirty() } }) : null),
+          h('td', {}, h('button', { class: 'ghost icon', disabled: f.columns.length <= 1, onclick: () => { f.columns.splice(i, 1); setDirty(); syncValuesToTemplate(); draw() } }, '✕'))))),
+      h('button', { style: 'margin-top:6px', disabled: f.columns.length >= 12, onclick: () => { f.columns.push({ label: 'Colonne', type: 'text', width: 1, total: false, decimals: null }); setDirty(); syncValuesToTemplate(); draw() } }, '＋ Colonne'))
+  }
+  draw()
+  return box
+}
+
+// ── En-tête & pied ──────────────────────────────────────────────────────────
+function varChips() {
+  const keys = ['date', 'heure', 'annee', 'page', 'pages', 'doc_title', 'template']
+  for (const f of state.tpl.fields) {
+    if (!TYPES[f.type]?.data || f.type === 'signature') continue
+    keys.push(f.key)
+    if (f.type === 'table' && f.columns.some(c => c.type === 'number' && c.total)) keys.push(f.key + '_total')
+  }
+  return h('div', {}, h('div', { class: 'hint' }, 'Cliquez une variable pour l\'insérer dans le dernier champ texte sélectionné :'),
+    h('div', { class: 'chips' }, keys.map(k => h('span', { class: 'chip', onmousedown: e => { e.preventDefault(); insertVar(k) } }, `{{${k}}}`))))
+}
+function insertVar(k) {
+  const li = state.lastInput
+  if (!li || !document.body.contains(li.el)) return toast('Sélectionnez d\'abord un champ texte', true)
+  const el = li.el, ins = `{{${k}}}`
+  const s = el.selectionStart ?? el.value.length, e = el.selectionEnd ?? s
+  el.value = el.value.slice(0, s) + ins + el.value.slice(e)
+  el.setSelectionRange(s + ins.length, s + ins.length)
+  el.focus()
+  li.obj[li.key] = el.value
+  setDirty()
+  updateMini()
+}
+
+function renderHF() {
+  const H = state.tpl.header, F = state.tpl.footer
+  const logoPrev = h('div', { class: 'logo-prev' }, H.logo ? h('img', { src: H.logo, alt: 'logo' }) : 'Aucun logo')
+  const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', class: 'hidden', onchange: e => {
+    const fobj = e.target.files[0]
+    if (!fobj) return
+    if (fobj.size > 2 * 1024 * 1024) return toast('Logo trop volumineux (2 Mo max.)', true)
+    const rd = new FileReader()
+    rd.onload = () => { H.logo = rd.result; setDirty(); render() }
+    rd.readAsDataURL(fobj)
+  } })
+  const onAny = () => updateMini()
+  const hcard = h('div', { class: 'card', oninput: onAny, onchange: onAny },
+    h('h3', {}, 'En-tête', h('span', { class: 'sp' }), bindBool(H, 'enabled', 'Afficher', render)),
+    H.enabled ? h('div', { class: 'grid' },
+      h('div', { class: 'fl full' }, h('div', { class: 'lab' }, 'Logo'), h('div', { class: 'logo-box' }, logoPrev,
+        h('div', { style: 'display:flex;flex-direction:column;gap:6px' },
+          h('div', { style: 'display:flex;gap:6px' }, h('button', { onclick: () => file.click() }, H.logo ? 'Changer…' : 'Choisir une image…'),
+            H.logo ? h('button', { class: 'danger', onclick: () => { H.logo = ''; setDirty(); render() } }, 'Retirer') : null),
+          h('div', { style: 'display:flex;gap:10px;align-items:center' }, 'Hauteur', bindNum(H, 'logo_height', { min: 5, max: 60, step: 1, style: 'width:72px;flex:0 0 72px' }), 'mm',
+            bindSelect(H, 'logo_position', [['left', 'À gauche'], ['right', 'À droite']]))), file)),
+      fl('Titre', bindText(H, 'title', { placeholder: 'Nom de la société' })),
+      fl('Sous-titre', bindText(H, 'subtitle', { placeholder: 'Activité, slogan…' })),
+      fl('Texte (adresse, contact…)', bindText(H, 'text', { rows: 3, placeholder: '12 rue…\nTél. …' }, 'textarea'), 'full'),
+      fl('Alignement du texte', bindSelect(H, 'align', [['L', 'Gauche'], ['C', 'Centré'], ['R', 'Droite']])),
+      h('div', { class: 'fl', style: 'justify-content:flex-end;gap:8px' }, bindBool(H, 'line', 'Filet sous l\'en-tête'), bindBool(H, 'first_page_only', 'Première page seulement'))) : null)
+  const fcard = h('div', { class: 'card', oninput: onAny, onchange: onAny },
+    h('h3', {}, 'Pied de page', h('span', { class: 'sp' }), bindBool(F, 'enabled', 'Afficher', render)),
+    F.enabled ? h('div', { class: 'grid' },
+      fl('Gauche', bindText(F, 'left', { placeholder: 'Raison sociale, SIRET…' })),
+      fl('Centre', bindText(F, 'center')),
+      fl('Droite', bindText(F, 'right', { placeholder: 'Page {{page}} / {{pages}}' })),
+      h('div', { class: 'fl', style: 'justify-content:flex-end' }, bindBool(F, 'line', 'Filet au-dessus'))) : null)
+  return h('div', { style: 'display:flex;gap:18px;align-items:flex-start' },
+    h('div', { style: 'flex:1;min-width:0' }, hcard, fcard, h('div', { class: 'card' }, varChips())),
+    h('div', { style: 'position:sticky;top:0' }, h('div', { class: 'hint', style: 'margin-bottom:6px' }, 'Schéma (indicatif)'), miniPage()))
+}
+
+function miniPage() {
+  const t = state.tpl, H = t.header, F = t.footer
+  const demo = s => (s || '').replace(/\{\{\s*page\s*\}\}/g, '1').replace(/\{\{\s*pages\s*\}\}/g, '2').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => k === 'date' ? new Date().toLocaleDateString('fr-FR') : `‹${k}›`)
+  const acc = t.page.accent
+  const head = H.enabled ? h('div', { class: 'mp-head', style: `${H.line ? `border-bottom:1px solid ${acc};` : ''}flex-direction:${H.logo_position === 'right' ? 'row-reverse' : 'row'}` },
+    H.logo ? h('img', { src: H.logo }) : null,
+    h('div', { class: 't', style: `text-align:${({ L: 'left', C: 'center', R: 'right' })[H.align]}` }, h('b', {}, demo(H.title)), h('div', { style: `color:${acc}` }, demo(H.subtitle)), h('div', { style: 'color:#777;white-space:pre-line' }, demo(H.text)))) : null
+  const body = h('div', { class: 'mp-body', style: H.enabled ? '' : 'top:7%' }, t.page.show_title ? h('b', { style: 'font-size:7px' }, demo(t.doc_title)) : null,
+    ...Array.from({ length: 9 }, (_, i) => h('div', { class: 'mp-line', style: `width:${[60, 90, 75, 40, 85, 95, 50, 70, 30][i]}%` })))
+  const foot = F.enabled ? h('div', { class: 'mp-foot', style: F.line ? '' : 'border-top:none' }, h('span', {}, demo(F.left)), h('span', {}, demo(F.center)), h('span', {}, demo(F.right))) : null
+  return h('div', { class: 'mini-page' + (t.page.orientation === 'L' ? ' land' : ''), id: 'mini' }, head, body, foot)
+}
+let miniTimer
+function updateMini() {
+  clearTimeout(miniTimer)
+  miniTimer = setTimeout(() => { const m = $('#mini'); if (m) m.replaceWith(miniPage()) }, 120)
+}
+
+// ── Mise en page ───────────────────────────────────────────────────────────
+function renderLayout() {
+  const t = state.tpl, P = t.page
+  return h('div', {},
+    h('div', { class: 'card' }, h('h3', {}, 'Modèle'),
+      h('div', { class: 'grid' },
+        fl('Nom du modèle', bindText(t, 'name', { maxlength: 120, oninput: () => setDirty() })),
+        fl('Description', bindText(t, 'description', { maxlength: 500 })),
+        fl('Titre du document', bindText(t, 'doc_title', { placeholder: 'Facture n° {{numero}}' }), '', 'Imprimé en haut de la première page et utilisé comme titre PDF.'),
+        fl('Nom du fichier', bindText(t, 'file_name', { placeholder: '{{doc_title}} {{date}}' }), '', '« .pdf » est ajouté ; un suffixe (2), (3)… évite d\'écraser un fichier.'),
+        h('div', { class: 'full' }, varChips()))),
+    h('div', { class: 'card' }, h('h3', {}, 'Page'),
+      h('div', { class: 'grid' },
+        fl('Format', bindSelect(P, 'format', [['A4', 'A4'], ['A5', 'A5'], ['A3', 'A3'], ['Letter', 'Letter (US)'], ['Legal', 'Legal (US)']])),
+        fl('Orientation', bindSelect(P, 'orientation', [['P', 'Portrait'], ['L', 'Paysage']])),
+        fl('Marges (mm)', bindNum(P, 'margin', { min: 5, max: 40, step: 1 })),
+        fl('Police', bindSelect(P, 'font', FONTS), '', 'Polices Windows (accents, €, œ) ; repli sur Helvetica si absente.'),
+        fl('Taille du texte (pt)', bindNum(P, 'font_size', { min: 7, max: 16, step: 0.5 })),
+        fl('Couleur d\'accent', h('div', { style: 'display:flex;gap:8px;align-items:center' },
+          h('input', { type: 'color', value: P.accent, oninput: e => { P.accent = e.target.value; setDirty(); acc.textContent = e.target.value } }),
+          (acc = h('span', { class: 'mono muted' }, P.accent)))),
+        fl('Présentation des champs', bindSelect(P, 'style', [['stacked', 'Libellé au-dessus de la valeur'], ['table', 'Tableau libellé | valeur']])),
+        h('div', { class: 'fl', style: 'justify-content:flex-end;gap:8px' }, bindBool(P, 'show_title', 'Afficher le titre du document'), bindBool(P, 'hide_empty', 'Masquer les champs vides')))))
+}
+let acc
+
+// ── Lot CSV ────────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '')
+  const first = text.split(/\r?\n/, 1)[0] || ''
+  const delim = [';', ',', '\t'].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0]
+  const rows = []
+  let row = [], cell = '', q = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++ } else q = false }
+      else cell += c
+    } else if (c === '"' && cell === '') q = true
+    else if (c === delim) { row.push(cell); cell = '' }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = '' }
+    else cell += c
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row) }
+  return { delim, rows: rows.filter(r => r.some(c => c.trim() !== '')) }
+}
+
+function csvMapping(headers) {
+  const norm = s => slug(s)
+  const fields = state.tpl.fields.filter(f => TYPES[f.type]?.data && !['table', 'signature'].includes(f.type))
+  return headers.map(hd => {
+    const n = norm(hd)
+    return (fields.find(f => f.key === hd.trim()) || fields.find(f => f.key === n) || fields.find(f => norm(f.label) === n))?.key || null
+  })
+}
+
+function csvRows() {
+  const { rows } = state.csv
+  const map = csvMapping(rows[0])
+  return rows.slice(1).map(r => {
+    const v = {}
+    map.forEach((k, i) => { if (k) v[k] = (r[i] ?? '').trim() })
+    for (const f of state.tpl.fields) if (f.type === 'date' && v[f.key] && /^\d{2}\/\d{2}\/\d{4}$/.test(v[f.key])) { const [d, m, y] = v[f.key].split('/'); v[f.key] = `${y}-${m}-${d}` }
+    return v
+  })
+}
+
+function renderBatch() {
+  const fields = state.tpl.fields.filter(f => TYPES[f.type]?.data && !['table', 'signature'].includes(f.type))
+  const file = h('input', { type: 'file', accept: '.csv,text/csv,text/plain', class: 'hidden', onchange: e => {
+    const f = e.target.files[0]
+    if (!f) return
+    const rd = new FileReader()
+    rd.onload = () => loadCSV(rd.result, f.name)
+    rd.readAsText(f, 'utf-8')
+  } })
+  const sample = () => {
+    const head = fields.map(f => f.key).join(';')
+    saveBlob(new Blob(['﻿' + head + '\n' + fields.map(f => f.type === 'date' ? '2026-01-31' : f.type === 'number' ? '10' : f.type === 'checkbox' ? 'oui' : (f.options[0] || 'exemple')).join(';') + '\n'], { type: 'text/csv' }), `${slug(state.tpl.name)}-modele.csv`)
+  }
+  const kids = [h('div', { class: 'card' }, h('h3', {}, 'Génération par lot'),
+    h('div', { class: 'hint' }, 'Chargez un fichier CSV (séparateur ; , ou tabulation, encodage UTF-8) : une ligne = un PDF. La première ligne contient les en-têtes, associés aux champs par ', h('b', {}, 'clé'), ' ou par ', h('b', {}, 'libellé'), '. Les tableaux et signatures ne sont pas remplis par le CSV. Dates acceptées : ', h('code', {}, 'AAAA-MM-JJ'), ' ou ', h('code', {}, 'JJ/MM/AAAA'), '.'),
+    h('div', { class: 'actions-bar', style: 'margin-top:10px' }, h('button', { onclick: () => file.click() }, 'Choisir un CSV…'), h('button', { onclick: sample }, 'Télécharger un CSV exemple'), file))]
+  if (state.csv) {
+    const { rows, name } = state.csv
+    const map = csvMapping(rows[0])
+    const n = rows.length - 1
+    const unmatched = fields.filter(f => !map.includes(f.key))
+    const pb = h('div', { class: 'progress hidden' }, h('div', {}))
+    const out = h('div', {})
+    const go = h('button', { class: 'primary', disabled: n < 1, onclick: () => runBatch(go, pb, out) }, `Générer ${n} PDF`)
+    kids.push(h('div', { class: 'card' }, h('h3', {}, name, h('span', { class: 'muted', style: 'font-weight:400' }, ` — ${n} ligne${n > 1 ? 's' : ''}`), h('span', { class: 'sp' }), h('button', { class: 'ghost', onclick: () => { state.csv = null; render() } }, 'Retirer')),
+      h('table', { class: 'csv' }, h('tr', {}, rows[0].map((c, i) => h('th', { class: map[i] ? 'ok' : 'no', title: map[i] ? `→ ${map[i]}` : 'Colonne ignorée' }, c))),
+        rows.slice(1, 6).map(r => h('tr', {}, rows[0].map((_, i) => h('td', {}, r[i] ?? ''))))),
+      n > 5 ? h('div', { class: 'hint' }, `… et ${n - 5} autre(s) ligne(s)`) : null,
+      unmatched.length ? h('div', { class: 'hint', style: 'color:var(--warn);margin-top:6px' }, 'Champs sans colonne : ' + unmatched.map(f => f.key).join(', ') + (unmatched.some(f => f.required) ? ' (dont obligatoires : ces lignes échoueront)' : '')) : null,
+      h('div', { class: 'actions-bar', style: 'margin-top:10px' }, go), pb, out))
+  }
+  return h('div', {}, kids)
+}
+
+function loadCSV(text, name) {
+  const p = parseCSV(text)
+  if (p.rows.length < 2) return toast('CSV vide ou sans données (il faut une ligne d\'en-têtes et au moins une ligne)', true)
+  if (!csvMapping(p.rows[0]).some(Boolean)) return toast('Aucune colonne ne correspond aux champs du modèle', true)
+  state.csv = { ...p, name }
+  render()
+}
+
+async function runBatch(btn, pb, out) {
+  if (state.busy) return
+  state.busy = true
+  btn.disabled = true
+  pb.classList.remove('hidden')
+  out.replaceChildren()
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'generate_batch', { template_id: state.id, template: state.tpl, rows: csvRows() },
+      { onProgress: p => { pb.firstChild.style.width = (p.percent ?? 0) + '%'; btn.textContent = p.message || 'En cours…' } })
+    pb.firstChild.style.width = '100%'
+    out.append(h('div', { style: 'margin-top:10px' }, `✔ ${r.count} PDF créé(s) dans `, h('code', {}, r.folder), ' ',
+      h('button', { onclick: () => call('open_folder').catch(e => toast(e.message, true)) }, 'Ouvrir le dossier')))
+    if (r.error_count) out.append(h('div', { class: 'err-list' }, `${r.error_count} ligne(s) en erreur :`, r.errors.map(e => h('div', {}, `Ligne ${e.row + 1} : ${e.error}`))))
+    loadDocs()
+  } catch (e) { toast(e.message, true) }
+  finally { state.busy = false; btn.disabled = false; btn.textContent = `Générer ${state.csv.rows.length - 1} PDF` }
+}
+
+// ── Documents ──────────────────────────────────────────────────────────────
+async function loadDocs() {
+  if (!state.id) return
+  try { state.docs = (await call('documents_list', { template_id: state.id })).items } catch (e) { state.docs = [] }
+  $('#n-docs').textContent = state.docs.length || ''
+  if (state.tab === 'docs') render()
+}
+function fmtSize(n) { return n == null ? '' : n < 1024 ? n + ' o' : n < 1048576 ? (n / 1024).toFixed(0) + ' Ko' : (n / 1048576).toFixed(1) + ' Mo' }
+function renderDocs() {
+  if (!state.docs.length) return h('div', { class: 'empty', style: 'height:300px' }, h('div', { class: 'big' }, '📂'), 'Aucun document généré avec ce modèle.', h('button', { onclick: () => call('open_folder').catch(e => toast(e.message, true)) }, 'Ouvrir le dossier des PDF'))
+  return h('div', { class: 'card' },
+    h('h3', {}, 'Documents générés', h('span', { class: 'sp' }), h('button', { onclick: () => call('open_folder').catch(e => toast(e.message, true)) }, 'Ouvrir le dossier')),
+    h('table', { class: 'docs' }, h('tr', {}, h('th', {}, 'Fichier'), h('th', {}, 'Date'), h('th', {}, 'Pages'), h('th', {}, 'Taille'), h('th', {})),
+      state.docs.map(d => h('tr', { class: d.exists ? '' : 'gone', title: d.path },
+        h('td', {}, d.batch ? '📁 ' : '', d.file_name),
+        h('td', { class: 'muted' }, new Date(d.created).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })),
+        h('td', {}, d.batch ? `${d.count} PDF` : d.pages),
+        h('td', { class: 'muted' }, fmtSize(d.size)),
+        h('td', { class: 'a' },
+          d.exists ? h('button', { onclick: () => call('document_open', { id: d._id }).catch(e => toast(e.message, true)) }, 'Ouvrir') : h('span', { class: 'muted' }, 'fichier supprimé '),
+          d.has_values ? h('button', { class: 'ghost', title: 'Recharger ces valeurs dans le formulaire', onclick: () => reuseDoc(d._id) }, 'Réutiliser') : null,
+          h('button', { class: 'ghost icon danger', title: 'Retirer de l\'historique', onclick: () => deleteDoc(d) }, '✕'))))))
+}
+async function reuseDoc(id) {
+  try {
+    const d = (await call('document_get', { id })).document
+    state.values = initialValues(state.tpl, d.values || {})
+    valuesChanged()
+    switchTab('fill')
+    toast('Valeurs rechargées')
+  } catch (e) { toast(e.message, true) }
+}
+async function deleteDoc(d) {
+  let delFile = false
+  if (!d.batch && d.exists) {
+    if (!confirm(`Retirer « ${d.file_name} » de l'historique ?`)) return
+    delFile = confirm('Supprimer aussi le fichier PDF du disque ?\n\nOK = supprimer le fichier, Annuler = le conserver')
+  } else if (!confirm(`Retirer « ${d.file_name} » de l'historique ?${d.batch ? '\n(Le dossier du lot est conservé.)' : ''}`)) return
+  try {
+    await call('document_delete', { id: d._id, delete_file: delFile })
+    loadDocs()
+  } catch (e) { toast(e.message, true) }
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────
+async function moreAction(act) {
+  $('#more-pop').classList.add('hidden')
+  if (act === 'download') return download()
+  if (act === 'clear') {
+    if (!confirm('Vider toutes les valeurs du formulaire ?')) return
+    state.values = initialValues(state.tpl, null)
+    call('draft_clear', { template_id: state.id }).catch(() => {})
+    return render()
+  }
+  if (act === 'export') {
+    const { _id, created_at, updated_at, ...t } = state.tpl
+    return saveBlob(new Blob([JSON.stringify({ ledroide: 'pdf-forms', version: 1, template: t }, null, 2)], { type: 'application/json' }), `${slug(t.name)}.json`)
+  }
+  if (act === 'duplicate') {
+    if (state.dirty && !(await saveTemplate())) return
+    try { const r = await call('template_duplicate', { id: state.id }); await loadList(); await openTemplate(r.template._id); toast('Modèle dupliqué') } catch (e) { toast(e.message, true) }
+    return
+  }
+  if (act === 'delete') {
+    if (!confirm(`Supprimer définitivement le modèle « ${state.tpl.name} » ?\n(Les PDF déjà générés sont conservés.)`)) return
+    try {
+      await call('template_delete', { id: state.id })
+      state.tpl = null; state.id = null; state.dirty = false
+      $('#editor').classList.add('hidden'); $('#no-tpl').classList.remove('hidden')
+      loadList()
+      toast('Modèle supprimé')
+    } catch (e) { toast(e.message, true) }
+  }
+}
+
+$('#btn-new').onclick = () => newTemplate()
+$('#btn-new2').onclick = () => newTemplate()
+$('#btn-save').onclick = () => saveTemplate()
+$('#btn-generate').onclick = () => generate()
+$('#btn-preview').onclick = () => preview()
+$('#btn-folder').onclick = () => call('open_folder').catch(e => toast(e.message, true))
+$('#search').oninput = renderList
+$('#btn-more').onclick = e => { e.stopPropagation(); $('#more-pop').classList.toggle('hidden') }
+$('#more-pop').onclick = e => { const b = e.target.closest('button'); if (b) moreAction(b.dataset.act) }
+document.addEventListener('click', () => $('#more-pop').classList.add('hidden'))
+$$('#tabs .tab').forEach(t => (t.onclick = () => switchTab(t.dataset.tab)))
+$('#btn-import').onclick = () => $('#import-file').click()
+$('#import-file').onchange = e => {
+  const f = e.target.files[0]
+  e.target.value = ''
+  if (!f) return
+  const rd = new FileReader()
+  rd.onload = async () => {
+    try {
+      const data = JSON.parse(rd.result)
+      const t = data.template || data
+      if (!t || typeof t !== 'object' || !t.name) throw new Error('Fichier de modèle invalide')
+      delete t._id
+      await newTemplate(t)
+    } catch (err) { toast(err.message.startsWith('Unexpected') ? 'JSON invalide' : err.message, true) }
+  }
+  rd.readAsText(f)
+}
+document.addEventListener('keydown', e => {
+  if (!state.tpl) return
+  if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveTemplate() }
+  else if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); generate() }
+  else if (e.ctrlKey && e.key.toLowerCase() === 'p') { e.preventDefault(); preview() }
+})
+window.addEventListener('beforeunload', e => { if (state.dirty) { e.preventDefault(); e.returnValue = '' } })
+
+loadList()
+</script>
+</body>
+</html>

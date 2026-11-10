@@ -1,0 +1,53 @@
+{
+  "id": "sqlite-browser",
+  "name": "SQLite Browser",
+  "version": "1.0.0",
+  "description": "Explorez des bases SQLite : tables, vues, index et schéma, données paginées avec tri et filtre, éditeur SQL avec historique, export CSV/JSON. Lecture seule par défaut.",
+  "category": "Maths & données",
+  "tags": [
+    "sqlite",
+    "sql",
+    "base de données",
+    "données"
+  ],
+  "icon": "🗄️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "filesystem"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "max_rows": {
+      "type": "integer",
+      "title": "Lignes affichées au maximum (onglet SQL)",
+      "default": 1000,
+      "minimum": 50,
+      "maximum": 10000
+    },
+    "export_max_rows": {
+      "type": "integer",
+      "title": "Lignes exportées au maximum",
+      "default": 200000,
+      "minimum": 1000,
+      "maximum": 2000000
+    },
+    "history_size": {
+      "type": "integer",
+      "title": "Taille de l'historique des requêtes",
+      "default": 100,
+      "minimum": 10,
+      "maximum": 1000
+    }
+  }
+}

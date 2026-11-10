@@ -1,0 +1,47 @@
+{
+  "id": "port-scanner",
+  "name": "Scanner réseau",
+  "version": "1.0.0",
+  "description": "Scan de ports TCP d'un hôte (plages, presets, bannières) et découverte des appareils d'un réseau local (ping, ARP, DNS inverse, constructeur). À utiliser uniquement sur vos propres réseaux.",
+  "category": "Réseau",
+  "tags": [
+    "ports",
+    "scan",
+    "découverte",
+    "arp",
+    "lan"
+  ],
+  "icon": "📡",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "network",
+    "process"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "default_concurrency": {
+      "type": "integer",
+      "title": "Connexions simultanées par défaut (scan de ports)",
+      "default": 200,
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "ping_workers": {
+      "type": "integer",
+      "title": "Pings simultanés (découverte)",
+      "default": 64,
+      "minimum": 4,
+      "maximum": 256
+    }
+  }
+}

@@ -5,6 +5,7 @@ const NAV = [
   { id: 'modules', icon: '⊞', label: 'Modules' },
   { id: 'catalog', icon: '🗂', label: 'Catalogue' },
   { id: 'env',     icon: '🔑', label: 'Variables' },
+  { id: 'packages', icon: '📦', label: 'Bibliothèques' },
 ]
 
 

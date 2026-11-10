@@ -1,0 +1,46 @@
+{
+  "id": "rest-client",
+  "name": "REST Client",
+  "version": "1.0.0",
+  "description": "Testez des API REST : méthodes, paramètres, en-têtes, corps JSON/texte/formulaire, authentification, environnements de variables, historique et requêtes enregistrées.",
+  "category": "Développement",
+  "tags": [
+    "api",
+    "http",
+    "rest",
+    "test"
+  ],
+  "icon": "🛰️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "history_size": {
+      "type": "integer",
+      "title": "Taille de l'historique",
+      "default": 100,
+      "minimum": 10,
+      "maximum": 1000
+    },
+    "max_body_mb": {
+      "type": "integer",
+      "title": "Taille max. de réponse lue (Mo)",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 100
+    }
+  }
+}

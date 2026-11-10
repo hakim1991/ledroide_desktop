@@ -22,7 +22,7 @@
   "dependencies": {
     "python": [
       "pypdf",
-      "Pillow>=11,<12"
+      "Pillow>=11,<13"
     ],
     "modules": []
   },

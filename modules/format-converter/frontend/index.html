@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Convertisseur de formats</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    --lh: 19px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .topbar .title { font-weight: 600; font-size: 14px; margin-right: 6px; }
+  .topbar .sp { flex: 1; }
+  .fmt { font-weight: 600; min-width: 100px; }
+  #swap { font-size: 15px; padding: 3px 10px; }
+  .opts { display: flex; align-items: center; gap: 14px; padding: 7px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+  .opts label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .opts select, .opts input[type=text] { padding: 2px 6px; font-size: 12px; }
+  .opts input[type=text] { width: 90px; }
+
+  .editors { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 12px; }
+  .pane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .pane-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .pane-head .lbl { font-weight: 600; }
+  .pane-head .grow { flex: 1; }
+  .pill { padding: 1px 8px; border-radius: 10px; font-size: 11.5px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); }
+  .pill.ok { color: #86efac; border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.1); }
+  .pill.err { color: #fca5a5; border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.1); }
+  .pill.acc { color: var(--accent-h); border-color: rgba(99,102,241,.4); background: rgba(99,102,241,.1); }
+
+  .code { flex: 1; min-height: 0; display: flex; position: relative; overflow: hidden; }
+  .gutter { width: 46px; flex-shrink: 0; overflow: hidden; background: var(--surface); border-right: 1px solid var(--border);
+            font-family: var(--mono); font-size: 12px; line-height: var(--lh); color: #52525b; text-align: right; padding: 8px 6px 8px 0; user-select: none; }
+  .gutter div { height: var(--lh); }
+  .gutter div.bad { color: #fff; background: var(--err); border-radius: 0 3px 3px 0; }
+  .code textarea { flex: 1; min-width: 0; border: none; outline: none; resize: none; background: transparent; color: var(--text);
+                   font-family: var(--mono); font-size: 12.5px; line-height: var(--lh); padding: 8px 10px; white-space: pre; overflow: auto; tab-size: 2; }
+  .code textarea.stale { opacity: .4; }
+  .errbar { display: flex; gap: 8px; align-items: baseline; padding: 7px 10px; border-top: 1px solid rgba(239,68,68,.35);
+            background: rgba(239,68,68,.08); color: #fca5a5; font-size: 12.5px; cursor: pointer; }
+  .errbar b { white-space: nowrap; }
+  .warnbar { padding: 6px 10px; border-top: 1px solid rgba(245,158,11,.3); background: rgba(245,158,11,.07); color: #fcd34d; font-size: 12px; max-height: 80px; overflow: auto; }
+  .status { padding: 4px 10px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11.5px; display: flex; gap: 12px; }
+  .drop { position: absolute; inset: 0; background: rgba(99,102,241,.12); border: 2px dashed var(--accent); display: flex;
+          align-items: center; justify-content: center; font-weight: 600; color: var(--accent-h); pointer-events: none; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="title">🔄 Convertisseur</div>
+  <select id="from" class="fmt" title="Format source"></select>
+  <button id="swap" class="ghost" title="Échanger source et cible (Alt+X)">⇄</button>
+  <select id="to" class="fmt" title="Format cible"></select>
+  <span class="sp"></span>
+  <button id="btn-import" title="Importer un fichier (Ctrl+O)">Importer…</button>
+  <button id="btn-export" title="Enregistrer le résultat (Ctrl+S)">Exporter</button>
+  <button id="btn-copy" class="primary" title="Copier le résultat (Ctrl+Maj+C)">Copier</button>
+  <input type="file" id="file" class="hidden" accept=".json,.yaml,.yml,.toml,.xml,.csv,.tsv,.env,.ini,.cfg,.conf,.properties,.txt" />
+</div>
+
+<div class="opts">
+  <label>Indentation
+    <select id="opt-indent"><option value="0">compacte</option><option value="2" selected>2</option><option value="4">4</option></select></label>
+  <label><input type="checkbox" id="opt-sort" /> Trier les clés</label>
+  <label title="CSV / XML / INI / .env : convertir true, false et les nombres"><input type="checkbox" id="opt-types" checked /> Typer les valeurs</label>
+  <label title="CSV : colonnes a.b ⇄ objets imbriqués · .env : CLE__SOUS ⇄ imbriqué · INI : [a.b] ⇄ sections imbriquées"><input type="checkbox" id="opt-nested" checked /> Imbrication (a.b, A__B)</label>
+  <label>Séparateur CSV
+    <select id="opt-delim"><option value="auto">auto</option><option value=",">,</option><option value=";">;</option><option value="tab">tab</option><option value="|">|</option></select></label>
+  <label>Racine XML <input type="text" id="opt-root" value="root" spellcheck="false" /></label>
+  <span style="flex:1"></span>
+  <label><input type="checkbox" id="opt-live" checked /> En direct</label>
+</div>
+
+<div class="editors">
+  <section class="pane" id="pane-src">
+    <div class="pane-head"><span class="lbl">Source</span><span id="src-badge" class="pill hidden"></span><span class="grow"></span>
+      <button class="ghost" id="btn-format" title="Reformater la source dans son propre format">Reformater</button>
+      <button class="ghost" id="btn-sample" title="Charger un exemple">Exemple</button>
+      <button class="ghost" id="btn-clear" title="Effacer">Effacer</button></div>
+    <div class="code"><div class="gutter" id="g-src"></div>
+      <textarea id="src" spellcheck="false" wrap="off" placeholder="Collez du JSON, YAML, TOML, XML, CSV, .env ou INI — ou déposez un fichier."></textarea>
+      <div class="drop hidden" id="drop">Déposer le fichier ici</div></div>
+    <div class="errbar hidden" id="src-err" title="Aller à la ligne"></div>
+    <div class="status" id="src-status"></div>
+  </section>
+  <section class="pane">
+    <div class="pane-head"><span class="lbl">Résultat</span><span id="dst-badge" class="pill hidden"></span><span class="grow"></span></div>
+    <div class="code"><div class="gutter" id="g-dst"></div>
+      <textarea id="dst" spellcheck="false" wrap="off" readonly placeholder="Le résultat de la conversion apparaît ici."></textarea></div>
+    <div class="errbar hidden" id="dst-err"></div>
+    <div class="warnbar hidden" id="dst-warn"></div>
+    <div class="status" id="dst-status"></div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'format-converter'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const FORMATS = { json: 'JSON', yaml: 'YAML', toml: 'TOML', xml: 'XML', csv: 'CSV', env: '.env', ini: 'INI' }
+const EXT = { json: 'json', yaml: 'yaml', toml: 'toml', xml: 'xml', csv: 'csv', env: 'env', ini: 'ini' }
+const MIME = { json: 'application/json', yaml: 'application/yaml', toml: 'application/toml', xml: 'application/xml', csv: 'text/csv', env: 'text/plain', ini: 'text/plain' }
+const FROM_EXT = { json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml', xml: 'xml', csv: 'csv', tsv: 'csv', env: 'env', ini: 'ini', cfg: 'ini', conf: 'ini', properties: 'ini' }
+const MAX_FILE = 20 * 1024 * 1024
+const LS_KEY = 'format-converter:prefs'
+const SAMPLE = `# Exemple de configuration
+app:
+  name: Ledroide
+  version: 2
+  debug: false
+  tags: [desktop, outils]
+database:
+  host: localhost
+  port: 5432
+servers:
+  - host: alpha
+    port: 8080
+  - host: beta
+    port: 8081
+`
+
+const prefs = (() => {
+  const def = { from: 'auto', to: 'json', indent: '2', sort: false, types: true, nested: true, delim: 'auto', root: 'root', live: true, src: '' }
+  try { return { ...def, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') } } catch { return def }
+})()
+function savePrefs() {
+  Object.assign(prefs, {
+    from: $('#from').value, to: $('#to').value, indent: $('#opt-indent').value, sort: $('#opt-sort').checked,
+    types: $('#opt-types').checked, nested: $('#opt-nested').checked, delim: $('#opt-delim').value,
+    root: $('#opt-root').value, live: $('#opt-live').checked, src: $('#src').value.length < 200000 ? $('#src').value : '',
+  })
+  try { localStorage.setItem(LS_KEY, JSON.stringify(prefs)) } catch { /* storage unavailable */ }
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.className = ''), bad ? 4500 : 2200)
+}
+
+// ── Editors ─────────────────────────────────────────────────────────────────
+function lineCount(text) { let n = 1; for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) n++; return n }
+function renderGutter(ta, gutter, badLine = null) {
+  const n = lineCount(ta.value)
+  const max = Math.min(n, 100000)
+  let html = ''
+  for (let i = 1; i <= max; i++) html += i === badLine ? `<div class="bad">${i}</div>` : `<div>${i}</div>`
+  gutter.innerHTML = html
+  gutter.scrollTop = ta.scrollTop
+}
+function bindGutter(ta, gutter) { ta.addEventListener('scroll', () => { gutter.scrollTop = ta.scrollTop }) }
+bindGutter($('#src'), $('#g-src'))
+bindGutter($('#dst'), $('#g-dst'))
+
+function goToLine(ta, line, col) {
+  const lines = ta.value.split('\n')
+  let pos = 0
+  for (let i = 0; i < Math.min(line - 1, lines.length); i++) pos += lines[i].length + 1
+  pos += Math.max(0, Math.min((col || 1) - 1, (lines[line - 1] || '').length))
+  ta.focus()
+  ta.setSelectionRange(pos, pos)
+  const lh = parseFloat(getComputedStyle(ta).lineHeight) || 19
+  ta.scrollTop = Math.max(0, (line - 4) * lh)
+}
+
+function statusText(text) {
+  const bytes = new TextEncoder().encode(text).length
+  const size = bytes < 1024 ? `${bytes} o` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} Ko` : `${(bytes / 1048576).toFixed(2)} Mo`
+  return `<span>${lineCount(text).toLocaleString('fr-FR')} lignes</span><span>${size}</span>`
+}
+
+$('#src').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) {
+    e.preventDefault()
+    const ta = e.target, s = ta.selectionStart
+    ta.setRangeText('  ', s, ta.selectionEnd, 'end')
+    ta.dispatchEvent(new Event('input'))
+  }
+})
+
+// ── Conversion ──────────────────────────────────────────────────────────────
+function options() {
+  return {
+    indent: +$('#opt-indent').value, sort_keys: $('#opt-sort').checked, infer_types: $('#opt-types').checked,
+    nested: $('#opt-nested').checked, csv_delimiter: $('#opt-delim').value, xml_root: $('#opt-root').value.trim() || 'root',
+  }
+}
+
+let seq = 0, lastDetected = null, lastOk = false
+async function convert(force = false) {
+  const text = $('#src').value
+  savePrefs()
+  renderGutter($('#src'), $('#g-src'))
+  $('#src-status').innerHTML = statusText(text)
+  if (!$('#opt-live').checked && !force) return
+  const my = ++seq
+  const to = $('#to').value
+  try {
+    const r = await call('convert', { text, from: $('#from').value, to, options: options() }, { timeout: 60000 })
+    if (my !== seq) return
+    render(r, to)
+  } catch (e) {
+    if (my !== seq) return
+    lastOk = false
+    showDstError(e.message)
+  }
+}
+
+function render(r, to) {
+  const srcErr = $('#src-err'), dstErr = $('#dst-err'), warn = $('#dst-warn')
+  srcErr.classList.add('hidden'); dstErr.classList.add('hidden'); warn.classList.add('hidden')
+  $('#dst').classList.toggle('stale', !r.ok && !r.empty)
+  lastDetected = r.detected || null
+  const badge = $('#src-badge')
+  if (r.detected) {
+    badge.textContent = ($('#from').value === 'auto' ? 'détecté : ' : '') + FORMATS[r.detected]
+    badge.className = 'pill ' + (r.ok ? 'ok' : 'err')
+  } else badge.className = 'pill hidden'
+  if (r.empty) {
+    lastOk = false
+    $('#dst').value = ''
+    renderGutter($('#dst'), $('#g-dst'))
+    $('#dst-status').innerHTML = ''
+    $('#dst-badge').className = 'pill hidden'
+    return
+  }
+  if (!r.ok) {
+    lastOk = false
+    if (r.stage === 'parse' || r.stage === 'detect') {
+      const where = r.line ? `Ligne ${r.line}${r.column ? `, colonne ${r.column}` : ''}` : 'Erreur'
+      srcErr.innerHTML = `<b>${esc(where)}</b><span>${esc(r.message)}</span>`
+      srcErr.classList.remove('hidden')
+      srcErr.onclick = () => { if (r.line) goToLine($('#src'), r.line, r.column) }
+      renderGutter($('#src'), $('#g-src'), r.line)
+      $('#dst-badge').className = 'pill err'; $('#dst-badge').textContent = 'source invalide'
+    } else showDstError(r.message)
+    return
+  }
+  lastOk = true
+  $('#dst').value = r.output
+  renderGutter($('#dst'), $('#g-dst'))
+  $('#dst-status').innerHTML = statusText(r.output)
+  $('#dst-badge').className = 'pill acc'; $('#dst-badge').textContent = FORMATS[to]
+  if (r.warnings && r.warnings.length) {
+    warn.innerHTML = r.warnings.map((w) => `⚠ ${esc(w)}`).join('<br>')
+    warn.classList.remove('hidden')
+  }
+}
+function showDstError(msg) {
+  $('#dst').classList.add('stale')
+  const dstErr = $('#dst-err')
+  dstErr.innerHTML = `<b>Conversion impossible</b><span>${esc(msg)}</span>`
+  dstErr.classList.remove('hidden')
+  $('#dst-badge').className = 'pill err'; $('#dst-badge').textContent = 'erreur'
+}
+
+let timer
+function scheduleConvert() { clearTimeout(timer); timer = setTimeout(convert, 250) }
+
+// ── Actions ─────────────────────────────────────────────────────────────────
+function swap() {
+  if (!lastOk) { toast('Rien à échanger : le résultat est vide ou invalide', true); return }
+  const prevFrom = $('#from').value === 'auto' ? lastDetected : $('#from').value
+  $('#src').value = $('#dst').value
+  $('#from').value = $('#to').value
+  if (prevFrom && prevFrom !== $('#to').value) $('#to').value = prevFrom
+  convert(true)
+}
+async function reformat() {
+  const fmt = $('#from').value === 'auto' ? lastDetected : $('#from').value
+  if (!fmt) { toast('Format source inconnu', true); return }
+  try {
+    const r = await call('convert', { text: $('#src').value, from: fmt, to: fmt, options: options() }, { timeout: 60000 })
+    if (!r.ok) { render(r, $('#to').value); toast('La source contient une erreur', true); return }
+    $('#src').value = r.output
+    convert(true)
+    toast(`Source reformatée (${FORMATS[fmt]})`)
+  } catch (e) { toast(e.message, true) }
+}
+async function copyOut() {
+  const v = $('#dst').value
+  if (!v || !lastOk) { toast('Rien à copier', true); return }
+  try { await navigator.clipboard.writeText(v); toast('Résultat copié') } catch { toast('Copie impossible', true) }
+}
+function exportOut() {
+  const v = $('#dst').value
+  if (!v || !lastOk) { toast('Rien à exporter', true); return }
+  const fmt = $('#to').value
+  const blob = new Blob([v], { type: `${MIME[fmt]};charset=utf-8` })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = fmt === 'env' ? '.env' : `${importedName || 'converti'}.${EXT[fmt]}`
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  toast(`Exporté : ${a.download}`)
+}
+let importedName = ''
+function loadFile(file) {
+  if (!file) return
+  if (file.size > MAX_FILE) { toast('Fichier trop volumineux (20 Mo max)', true); return }
+  if ($('#src').value.trim() && !confirm(`Remplacer la source par « ${file.name} » ?`)) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    const name = file.name.toLowerCase()
+    const ext = name.startsWith('.env') ? 'env' : name.split('.').pop()
+    importedName = file.name.replace(/\.[^.]+$/, '').replace(/^\./, '') || 'converti'
+    $('#from').value = FROM_EXT[ext] || 'auto'
+    if (ext === 'tsv') $('#opt-delim').value = 'tab'
+    $('#src').value = String(reader.result).replace(/^﻿/, '')
+    convert(true)
+    toast(`Importé : ${file.name}`)
+  }
+  reader.onerror = () => toast('Lecture du fichier impossible', true)
+  reader.readAsText(file, 'utf-8')
+}
+
+function fillFormats() {
+  $('#from').innerHTML = '<option value="auto">Auto</option>' + Object.entries(FORMATS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')
+  $('#to').innerHTML = Object.entries(FORMATS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')
+}
+
+$('#src').addEventListener('input', scheduleConvert)
+for (const id of ['#from', '#to', '#opt-indent', '#opt-sort', '#opt-types', '#opt-nested', '#opt-delim']) $(id).addEventListener('change', () => convert(true))
+$('#opt-root').addEventListener('input', scheduleConvert)
+$('#opt-live').addEventListener('change', () => { savePrefs(); if ($('#opt-live').checked) convert(true) })
+$('#swap').onclick = swap
+$('#btn-copy').onclick = copyOut
+$('#btn-export').onclick = exportOut
+$('#btn-import').onclick = () => $('#file').click()
+$('#file').onchange = (e) => { loadFile(e.target.files[0]); e.target.value = '' }
+$('#btn-format').onclick = reformat
+$('#btn-sample').onclick = () => {
+  if ($('#src').value.trim() && !confirm('Remplacer la source par l\'exemple ?')) return
+  $('#src').value = SAMPLE; $('#from').value = 'auto'; convert(true)
+}
+$('#btn-clear').onclick = () => { $('#src').value = ''; importedName = ''; convert(true); $('#src').focus() }
+
+const pane = $('#pane-src')
+pane.addEventListener('dragover', (e) => { e.preventDefault(); $('#drop').classList.remove('hidden') })
+pane.addEventListener('dragleave', (e) => { if (!pane.contains(e.relatedTarget)) $('#drop').classList.add('hidden') })
+pane.addEventListener('drop', (e) => { e.preventDefault(); $('#drop').classList.add('hidden'); loadFile(e.dataTransfer.files[0]) })
+
+document.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase()
+  if (e.ctrlKey && k === 'o') { e.preventDefault(); $('#file').click() }
+  else if (e.ctrlKey && k === 's') { e.preventDefault(); exportOut() }
+  else if (e.ctrlKey && e.shiftKey && k === 'c') { e.preventDefault(); copyOut() }
+  else if (e.ctrlKey && k === 'enter') { e.preventDefault(); convert(true) }
+  else if (e.altKey && k === 'x') { e.preventDefault(); swap() }
+})
+
+fillFormats()
+$('#from').value = FORMATS[prefs.from] || prefs.from === 'auto' ? prefs.from : 'auto'
+$('#to').value = FORMATS[prefs.to] ? prefs.to : 'json'
+$('#opt-indent').value = prefs.indent
+$('#opt-sort').checked = prefs.sort
+$('#opt-types').checked = prefs.types
+$('#opt-nested').checked = prefs.nested
+$('#opt-delim').value = prefs.delim
+$('#opt-root').value = prefs.root
+$('#opt-live').checked = prefs.live
+$('#src').value = prefs.src || SAMPLE
+convert(true)
+$('#src').focus()
+</script>
+</body>
+</html>
