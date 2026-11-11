@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import Sidebar from './components/Sidebar'
+import Sidebar, { NAV } from './components/Sidebar'
 import ModulesGrid from './components/ModulesGrid'
 import ModuleFrame from './components/ModuleFrame'
 import CatalogPanel from './components/ModuleManager'
@@ -10,12 +10,17 @@ import { EMPTY_FILTERS } from './components/ModuleFilters'
 
 const api = (path, opts) => window.ledroide.api(path, opts)
 
+// Onglets : id de module, ou « sys:<page> » pour les pages système (Catalogue, Variables, Bibliothèques).
+const SYS = 'sys:'
+const PAGES = Object.fromEntries(NAV.filter((n) => n.id !== 'modules').map((n) => [n.id, n]))
+const isPage = (key) => key.startsWith(SYS)
+const pageOf = (key) => key.slice(SYS.length)
+
 export default function App() {
   const [modules, setModules]       = useState([])
-  const [openIds, setOpenIds]       = useState([])
-  const [currentId, setCurrentId]   = useState(null)
+  const [tabs, setTabs]             = useState([])
+  const [current, setCurrent]       = useState(null)      // clé d'onglet, null = accueil
   const [reloadKeys, setReloadKeys] = useState({})
-  const [view, setView]             = useState('modules') // 'modules' | 'module' | 'catalog' | 'env' | 'packages'
   const [homeFilters, setHomeFilters] = useState(EMPTY_FILTERS)
   const [toast, setToast]           = useState(null)
   const [op, setOp]                 = useState(null)      // 'reloading' | 'restarting'
@@ -49,24 +54,26 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 3500)
   }, [])
 
-  function openModule(mod) {
-    setOpenIds((ids) => (ids.includes(mod.id) ? ids : [...ids, mod.id]))
-    setCurrentId(mod.id)
-    setView('module')
+  function openTab(key) {
+    setTabs((t) => (t.includes(key) ? t : [...t, key]))
+    setCurrent(key)
   }
 
-  function closeModule(modId) {
-    const next = openIds.filter((id) => id !== modId)
-    setOpenIds(next)
-    if (currentId === modId) {
-      const fallback = next[next.length - 1] ?? null
-      setCurrentId(fallback)
-      if (!fallback && view === 'module') setView('modules')
-    }
+  const openModule = (mod) => openTab(mod.id)
+
+  function navigate(id) {
+    if (id === 'modules') setCurrent(null)
+    else openTab(SYS + id)
   }
 
-  function reloadModule(modId) {
-    setReloadKeys((k) => ({ ...k, [modId]: (k[modId] ?? 0) + 1 }))
+  function closeTab(key) {
+    const next = tabs.filter((k) => k !== key)
+    setTabs(next)
+    if (current === key) setCurrent(next[next.length - 1] ?? null)
+  }
+
+  function reloadTab(key) {
+    setReloadKeys((k) => ({ ...k, [key]: (k[key] ?? 0) + 1 }))
   }
 
   async function hotReload() {
@@ -91,7 +98,7 @@ export default function App() {
       if (!ok) throw new Error('le backend ne répond pas')
       setBackend({ status: 'ready' })
       await fetchModules()
-      openIds.forEach(reloadModule)
+      tabs.filter((k) => !isPage(k)).forEach(reloadTab)
       showToast('Backend redémarré')
     } catch (err) {
       setBackend({ status: 'error', message: `Échec du redémarrage : ${err.message}` })
@@ -100,18 +107,17 @@ export default function App() {
     }
   }
 
-  function handleModuleDeactivated(modId) {
-    closeModule(modId)
-  }
 
   const activeModules = modules.filter((m) => m.status === 'active')
-  const openModules   = openIds.map((id) => modules.find((m) => m.id === id)).filter((m) => m?.status === 'active')
-  const showFrames    = view === 'module' && openModules.length > 0
+  const openModules   = tabs.filter((k) => !isPage(k)).map((id) => modules.find((m) => m.id === id)).filter((m) => m?.status === 'active')
+  const visibleTabs   = tabs.filter((k) => isPage(k) || openModules.some((m) => m.id === k))
+  const shown         = visibleTabs.includes(current) ? current : null
+  const sidebarView   = shown && isPage(shown) ? pageOf(shown) : 'modules'
   const missingEnv    = new Set(activeModules.flatMap((m) => m.env_missing ?? [])).size
 
   return (
     <div className="app">
-      <Sidebar view={view} onNavigate={setView} badges={{ env: missingEnv }} />
+      <Sidebar view={sidebarView} onNavigate={navigate} badges={{ env: missingEnv }} />
 
       <main className="app-main">
         {toast && (
@@ -124,45 +130,52 @@ export default function App() {
           <BackendBanner backend={backend} onRestart={restartBackend} busy={!!op} />
         )}
 
-        {view === 'module' && openModules.length > 0 && (
+        {visibleTabs.length > 0 && (
           <nav className="app-tabs">
-            {openModules.map((mod) => (
-              <div
-                key={mod.id}
-                className={`app-tab ${mod.id === currentId ? 'active' : ''}`}
-                onClick={() => setCurrentId(mod.id)}
-                onAuxClick={(e) => e.button === 1 && closeModule(mod.id)}
-                title={mod.name}
-              >
-                <ModuleIcon id={mod.id} fallback={mod.icon} size={16} />
-                <span className="app-tab-name">{mod.name}</span>
-                <button
-                  className="app-tab-btn"
-                  title="Recharger"
-                  onClick={(e) => { e.stopPropagation(); reloadModule(mod.id) }}
-                >↻</button>
-                <button
-                  className="app-tab-btn"
-                  title="Fermer"
-                  onClick={(e) => { e.stopPropagation(); closeModule(mod.id) }}
-                >✕</button>
-              </div>
-            ))}
+            {visibleTabs.map((key) => {
+              const page = isPage(key) ? PAGES[pageOf(key)] : null
+              const mod  = page ? null : openModules.find((m) => m.id === key)
+              const name = page ? page.label : mod.name
+              return (
+                <div
+                  key={key}
+                  className={`app-tab ${key === shown ? 'active' : ''} ${page ? 'sys' : ''}`}
+                  onClick={() => setCurrent(key)}
+                  onAuxClick={(e) => e.button === 1 && closeTab(key)}
+                  title={name}
+                >
+                  {page
+                    ? <span className="app-tab-icon">{page.icon}</span>
+                    : <ModuleIcon id={mod.id} fallback={mod.icon} size={16} />}
+                  <span className="app-tab-name">{name}</span>
+                  <button
+                    className="app-tab-btn"
+                    title="Recharger"
+                    onClick={(e) => { e.stopPropagation(); reloadTab(key) }}
+                  >↻</button>
+                  <button
+                    className="app-tab-btn"
+                    title="Fermer"
+                    onClick={(e) => { e.stopPropagation(); closeTab(key) }}
+                  >✕</button>
+                </div>
+              )
+            })}
           </nav>
         )}
 
-        <div className="app-frames" style={showFrames ? undefined : { display: 'none' }}>
+        <div className="app-frames" style={shown && !isPage(shown) ? undefined : { display: 'none' }}>
           {openModules.map((mod) => (
             <ModuleFrame
               key={mod.id}
               module={mod}
-              hidden={mod.id !== currentId}
+              hidden={mod.id !== shown}
               reloadKey={reloadKeys[mod.id] ?? 0}
             />
           ))}
         </div>
 
-        {(view === 'modules' || (view === 'module' && openModules.length === 0)) && (
+        {!shown && (
           <ModulesGrid
             modules={activeModules}
             onOpen={openModule}
@@ -171,32 +184,33 @@ export default function App() {
           />
         )}
 
-        {view === 'catalog' && (
-          <CatalogPanel
-            modules={modules}
-            onRefresh={fetchModules}
-            onClose={() => setView(openModules.length ? 'module' : 'modules')}
-            onModuleDeactivated={handleModuleDeactivated}
-            showToast={showToast}
-            onHotReload={hotReload}
-            onRestartBackend={restartBackend}
-            onOpenEnv={() => setView('env')}
-            op={op}
-          />
-        )}
-
-        {view === 'env' && (
-          <EnvPanel modules={modules} onSaved={fetchModules} showToast={showToast} />
-        )}
-
-        {view === 'packages' && (
-          <PackagesPanel
-            modules={modules}
-            showToast={showToast}
-            onRestartBackend={restartBackend}
-            onChanged={fetchModules}
-          />
-        )}
+        {visibleTabs.filter(isPage).map((key) => (
+          <div key={`${key}:${reloadKeys[key] ?? 0}`} className="app-page" style={key === shown ? undefined : { display: 'none' }}>
+            {pageOf(key) === 'catalog' && (
+              <CatalogPanel
+                modules={modules}
+                onRefresh={fetchModules}
+                onModuleDeactivated={closeTab}
+                showToast={showToast}
+                onHotReload={hotReload}
+                onRestartBackend={restartBackend}
+                onOpenEnv={() => navigate('env')}
+                op={op}
+              />
+            )}
+            {pageOf(key) === 'env' && (
+              <EnvPanel modules={modules} onSaved={fetchModules} showToast={showToast} />
+            )}
+            {pageOf(key) === 'packages' && (
+              <PackagesPanel
+                modules={modules}
+                showToast={showToast}
+                onRestartBackend={restartBackend}
+                onChanged={fetchModules}
+              />
+            )}
+          </div>
+        ))}
       </main>
     </div>
   )

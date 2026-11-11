@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Terminal SSH</title>
+<script src="/ledroide-bridge.js"></script>
+<link rel="stylesheet" href="vendor/xterm.css" />
+<script src="vendor/xterm.js"></script>
+<script src="vendor/addon-fit.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --border2: #3f3f46;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+    --term-bg: #0c0c0f;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: var(--border2); background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); background: rgba(239,68,68,.08); }
+  button.icon { padding: 3px 7px; }
+  button.on { background: rgba(99,102,241,.16); border-color: rgba(99,102,241,.5); color: var(--text); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; min-width: 0; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .sp { flex: 1; }
+  kbd { font-family: var(--mono); font-size: 11px; background: var(--surface2); border: 1px solid var(--border);
+        border-radius: 4px; padding: 0 4px; }
+
+  /* ── Sidebar ── */
+  #side { width: 250px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  .side-head { padding: 12px 10px 8px 12px; display: flex; align-items: center; gap: 4px; }
+  .side-head b { flex: 1; font-size: 13px; }
+  .side-search { padding: 0 10px 8px; }
+  .side-search input { width: 100%; }
+  #hosts { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .grp { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 10px 8px 4px;
+         display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .grp .n { margin-left: auto; font-size: 10px; }
+  .grp.closed .chev { transform: rotate(-90deg); }
+  .chev { transition: transform .12s; display: inline-block; font-size: 9px; }
+  .host { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 6px; cursor: pointer; position: relative; }
+  .host:hover { background: var(--surface2); }
+  .host.live .dot { box-shadow: 0 0 0 2px rgba(34,197,94,.35); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .host .txt { flex: 1; min-width: 0; }
+  .host .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .host .sub { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+  .host .acts { display: none; gap: 2px; }
+  .host:hover .acts { display: flex; }
+  .host .acts button { padding: 1px 5px; font-size: 12px; }
+  .side-empty { color: var(--muted); text-align: center; padding: 24px 12px; font-size: 12px; line-height: 1.6; }
+  .side-foot { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .quick { display: flex; gap: 4px; }
+  .quick input { flex: 1; font-family: var(--mono); font-size: 12px; }
+
+  /* ── Main / tabs ── */
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  #tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--border); background: var(--surface);
+          overflow-x: auto; flex-shrink: 0; min-height: 36px; align-items: flex-end; }
+  .tab { display: flex; align-items: center; gap: 6px; padding: 5px 6px 6px 10px; border-radius: 6px 6px 0 0; cursor: pointer;
+         color: var(--muted); max-width: 220px; user-select: none; border: 1px solid transparent; border-bottom: none; }
+  .tab:hover { color: var(--text); background: rgba(255,255,255,.03); }
+  .tab.active { background: var(--bg); color: var(--text); border-color: var(--border); }
+  .tab .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab.dead .name { text-decoration: line-through; opacity: .7; }
+  .tab .x { border: none; background: transparent; color: var(--muted); padding: 0 3px; font-size: 12px; }
+  .tab .x:hover { color: var(--text); }
+  #panes { flex: 1; min-height: 0; position: relative; }
+  .pane { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .bar .target { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; padding: 3px 9px; background: transparent; color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  .split { flex: 1; min-height: 0; display: flex; }
+  .split.v { flex-direction: column; }
+  .term-wrap { flex: 1; min-width: 120px; min-height: 80px; background: var(--term-bg); position: relative; }
+  .term { position: absolute; inset: 6px 4px 4px 10px; }
+  .dead-overlay { position: absolute; inset: 0; background: rgba(12,12,15,.72); display: flex; align-items: center; justify-content: center;
+                  flex-direction: column; gap: 10px; z-index: 5; text-align: center; padding: 20px; }
+  .gutter { flex-shrink: 0; background: var(--border); cursor: col-resize; width: 4px; }
+  .split.v .gutter { cursor: row-resize; height: 4px; width: auto; }
+  .gutter:hover, .gutter.drag { background: var(--accent); }
+  .files { display: flex; flex-direction: column; min-width: 260px; min-height: 120px; background: var(--bg); position: relative; }
+  .split:not(.v) .files { width: 46%; }
+  .split.v .files { height: 45%; }
+  .layout-term .files, .layout-term .gutter { display: none; }
+  .layout-files .term-wrap, .layout-files .gutter { display: none; }
+  .layout-files .files { flex: 1; width: auto !important; height: auto !important; }
+
+  /* ── Explorer ── */
+  .ftool { display: flex; align-items: center; gap: 2px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .ftool .path { flex: 1; min-width: 80px; margin: 0 4px; font-family: var(--mono); font-size: 12px; }
+  .ftool button { padding: 3px 7px; }
+  .crumbs { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 10px; font-family: var(--mono); font-size: 12px;
+            white-space: nowrap; border-bottom: 1px solid var(--border); color: var(--muted); flex-shrink: 0; }
+  .crumb-path { display: flex; align-items: center; gap: 1px; overflow-x: auto; min-width: 0; }
+  .crumbs input { width: 110px; padding: 2px 6px; font-size: 12px; font-family: inherit; }
+  .crumbs > button { padding: 1px 6px; }
+  .crumb-path span { cursor: pointer; padding: 1px 4px; border-radius: 4px; }
+  .crumb-path span:hover { background: var(--surface2); color: var(--text); }
+  .crumb-path span.cur { color: var(--text); }
+  .crumb-path i { font-style: normal; opacity: .5; }
+  .flist { flex: 1; overflow: auto; min-height: 0; outline: none; position: relative; }
+  .flist.drop { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(99,102,241,.05); }
+  table.ft { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .ft th { position: sticky; top: 0; background: var(--surface); text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px;
+           padding: 5px 8px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; z-index: 1; }
+  .ft th:hover { color: var(--text); }
+  .ft th .arr { font-size: 9px; margin-left: 3px; }
+  .ft td { padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid rgba(39,39,42,.5); }
+  .ft tr.row { cursor: default; user-select: none; }
+  .ft tr.row:hover td { background: rgba(255,255,255,.025); }
+  .ft tr.row.sel td { background: rgba(99,102,241,.18); }
+  .ft tr.row.cursor td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+  .ft .c-name { width: auto; }
+  .ft .c-size { width: 82px; text-align: right; }
+  .ft .c-date { width: 128px; }
+  .ft .c-perm { width: 92px; font-family: var(--mono); font-size: 11.5px; }
+  .ft .c-own { width: 96px; }
+  .ft td.c-size { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ft td.c-date, .ft td.c-own { color: var(--muted); }
+  .ft td.c-perm { color: var(--muted); }
+  .fi { display: inline-block; width: 18px; text-align: center; margin-right: 4px; }
+  .lnk { color: var(--info); font-size: 11px; margin-left: 6px; }
+  .rename-in { width: calc(100% - 26px); padding: 1px 4px; font: inherit; }
+  .fempty { color: var(--muted); text-align: center; padding: 40px 10px; }
+  .fstatus { display: flex; gap: 10px; padding: 4px 10px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11.5px; flex-shrink: 0; }
+  .floading { position: absolute; top: 34px; left: 0; right: 0; height: 2px; overflow: hidden; z-index: 2; }
+  .floading::after { content: ''; position: absolute; left: -30%; width: 30%; height: 100%; background: var(--accent); animation: slide 1s infinite; }
+  @keyframes slide { to { left: 100%; } }
+
+  .transfers { border-top: 1px solid var(--border); max-height: 140px; overflow-y: auto; flex-shrink: 0; }
+  .tr { display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 12px; }
+  .tr .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tr .pb { width: 110px; height: 5px; border-radius: 3px; background: var(--surface2); overflow: hidden; flex-shrink: 0; }
+  .tr .pb i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .15s; }
+  .tr.ok .pb i { background: var(--ok); }
+  .tr.fail .pb i { background: var(--err); width: 100% !important; }
+  .tr .st { color: var(--muted); width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+  .tr button { padding: 0 5px; font-size: 11px; }
+
+  /* ── Empty state ── */
+  .welcome { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+             color: var(--muted); text-align: center; padding: 30px; }
+  .welcome .big { font-size: 44px; }
+  .welcome h2 { color: var(--text); font-size: 16px; font-weight: 600; }
+  .recent { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 640px; margin-top: 6px; }
+  .recent button { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+  .tips { font-size: 12px; line-height: 1.8; }
+
+  /* ── Menus, modals, toasts ── */
+  .menu { position: fixed; z-index: 50; background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 4px;
+          min-width: 200px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .menu .mi { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
+  .menu .mi:hover { background: var(--surface2); }
+  .menu .mi.dis { opacity: .4; pointer-events: none; }
+  .menu .mi.danger { color: #fca5a5; }
+  .menu .mi .k { margin-left: auto; color: var(--muted); font-size: 11px; }
+  .menu .ms { height: 1px; background: var(--border); margin: 4px 2px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 40; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; width: 520px; max-width: 100%;
+           max-height: calc(100vh - 40px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+  .modal.wide { width: 1100px; height: calc(100vh - 40px); }
+  .modal-h { padding: 14px 16px 10px; display: flex; align-items: center; gap: 8px; }
+  .modal-h h3 { font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .modal-b { padding: 4px 16px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .modal-f { padding: 10px 16px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); align-items: center; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .row3 { display: grid; grid-template-columns: 2fr 90px; gap: 10px 12px; }
+  .fl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .fl > label { color: var(--muted); font-size: 12px; }
+  .fl input, .fl select, .fl textarea { width: 100%; }
+  .fl .help { color: var(--muted); font-size: 11px; line-height: 1.5; }
+  .chk { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .radios { display: flex; gap: 6px; }
+  .radios label { flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; cursor: pointer; display: flex; gap: 6px; align-items: center; }
+  .radios input { width: auto !important; flex-shrink: 0; }
+  .radios label:has(input:checked) { border-color: var(--accent); background: rgba(99,102,241,.08); }
+  .swatches { display: flex; gap: 6px; }
+  .swatches span { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  .swatches span.on { border-color: var(--text); }
+  .alert { border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.55; }
+  .alert.warn { background: rgba(245,158,11,.09); border: 1px solid rgba(245,158,11,.35); }
+  .alert.err { background: rgba(239,68,68,.09); border: 1px solid rgba(239,68,68,.4); }
+  .alert.info { background: rgba(56,189,248,.07); border: 1px solid rgba(56,189,248,.3); }
+  .fp { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+        padding: 8px 10px; word-break: break-all; user-select: all; }
+  .editor { flex: 1; min-height: 0; padding: 0 16px 10px; display: flex; }
+  .editor textarea { flex: 1; resize: none; font-family: var(--mono); font-size: 13px; line-height: 1.5; tab-size: 4; white-space: pre;
+                     background: var(--term-bg); padding: 10px 12px; }
+  .klist { display: flex; flex-direction: column; gap: 6px; }
+  .krow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .krow .t { flex: 1; min-width: 0; }
+  .krow .t div:last-child { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  #toasts { position: fixed; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 60; align-items: flex-end; }
+  .toast { background: var(--surface); border: 1px solid var(--border2); border-left: 3px solid var(--ok); border-radius: 8px; padding: 9px 12px;
+           box-shadow: 0 8px 24px rgba(0,0,0,.4); max-width: 420px; display: flex; gap: 10px; align-items: center; }
+  .toast.err { border-left-color: var(--err); }
+  .toast button { padding: 2px 8px; font-size: 12px; }
+  .xterm .xterm-viewport { scrollbar-color: #3f3f46 transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+</style>
+</head>
+<body>
+<aside id="side">
+  <div class="side-head">
+    <b>Serveurs</b>
+    <button class="ghost icon" id="btn-known" title="Clés de serveurs connues">🔑</button>
+    <button class="ghost icon" id="btn-import" title="Importer depuis ~/.ssh/config">⇩</button>
+    <button class="primary icon" id="btn-new" title="Nouvel accès">＋</button>
+  </div>
+  <div class="side-search"><input id="search" placeholder="Rechercher…" /></div>
+  <div id="hosts"></div>
+  <div class="side-foot">
+    <div class="quick">
+      <input id="quick" placeholder="utilisateur@hôte:port" title="Connexion rapide (non enregistrée)" />
+      <button id="quick-go" title="Connexion rapide">➜</button>
+    </div>
+  </div>
+</aside>
+
+<section id="main">
+  <nav id="tabs"></nav>
+  <div id="panes">
+    <div class="welcome" id="welcome">
+      <div class="big">🖥️</div>
+      <h2>Terminal SSH</h2>
+      <div>Choisissez un serveur à gauche ou créez un nouvel accès.</div>
+      <div class="recent" id="recent"></div>
+      <div class="tips">
+        <kbd>Ctrl</kbd>+<kbd>C</kbd> copie la sélection (sinon interrompt) · <kbd>Ctrl</kbd>+<kbd>V</kbd> colle ·
+        <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>T</kbd> dupliquer la session<br />
+        Explorateur : <kbd>Entrée</kbd> ouvrir · <kbd>Retour</kbd> dossier parent · <kbd>F2</kbd> renommer ·
+        <kbd>Suppr</kbd> supprimer · <kbd>F5</kbd> actualiser · glisser-déposer des fichiers pour les envoyer
+      </div>
+      <button class="primary" id="welcome-new">＋ Nouvel accès SSH</button>
+    </div>
+  </div>
+</section>
+<div id="toasts"></div>
+
+<script>
+'use strict'
+const MID = 'ssh-terminal'
+const L = window.ledroide
+const call = (action, payload, opts) => L.call(MID, action, payload || {}, opts)
+const $ = (sel, root = document) => root.querySelector(sel)
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)]
+const COLORS = ['', '#22c55e', '#38bdf8', '#6366f1', '#a855f7', '#ec4899', '#ef4444', '#f97316', '#eab308']
+const CHUNK = 512 * 1024
+
+const state = {
+  hosts: [], vault: true, info: { font_size: 14, scrollback: 5000, show_hidden: false },
+  sessions: new Map(), order: [], current: null, search: '', closedGroups: new Set(),
+}
+try { JSON.parse(localStorage.getItem('sshterm.closedGroups') || '[]').forEach((g) => state.closedGroups.add(g)) } catch {}
+
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag)
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue
+    if (k === 'class') e.className = v
+    else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v)
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v)
+    else if (k === 'html') e.innerHTML = v
+    else e.setAttribute(k, v === true ? '' : v)
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : String(k))
+  return e
+}
+
+function toast(text, ok = true, action) {
+  const t = el('div', { class: `toast ${ok ? '' : 'err'}` }, el('span', {}, text))
+  if (action) t.append(el('button', { onclick: () => { action.fn(); t.remove() } }, action.label))
+  $('#toasts').append(t)
+  setTimeout(() => t.remove(), ok ? 4000 : 7000)
+}
+
+function fmtSize(n) {
+  if (n == null) return ''
+  if (n < 1024) return `${n} o`
+  const u = ['Ko', 'Mo', 'Go', 'To']
+  let i = -1
+  do { n /= 1024; i++ } while (n >= 1024 && i < u.length - 1)
+  return `${n.toFixed(n < 10 ? 1 : 0)} ${u[i]}`
+}
+function fmtDate(ts) {
+  if (!ts) return ''
+  const d = new Date(ts * 1000), now = new Date()
+  const p = (x) => String(x).padStart(2, '0')
+  const time = `${p(d.getHours())}:${p(d.getMinutes())}`
+  if (d.toDateString() === now.toDateString()) return `Aujourd'hui ${time}`
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${time}`
+}
+function ago(ts) {
+  if (!ts) return 'jamais utilisé'
+  const s = Date.now() / 1000 - ts
+  if (s < 60) return "à l'instant"
+  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`
+  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`
+  return `il y a ${Math.floor(s / 86400)} j`
+}
+const joinPath = (dir, name) => (dir === '/' ? '' : dir) + '/' + name
+const shq = (p) => `'${p.replace(/'/g, `'\\''`)}'`
+const fileIcon = (e) => e.type === 'dir' || e.link_dir ? '📁' : e.type === 'link' ? '🔗' :
+  /\.(png|jpe?g|gif|webp|svg|ico|bmp)$/i.test(e.name) ? '🖼️' :
+  /\.(zip|tar|gz|tgz|bz2|xz|7z|rar)$/i.test(e.name) ? '📦' :
+  /\.(sh|py|js|ts|php|rb|go|rs|c|cpp|h|java|pl|lua)$/i.test(e.name) ? '📜' :
+  /\.(conf|cfg|ini|ya?ml|json|toml|env|xml)$/i.test(e.name) || e.name.startsWith('.') ? '⚙️' :
+  /\.(log|txt|md|csv)$/i.test(e.name) ? '📄' : '📄'
+const isDir = (e) => e.type === 'dir' || (e.type === 'link' && e.link_dir)
+
+/* ── Modals & menus ─────────────────────────────────────────────────────── */
+
+function modal({ title, body, buttons = [], wide = false, onClose, beforeClose }) {
+  const bg = el('div', { class: 'modal-bg' })
+  const box = el('div', { class: `modal ${wide ? 'wide' : ''}` })
+  const close = (v) => { bg.remove(); document.removeEventListener('keydown', onKey, true); onClose?.(v) }
+  const dismiss = async () => { if (!beforeClose || await beforeClose()) close(null) }
+  const head = el('div', { class: 'modal-h' }, el('h3', {}, title), el('button', { class: 'ghost icon', onclick: dismiss }, '✕'))
+  box.append(head)
+  if (body) box.append(body)
+  if (buttons.length) {
+    const f = el('div', { class: 'modal-f' })
+    buttons.forEach((b) => b && f.append(b === 'sp' ? el('div', { class: 'sp' }) : b))
+    box.append(f)
+  }
+  function onKey(e) {
+    if (e.key === 'Escape' && bg === $$('.modal-bg').pop()) { e.stopPropagation(); e.preventDefault(); dismiss() }
+  }
+  document.addEventListener('keydown', onKey, true)
+  bg.addEventListener('mousedown', (e) => { if (e.target === bg) dismiss() })
+  bg.append(box)
+  document.body.append(bg)
+  setTimeout(() => box.querySelector('[autofocus], input:not([type=checkbox]):not([type=radio]), textarea')?.focus(), 30)
+  return { close, box }
+}
+
+function ask({ title, message, label, value = '', password = false, confirm = 'Valider', extra }) {
+  return new Promise((resolve) => {
+    const input = el('input', { type: password ? 'password' : 'text', value, autofocus: true, class: password ? '' : 'mono' })
+    const body = el('div', { class: 'modal-b' }, message && el('div', { class: 'muted' }, message),
+      el('div', { class: 'fl' }, label && el('label', {}, label), input), extra?.node)
+    let done = false
+    const ok = el('button', { class: 'primary', onclick: () => { done = true; m.close({ value: input.value, ...extra?.read?.() }) } }, confirm)
+    const m = modal({ title, body, buttons: [el('button', { onclick: () => m.close(null) }, 'Annuler'), ok],
+      onClose: (v) => resolve(done ? v : null) })
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') ok.click() })
+    if (!password) setTimeout(() => { const dot = value.lastIndexOf('.'); input.setSelectionRange(0, dot > 0 ? dot : value.length) }, 40)
+  })
+}
+
+function confirmBox({ title, message, confirm = 'Confirmer', danger = false, node }) {
+  return new Promise((resolve) => {
+    let ok = false
+    const body = el('div', { class: 'modal-b' }, message && el('div', {}, message), node)
+    const btn = el('button', { class: danger ? 'primary danger' : 'primary', autofocus: true, onclick: () => { ok = true; m.close(true) } }, confirm)
+    if (danger) Object.assign(btn.style, { background: '#b91c1c', borderColor: '#b91c1c' })
+    const m = modal({ title, body, buttons: [el('button', { onclick: () => m.close(null) }, 'Annuler'), btn], onClose: () => resolve(ok) })
+    setTimeout(() => btn.focus(), 40)
+  })
+}
+
+let openMenu = null
+function menu(x, y, items) {
+  closeMenu()
+  const m = el('div', { class: 'menu' })
+  for (const it of items) {
+    if (!it) continue
+    if (it === '-') { m.append(el('div', { class: 'ms' })); continue }
+    m.append(el('div', { class: `mi ${it.disabled ? 'dis' : ''} ${it.danger ? 'danger' : ''}`,
+      onclick: () => { closeMenu(); it.fn() } }, el('span', {}, it.icon || ''), el('span', {}, it.label), it.key && el('span', { class: 'k' }, it.key)))
+  }
+  document.body.append(m)
+  const r = m.getBoundingClientRect()
+  m.style.left = `${Math.min(x, innerWidth - r.width - 6)}px`
+  m.style.top = `${Math.min(y, innerHeight - r.height - 6)}px`
+  openMenu = m
+}
+function closeMenu() { openMenu?.remove(); openMenu = null }
+document.addEventListener('mousedown', (e) => { if (openMenu && !openMenu.contains(e.target)) closeMenu() })
+window.addEventListener('blur', closeMenu)
+
+/* ── Hosts sidebar ──────────────────────────────────────────────────────── */
+
+async function loadHosts() {
+  try {
+    const r = await call('hosts_list')
+    state.hosts = r.hosts
+    state.vault = r.vault
+  } catch (e) { toast(e.message, false) }
+  renderHosts()
+}
+
+function renderHosts() {
+  const box = $('#hosts')
+  box.textContent = ''
+  const q = state.search.trim().toLowerCase()
+  const live = new Set([...state.sessions.values()].filter((s) => !s.dead).map((s) => s.info.host_id))
+  const list = state.hosts.filter((h) => !q || `${h.name} ${h.host} ${h.username} ${h.group}`.toLowerCase().includes(q))
+  if (!state.hosts.length) {
+    box.append(el('div', { class: 'side-empty' }, 'Aucun accès enregistré.', el('br'), 'Cliquez sur ＋ pour en créer un,', el('br'),
+      'ou ⇩ pour importer ~/.ssh/config.'))
+  } else if (!list.length) {
+    box.append(el('div', { class: 'side-empty' }, 'Aucun résultat'))
+  }
+  const groups = new Map()
+  for (const h of list) {
+    const g = h.group || ''
+    if (!groups.has(g)) groups.set(g, [])
+    groups.get(g).push(h)
+  }
+  const multi = groups.size > 1 || (groups.size === 1 && !groups.has(''))
+  for (const [g, hosts] of groups) {
+    const closed = !q && state.closedGroups.has(g)
+    if (multi) {
+      box.append(el('div', { class: `grp ${closed ? 'closed' : ''}`, onclick: () => {
+        state.closedGroups.has(g) ? state.closedGroups.delete(g) : state.closedGroups.add(g)
+        try { localStorage.setItem('sshterm.closedGroups', JSON.stringify([...state.closedGroups])) } catch {}
+        renderHosts()
+      } }, el('span', { class: 'chev' }, '▼'), g || 'Sans groupe', el('span', { class: 'n' }, hosts.length)))
+    }
+    if (closed) continue
+    for (const h of hosts) {
+      const row = el('div', { class: `host ${live.has(h._id) ? 'live' : ''}`, title: `${h.username}@${h.host}:${h.port}${h.notes ? '\n\n' + h.notes : ''}`,
+        onclick: () => connectHost(h._id),
+        oncontextmenu: (e) => { e.preventDefault(); hostMenu(h, e.clientX, e.clientY) } },
+        el('span', { class: 'dot', style: { background: h.color || (live.has(h._id) ? 'var(--ok)' : '') } }),
+        el('div', { class: 'txt' }, el('div', { class: 'lbl' }, h.name),
+          el('div', { class: 'sub' }, `${h.username}@${h.host}${h.port !== 22 ? ':' + h.port : ''}`)),
+        el('div', { class: 'acts' },
+          el('button', { class: 'ghost', title: 'Modifier', onclick: (e) => { e.stopPropagation(); editHost(h) } }, '✎'),
+          el('button', { class: 'ghost', title: 'Plus', onclick: (e) => { e.stopPropagation(); const r = e.target.getBoundingClientRect(); hostMenu(h, r.left, r.bottom) } }, '⋯')))
+      box.append(row)
+    }
+  }
+  renderWelcome()
+}
+
+function hostMenu(h, x, y) {
+  menu(x, y, [
+    { icon: '▶', label: 'Se connecter', fn: () => connectHost(h._id) },
+    { icon: '✎', label: 'Modifier', fn: () => editHost(h) },
+    { icon: '⧉', label: 'Dupliquer', fn: async () => { try { await call('host_duplicate', { id: h._id }); loadHosts() } catch (e) { toast(e.message, false) } } },
+    { icon: '⎘', label: 'Copier la commande ssh', fn: () => copyText(`ssh ${h.port !== 22 ? `-p ${h.port} ` : ''}${h.username}@${h.host}`) },
+    '-',
+    { icon: '🗑', label: 'Supprimer', danger: true, fn: async () => {
+      if (!await confirmBox({ title: 'Supprimer l\'accès', message: `Supprimer « ${h.name} » et ses secrets enregistrés ?`, confirm: 'Supprimer', danger: true })) return
+      try { await call('host_delete', { id: h._id }); loadHosts() } catch (e) { toast(e.message, false) }
+    } },
+  ])
+}
+
+function renderWelcome() {
+  const w = $('#welcome')
+  w.classList.toggle('hidden', state.order.length > 0)
+  const rec = $('#recent')
+  rec.textContent = ''
+  ;[...state.hosts].filter((h) => h.last_used).sort((a, b) => b.last_used - a.last_used).slice(0, 6).forEach((h) => {
+    rec.append(el('button', { onclick: () => connectHost(h._id), title: `${h.username}@${h.host}` },
+      el('span', { class: 'dot', style: { background: h.color || 'var(--muted)' } }), h.name, el('span', { class: 'muted' }, ago(h.last_used))))
+  })
+}
+
+function copyText(text) {
+  const done = () => toast('Copié dans le presse-papiers')
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(done, () => fallback())
+  } else fallback()
+  function fallback() {
+    const ta = el('textarea', { style: { position: 'fixed', opacity: 0 } })
+    ta.value = text
+    document.body.append(ta)
+    ta.select()
+    try { document.execCommand('copy'); done() } catch { toast('Copie impossible', false) }
+    ta.remove()
+  }
+}
+
+/* ── Host editor ────────────────────────────────────────────────────────── */
+
+function editHost(h, { connectAfter = false } = {}) {
+  const isNew = !h?._id
+  h = h || { name: '', host: '', port: 22, username: '', auth: 'password', key_path: '', group: '', color: '', initial_dir: '', notes: '' }
+  const groups = [...new Set(state.hosts.map((x) => x.group).filter(Boolean))]
+  const f = {}
+  const inp = (key, attrs = {}) => (f[key] = el('input', { value: h[key] ?? '', ...attrs }))
+  let color = h.color || ''
+  const sw = el('div', { class: 'swatches' })
+  const drawSw = () => {
+    sw.textContent = ''
+    COLORS.forEach((c) => sw.append(el('span', { class: c === color ? 'on' : '', title: c || 'Aucune',
+      style: { background: c || 'var(--surface2)' }, onclick: () => { color = c; drawSw() } })))
+  }
+  drawSw()
+  const secretState = { password: undefined, key_data: undefined, passphrase: undefined }
+  const secretField = (key, label, opts = {}) => {
+    const saved = h[`has_${key}`]
+    const input = opts.multiline
+      ? el('textarea', { rows: 4, class: 'mono', style: { fontSize: '11px' }, placeholder: saved ? '•••• clé enregistrée (laisser vide pour la conserver)' : '-----BEGIN OPENSSH PRIVATE KEY-----' })
+      : el('input', { type: 'password', autocomplete: 'new-password', placeholder: saved ? '•••••••• enregistré (laisser vide pour le conserver)' : (opts.placeholder || '') })
+    input.addEventListener('input', () => { secretState[key] = input.value || undefined })
+    const clear = saved ? el('label', { class: 'chk muted', style: { fontSize: '11px' } },
+      el('input', { type: 'checkbox', onchange: (e) => { secretState[key] = e.target.checked ? null : (input.value || undefined); input.disabled = e.target.checked } }),
+      'Effacer la valeur enregistrée') : null
+    return el('div', { class: 'fl' }, el('label', {}, label), input, clear, opts.help && el('div', { class: 'help' }, opts.help))
+  }
+  const authBox = el('div', { class: 'radios' })
+  ;[['password', 'Mot de passe'], ['key', 'Clé privée'], ['agent', 'Agent / clés par défaut']].forEach(([v, lbl]) => {
+    authBox.append(el('label', {}, el('input', { type: 'radio', name: 'auth', value: v, checked: (h.auth || 'password') === v, onchange: drawAuth }), lbl))
+  })
+  const authFields = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } })
+  const pwField = secretField('password', 'Mot de passe', { help: state.vault ? 'Chiffré avec votre compte Windows (DPAPI). Laissez vide pour le demander à chaque connexion.' : 'Enregistrement indisponible sur ce système.' })
+  const keyPath = el('div', { class: 'fl' }, el('label', {}, 'Fichier de clé privée'), inp('key_path', { class: 'mono', placeholder: '~/.ssh/id_ed25519' }),
+    el('div', { class: 'help' }, 'Chemin local (OpenSSH, PEM ou PuTTY .ppk), ou collez la clé ci-dessous.'))
+  const keyData = secretField('key_data', 'Contenu de la clé (facultatif)', { multiline: true })
+  const pass = secretField('passphrase', 'Phrase de passe de la clé (facultatif)', { help: 'Laissez vide si la clé n\'en a pas, ou pour la demander à la connexion.' })
+  const agentHelp = el('div', { class: 'alert info' }, 'Utilise l\'agent SSH (OpenSSH ou Pageant) et les clés par défaut de ~/.ssh. Un mot de passe enregistré est essayé en dernier recours.')
+  function drawAuth() {
+    const auth = $('input[name=auth]:checked', authBox).value
+    authFields.textContent = ''
+    if (auth === 'password') authFields.append(pwField)
+    if (auth === 'key') authFields.append(keyPath, keyData, pass)
+    if (auth === 'agent') authFields.append(agentHelp, pwField)
+  }
+  drawAuth()
+  const gl = el('datalist', { id: 'groups-dl' }, groups.map((g) => el('option', { value: g })))
+  const body = el('div', { class: 'modal-b' },
+    el('div', { class: 'row2' },
+      el('div', { class: 'fl' }, el('label', {}, 'Nom'), inp('name', { placeholder: 'Serveur web prod', autofocus: true })),
+      el('div', { class: 'fl' }, el('label', {}, 'Groupe'), inp('group', { list: 'groups-dl', placeholder: 'Production' }), gl)),
+    el('div', { class: 'row3' },
+      el('div', { class: 'fl' }, el('label', {}, 'Hôte'), inp('host', { class: 'mono', placeholder: 'exemple.com ou 192.168.1.10' })),
+      el('div', { class: 'fl' }, el('label', {}, 'Port'), inp('port', { type: 'number', min: 1, max: 65535 }))),
+    el('div', { class: 'fl' }, el('label', {}, 'Utilisateur'), inp('username', { class: 'mono', placeholder: 'root' })),
+    el('div', { class: 'fl' }, el('label', {}, 'Authentification'), authBox),
+    authFields,
+    el('div', { class: 'row2' },
+      el('div', { class: 'fl' }, el('label', {}, 'Dossier initial de l\'explorateur'), inp('initial_dir', { class: 'mono', placeholder: 'Dossier personnel' })),
+      el('div', { class: 'fl' }, el('label', {}, 'Couleur'), sw)),
+    el('div', { class: 'fl' }, el('label', {}, 'Notes'), f.notes = el('textarea', { rows: 2 }, h.notes || '')))
+  f.host.addEventListener('input', () => {
+    const m = f.host.value.match(/^([^@\s]+)@([^:\s]+)(?::(\d+))?$/)
+    if (m) { f.username.value = m[1]; f.host.value = m[2]; if (m[3]) f.port.value = m[3] }
+  })
+  const save = async (andConnect) => {
+    const host = {
+      ...(isNew ? {} : { _id: h._id }),
+      name: f.name.value.trim() || `${f.username.value.trim()}@${f.host.value.trim()}`,
+      group: f.group.value, host: f.host.value, port: parseInt(f.port.value, 10) || 22, username: f.username.value,
+      auth: $('input[name=auth]:checked', authBox).value, key_path: f.key_path.value, initial_dir: f.initial_dir.value,
+      color, notes: f.notes.value,
+    }
+    const secrets = {}
+    for (const [k, v] of Object.entries(secretState)) if (v !== undefined) secrets[k] = v
+    try {
+      const r = await call('host_save', { host, secrets })
+      m.close()
+      await loadHosts()
+      toast(isNew ? 'Accès enregistré' : 'Accès mis à jour')
+      if (andConnect) connectHost(r.host._id)
+    } catch (e) { toast(e.message, false) }
+  }
+  const m = modal({ title: isNew ? 'Nouvel accès SSH' : `Modifier « ${h.name} »`, body,
+    buttons: [el('button', { onclick: () => m.close() }, 'Annuler'),
+      el('button', { onclick: () => save(false) }, 'Enregistrer'),
+      el('button', { class: 'primary', onclick: () => save(true) }, 'Enregistrer et connecter')] })
+  m.box.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.ctrlKey) save(connectAfter || true) })
+}
+
+/* ── Connection flow ────────────────────────────────────────────────────── */
+
+function estimateSize() {
+  const r = $('#panes').getBoundingClientRect()
+  const fs = state.info.font_size || 14
+  return { cols: Math.max(40, Math.floor((r.width * 0.54 - 20) / (fs * 0.6))), rows: Math.max(10, Math.floor((r.height - 50) / (fs * 1.2))) }
+}
+
+const connecting = new Set()
+async function connectHost(hostId, inline) {
+  const key = hostId || JSON.stringify(inline)
+  if (connecting.has(key)) return
+  connecting.add(key)
+  const extra = {}
+  const label = hostId ? state.hosts.find((h) => h._id === hostId)?.name : `${inline.username}@${inline.host}`
+  const pending = toastPending(`Connexion à ${label}…`)
+  try {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const r = await call('connect', { host_id: hostId, host: inline, ...estimateSize(), ...extra }, { timeout: 90000 })
+      if (!r.need) {
+        openSession(r)
+        loadHosts()
+        return
+      }
+      pending.hide()
+      if (r.code === 'HOSTKEY_UNKNOWN' || r.code === 'HOSTKEY_CHANGED') {
+        if (!await hostKeyPrompt(r)) return
+        extra.trust = r.fingerprint
+      } else if (r.code === 'NEED_PASSWORD') {
+        const a = await ask({ title: `Mot de passe — ${label}`, message: r.retry ? 'Le mot de passe enregistré a été refusé.' : null,
+          label: `Mot de passe de ${inline?.username || state.hosts.find((h) => h._id === hostId)?.username || ''}`,
+          password: true, confirm: 'Se connecter', extra: hostId && state.vault ? saveOpt('Enregistrer le mot de passe') : null })
+        if (!a) return
+        extra.password = a.value
+        extra.save_password = !!a.save
+      } else if (r.code === 'NEED_PASSPHRASE' || r.code === 'BAD_PASSPHRASE') {
+        const a = await ask({ title: 'Phrase de passe de la clé', message: r.code === 'BAD_PASSPHRASE' ? 'Phrase de passe incorrecte.' : r.message,
+          label: 'Phrase de passe', password: true, confirm: 'Déverrouiller', extra: hostId && state.vault ? saveOpt('Enregistrer la phrase de passe') : null })
+        if (!a) return
+        extra.passphrase = a.value
+        extra.save_passphrase = !!a.save
+      } else {
+        toast(r.message, false)
+        return
+      }
+      pending.show()
+    }
+  } catch (e) {
+    toast(`${label} : ${e.message}`, false)
+  } finally {
+    pending.remove()
+    connecting.delete(key)
+  }
+}
+
+function saveOpt(label) {
+  const cb = el('input', { type: 'checkbox' })
+  return { node: el('label', { class: 'chk' }, cb, label), read: () => ({ save: cb.checked }) }
+}
+
+function toastPending(text) {
+  const t = el('div', { class: 'toast' }, el('span', {}, '⏳ ' + text))
+  $('#toasts').append(t)
+  return { hide: () => t.classList.add('hidden'), show: () => t.classList.remove('hidden'), remove: () => t.remove() }
+}
+
+function hostKeyPrompt(r) {
+  const changed = r.code === 'HOSTKEY_CHANGED'
+  const node = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+    el('div', { class: `alert ${changed ? 'err' : 'warn'}` }, r.message,
+      changed ? el('div', { style: { marginTop: '6px' } }, 'Ne continuez que si vous savez que la clé du serveur a été changée (réinstallation, nouveau serveur…).') : null),
+    el('div', { class: 'fl' }, el('label', {}, `Empreinte ${r.key_type || ''} présentée par ${r.host}`), el('div', { class: 'fp' }, r.fingerprint)),
+    changed ? el('div', { class: 'fl' }, el('label', {}, 'Empreinte connue jusqu\'ici'), ...r.expected.map((x) => el('div', { class: 'fp' }, x))) : null,
+    el('div', { class: 'muted', style: { fontSize: '12px' } }, 'Comparez avec l\'empreinte du serveur (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub). Elle sera mémorisée.'))
+  return confirmBox({ title: changed ? '⚠ Clé du serveur modifiée' : 'Nouveau serveur', node,
+    confirm: changed ? 'Remplacer la clé et se connecter' : 'Faire confiance et se connecter', danger: changed })
+}
+
+/* ── Sessions ───────────────────────────────────────────────────────────── */
+
+const XTERM_THEME = {
+  background: '#0c0c0f', foreground: '#e2e2e8', cursor: '#a5b4fc', cursorAccent: '#0c0c0f', selectionBackground: 'rgba(129,140,248,.35)',
+  black: '#1f1f23', red: '#f87171', green: '#4ade80', yellow: '#facc15', blue: '#60a5fa', magenta: '#c084fc', cyan: '#22d3ee', white: '#d4d4d8',
+  brightBlack: '#52525b', brightRed: '#fca5a5', brightGreen: '#86efac', brightYellow: '#fde047', brightBlue: '#93c5fd', brightMagenta: '#d8b4fe',
+  brightCyan: '#67e8f9', brightWhite: '#fafafa',
+}
+
+function openSession(info, replay = '') {
+  const S = {
+    sid: info.sid, info, dead: false, layout: localStorage.getItem('sshterm.layout') || 'split', vertical: localStorage.getItem('sshterm.vertical') === '1',
+    queue: '', sending: false, lastSize: '',
+    fx: { path: null, entries: [], sel: new Set(), cursor: null, anchor: null, sort: { key: 'name', dir: 1 }, hidden: !!state.info.show_hidden, filter: '', loading: false },
+    transfers: [],
+  }
+  state.sessions.set(S.sid, S)
+  state.order.push(S.sid)
+  buildPane(S)
+  if (replay) S.term.write(replay)
+  else if (early.has(S.sid)) S.term.write(early.get(S.sid).join(''))
+  early.delete(S.sid)
+  activate(S.sid)
+  const host = state.hosts.find((h) => h._id === info.host_id)
+  const start = host?.initial_dir?.trim() || info.home || '/'
+  listDir(S, start.startsWith('/') ? start : (info.home || '/') + '/' + start).catch(() => listDir(S, info.home || '/'))
+  return S
+}
+
+function buildPane(S) {
+  const termEl = el('div', { class: 'term' })
+  const termWrap = el('div', { class: 'term-wrap' }, termEl)
+  const gutter = el('div', { class: 'gutter' })
+  const files = buildExplorer(S)
+  const split = el('div', { class: `split ${S.vertical ? 'v' : ''}` }, termWrap, gutter, files)
+  const segBtn = (v, label, title) => el('button', { 'data-v': v, title, onclick: () => setLayout(S, v) }, label)
+  const seg = el('div', { class: 'seg' }, segBtn('term', '⌨ Terminal', 'Terminal seul'), segBtn('split', '◫ Les deux', 'Terminal et fichiers'), segBtn('files', '📁 Fichiers', 'Fichiers seuls'))
+  S.dot = el('span', { class: 'dot', style: { background: S.info.color || 'var(--ok)' } })
+  const bar = el('div', { class: 'bar' },
+    S.dot,
+    el('span', { class: 'target', title: S.info.target }, S.info.target), el('div', { class: 'sp' }), seg,
+    el('button', { class: 'ghost icon', title: 'Disposition horizontale / verticale', onclick: () => {
+      S.vertical = !S.vertical; split.classList.toggle('v', S.vertical); try { localStorage.setItem('sshterm.vertical', S.vertical ? '1' : '0') } catch {}
+      files.style.width = files.style.height = ''; fitSoon(S)
+    } }, '⇅'),
+    el('button', { class: 'ghost icon', title: 'Nouvelle session sur ce serveur (Ctrl+Maj+T)', onclick: () => duplicateSession(S) }, '＋'),
+    el('button', { class: 'ghost', title: 'Fermer la connexion', onclick: () => closeSession(S) }, '⏻ Déconnecter'))
+  const pane = el('div', { class: 'pane hidden' }, bar, split)
+  S.pane = pane; S.split = split; S.seg = seg; S.termWrap = termWrap; S.files = files
+  $('#panes').append(pane)
+  setLayout(S, S.layout, true)
+
+  gutter.addEventListener('mousedown', (e) => {
+    e.preventDefault()
+    gutter.classList.add('drag')
+    const rect = split.getBoundingClientRect()
+    const move = (ev) => {
+      if (S.vertical) files.style.height = `${Math.min(Math.max(rect.bottom - ev.clientY, 120), rect.height - 80)}px`
+      else files.style.width = `${Math.min(Math.max(rect.right - ev.clientX, 260), rect.width - 120)}px`
+    }
+    const up = () => { gutter.classList.remove('drag'); removeEventListener('mousemove', move); removeEventListener('mouseup', up); fitSoon(S) }
+    addEventListener('mousemove', move)
+    addEventListener('mouseup', up)
+  })
+
+  const term = new Terminal({
+    fontFamily: "'Cascadia Mono', 'Cascadia Code', Consolas, 'Courier New', monospace", fontSize: state.info.font_size || 14,
+    scrollback: state.info.scrollback || 5000, theme: XTERM_THEME, cursorBlink: true, allowProposedApi: true,
+    macOptionIsMeta: true, rightClickSelectsWord: false, smoothScrollDuration: 0,
+  })
+  const fit = new FitAddon.FitAddon()
+  term.loadAddon(fit)
+  term.open(termEl)
+  S.term = term; S.fit = fit
+  term.onData((d) => sendInput(S, d))
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown') return true
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyT') { duplicateSession(S); return false }
+    if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) { copyText(term.getSelection()); term.clearSelection(); return false }
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') { if (term.hasSelection()) copyText(term.getSelection()); return false }
+    if (e.ctrlKey && (e.code === 'KeyV')) return false
+    if (e.ctrlKey && e.code === 'Tab') return false
+    return true
+  })
+  termEl.addEventListener('contextmenu', (e) => {
+    e.preventDefault()
+    menu(e.clientX, e.clientY, [
+      { icon: '⎘', label: 'Copier', key: 'Ctrl+C', disabled: !term.hasSelection(), fn: () => copyText(term.getSelection()) },
+      { icon: '📋', label: 'Coller', key: 'Ctrl+V', fn: () => navigator.clipboard?.readText?.().then((t) => term.paste(t), () => toast('Utilisez Ctrl+V pour coller', false)) },
+      { icon: '⬚', label: 'Tout sélectionner', fn: () => term.selectAll() },
+      { icon: '⌫', label: 'Effacer l\'écran', fn: () => term.clear() },
+      '-',
+      { icon: '📁', label: 'Afficher le dossier de l\'explorateur ici (cd)', disabled: !S.fx.path, fn: () => cdHere(S, S.fx.path) },
+    ])
+  })
+  new ResizeObserver(() => fitSoon(S)).observe(termWrap)
+}
+
+const fitTimers = new WeakMap()
+function fitSoon(S) {
+  clearTimeout(fitTimers.get(S))
+  fitTimers.set(S, setTimeout(() => {
+    if (!S.termWrap.offsetWidth || !S.termWrap.offsetHeight) return
+    try { S.fit.fit() } catch { return }
+    const size = `${S.term.cols}x${S.term.rows}`
+    if (size !== S.lastSize && !S.dead) {
+      S.lastSize = size
+      call('term_resize', { sid: S.sid, cols: S.term.cols, rows: S.term.rows }).catch(() => {})
+    }
+  }, 60))
+}
+
+function setLayout(S, v, initial) {
+  S.layout = v
+  S.split.classList.remove('layout-term', 'layout-files', 'layout-split')
+  S.split.classList.add(`layout-${v}`)
+  $$('button', S.seg).forEach((b) => b.classList.toggle('on', b.dataset.v === v))
+  if (!initial) try { localStorage.setItem('sshterm.layout', v) } catch {}
+  fitSoon(S)
+  if (v !== 'files') setTimeout(() => S.term?.focus(), 30)
+}
+
+function sendInput(S, data) {
+  if (S.dead) return
+  S.queue += data
+  if (S.sending) return
+  S.sending = true
+  const flush = () => {
+    const chunk = S.queue
+    S.queue = ''
+    call('term_input', { sid: S.sid, data: chunk }).catch((e) => { if (e.code === 'SESSION_CLOSED') markDead(S, e.message) })
+      .finally(() => { if (S.queue && !S.dead) flush(); else S.sending = false })
+  }
+  flush()
+}
+
+function cdHere(S, path) {
+  setLayout(S, S.layout === 'files' ? 'split' : S.layout)
+  sendInput(S, `cd -- ${shq(path)}\r`)
+  S.term.focus()
+}
+
+function activate(sid) {
+  state.current = sid
+  for (const S of state.sessions.values()) S.pane.classList.toggle('hidden', S.sid !== sid)
+  renderTabs()
+  renderWelcome()
+  const S = state.sessions.get(sid)
+  if (S) { fitSoon(S); if (S.layout !== 'files') setTimeout(() => S.term.focus(), 20) }
+}
+
+function renderTabs() {
+  const tabs = $('#tabs')
+  tabs.textContent = ''
+  const counts = {}
+  for (const sid of state.order) {
+    const S = state.sessions.get(sid)
+    const n = (counts[S.info.title] = (counts[S.info.title] || 0) + 1)
+    tabs.append(el('div', { class: `tab ${sid === state.current ? 'active' : ''} ${S.dead ? 'dead' : ''}`, title: S.info.target,
+      onclick: () => activate(sid), onauxclick: (e) => { if (e.button === 1) closeSession(S) },
+      oncontextmenu: (e) => { e.preventDefault(); menu(e.clientX, e.clientY, [
+        { icon: '＋', label: 'Dupliquer la session', fn: () => duplicateSession(S) },
+        { icon: '↻', label: 'Reconnecter', disabled: !S.dead, fn: () => reconnect(S) },
+        { icon: '✕', label: 'Fermer', fn: () => closeSession(S) },
+        { icon: '✕', label: 'Fermer les autres', disabled: state.order.length < 2, fn: () => [...state.sessions.values()].filter((x) => x !== S).forEach((x) => closeSession(x, true)) },
+      ]) } },
+      el('span', { class: 'dot', style: { background: S.dead ? 'var(--err)' : (S.info.color || 'var(--ok)') } }),
+      el('span', { class: 'name' }, S.info.title + (n > 1 ? ` (${n})` : '')),
+      el('button', { class: 'x', title: 'Fermer', onclick: (e) => { e.stopPropagation(); closeSession(S) } }, '✕')))
+  }
+}
+
+function duplicateSession(S) {
+  if (S.info.host_id) connectHost(S.info.host_id)
+  else toast('Connexion rapide : relancez-la depuis la barre latérale', false)
+}
+
+async function closeSession(S, silent) {
+  if (!S.dead && !silent && S.transfers.some((t) => t.state === 'run')) {
+    if (!await confirmBox({ title: 'Transferts en cours', message: 'Des transferts sont en cours sur cette session. Fermer quand même ?', confirm: 'Fermer', danger: true })) return
+  }
+  S.closing = true
+  if (!S.dead) call('disconnect', { sid: S.sid }).catch(() => {})
+  S.term.dispose()
+  S.pane.remove()
+  state.sessions.delete(S.sid)
+  const idx = state.order.indexOf(S.sid)
+  state.order.splice(idx, 1)
+  if (state.current === S.sid) {
+    const next = state.order[Math.min(idx, state.order.length - 1)]
+    if (next) activate(next)
+    else { state.current = null; renderTabs(); renderWelcome() }
+  } else renderTabs()
+  renderHosts()
+}
+
+function markDead(S, reason) {
+  if (S.dead || S.closing) return
+  S.dead = true
+  S.term.write(`\r\n\x1b[90m── ${reason || 'Session terminée'} ──\x1b[0m\r\n`)
+  const ov = el('div', { class: 'dead-overlay' }, el('div', {}, reason || 'Session terminée'),
+    el('div', { style: { display: 'flex', gap: '8px' } },
+      S.info.host_id && el('button', { class: 'primary', onclick: () => reconnect(S) }, '↻ Reconnecter'),
+      el('button', { onclick: () => closeSession(S) }, 'Fermer l\'onglet'),
+      el('button', { class: 'ghost', onclick: () => ov.remove() }, 'Voir la sortie')))
+  S.termWrap.append(ov)
+  S.overlay = ov
+  S.dot.style.background = 'var(--err)'
+  S.transfers.filter((t) => t.state === 'run').forEach((t) => { t.cancel = true })
+  renderTabs()
+  renderHosts()
+}
+
+async function reconnect(S) {
+  const idx = state.order.indexOf(S.sid)
+  const before = new Set(state.order)
+  await connectHost(S.info.host_id)
+  const added = state.order.find((x) => !before.has(x))
+  if (added) {
+    const N = state.sessions.get(added)
+    state.order.splice(state.order.indexOf(added), 1)
+    state.order.splice(idx + 1, 0, added)
+    if (S.fx.path) listDir(N, S.fx.path).catch(() => {})
+    N.layout = S.layout
+    setLayout(N, S.layout, true)
+    closeSession(S, true)
+    activate(added)
+  }
+}
+
+// Output can arrive before `connect` has returned and the tab exists.
+const early = new Map()
+L.on(MID, 'term:data', (p) => {
+  const S = state.sessions.get(p.sid)
+  if (S) { if (!S.dead) S.term.write(p.data); return }
+  if (!early.has(p.sid)) { early.set(p.sid, []); setTimeout(() => early.delete(p.sid), 120000) }
+  early.get(p.sid).push(p.data)
+})
+L.on(MID, 'term:exit', (p) => {
+  const S = state.sessions.get(p.sid)
+  if (S) markDead(S, p.reason)
+})
+
+/* ── File explorer ──────────────────────────────────────────────────────── */
+
+function buildExplorer(S) {
+  const fx = S.fx
+  const path = el('input', { class: 'path', spellcheck: 'false', title: 'Chemin (Entrée pour y aller)' })
+  path.addEventListener('keydown', (e) => { if (e.key === 'Enter') { listDir(S, path.value.trim() || '/'); list.focus() } })
+  const filter = el('input', { placeholder: 'Filtrer…' })
+  filter.addEventListener('input', () => { fx.filter = filter.value; renderList(S) })
+  const hiddenBtn = el('button', { class: `ghost icon ${fx.hidden ? 'on' : ''}`, title: 'Afficher les fichiers cachés', onclick: () => {
+    fx.hidden = !fx.hidden; hiddenBtn.classList.toggle('on', fx.hidden); renderList(S) } }, '👁')
+  const upInput = el('input', { type: 'file', multiple: true, class: 'hidden', onchange: () => { uploadFiles(S, [...upInput.files]); upInput.value = '' } })
+  const tool = el('div', { class: 'ftool' },
+    el('button', { class: 'ghost icon', title: 'Dossier parent (Retour arrière)', onclick: () => goUp(S) }, '↑'),
+    el('button', { class: 'ghost icon', title: 'Dossier personnel', onclick: () => listDir(S, S.info.home || '/') }, '⌂'),
+    el('button', { class: 'ghost icon', title: 'Actualiser (F5)', onclick: () => refresh(S) }, '↻'),
+    path,
+    el('button', { class: 'ghost icon', title: 'Nouveau dossier', onclick: () => newItem(S, true) }, '＋📁'),
+    el('button', { class: 'ghost icon', title: 'Nouveau fichier', onclick: () => newItem(S, false) }, '＋📄'),
+    el('button', { class: 'ghost icon', title: 'Envoyer des fichiers', onclick: () => upInput.click() }, '⬆'),
+    el('button', { class: 'ghost icon', title: 'Télécharger la sélection', onclick: () => download(S) }, '⬇'),
+    el('button', { class: 'ghost icon', title: 'Ouvrir ce dossier dans le terminal (cd)', onclick: () => fx.path && cdHere(S, fx.path) }, '⌨'),
+    upInput)
+  const crumbPath = el('div', { class: 'crumb-path' })
+  const crumbs = el('div', { class: 'crumbs' }, crumbPath, el('div', { class: 'sp' }), filter, hiddenBtn)
+  const list = el('div', { class: 'flist', tabindex: 0 })
+  const loading = el('div', { class: 'floading hidden' })
+  const status = el('div', { class: 'fstatus' })
+  const transfers = el('div', { class: 'transfers hidden' })
+  const box = el('div', { class: 'files' }, tool, loading, crumbs, list, transfers, status)
+  Object.assign(fx, { ui: { path, crumbs: crumbPath, list, status, loading, transfers, filter } })
+
+  list.addEventListener('keydown', (e) => explorerKey(S, e))
+  list.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('tr.row')) return
+    e.preventDefault()
+    fx.sel.clear(); paintSelection(S)
+    menu(e.clientX, e.clientY, folderMenuItems(S))
+  })
+  list.addEventListener('mousedown', (e) => { if (!e.target.closest('tr.row') && !e.target.closest('th') && e.button === 0) { fx.sel.clear(); paintSelection(S) } })
+  let depth = 0
+  list.addEventListener('dragenter', (e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); depth++; list.classList.add('drop') } })
+  list.addEventListener('dragover', (e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' } })
+  list.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; list.classList.remove('drop') } })
+  list.addEventListener('drop', (e) => {
+    e.preventDefault(); depth = 0; list.classList.remove('drop')
+    const items = [...(e.dataTransfer.items || [])]
+    const dirs = items.filter((it) => it.webkitGetAsEntry?.()?.isDirectory).length
+    const files = [...e.dataTransfer.files].filter((f, i) => !items[i]?.webkitGetAsEntry?.()?.isDirectory)
+    if (dirs) toast(`${dirs} dossier(s) ignoré(s) : seuls les fichiers peuvent être déposés`, false)
+    const row = e.target.closest('tr.row')
+    const ent = row && fx.view?.[+row.dataset.i]
+    uploadFiles(S, files, ent && isDir(ent) ? joinPath(fx.path, ent.name) : undefined)
+  })
+  return box
+}
+
+async function listDir(S, path, { keepSel = false, focus } = {}) {
+  const fx = S.fx
+  if (S.dead) return
+  fx.loading = true
+  fx.ui.loading.classList.remove('hidden')
+  try {
+    const r = await call('sftp_list', { sid: S.sid, path }, { timeout: 30000 })
+    const changed = r.path !== fx.path
+    const prev = fx.path
+    fx.path = r.path
+    fx.entries = r.entries
+    if (r.home) S.info.home = r.home
+    if (changed && !keepSel) {
+      fx.sel.clear(); fx.cursor = null; fx.anchor = null
+      if (fx.filter) { fx.filter = ''; fx.ui.filter.value = '' }
+      // Coming back up: put the cursor on the folder we left.
+      if (prev && prev.startsWith(r.path) && prev !== r.path) {
+        const child = prev.slice(r.path === '/' ? 1 : r.path.length + 1).split('/')[0]
+        fx.cursor = child
+      }
+    }
+    if (focus) { fx.sel = new Set([focus]); fx.cursor = focus }
+    renderList(S)
+  } catch (e) {
+    toast(e.message, false)
+    throw e
+  } finally {
+    fx.loading = false
+    fx.ui.loading.classList.add('hidden')
+  }
+}
+const refresh = (S) => S.fx.path && listDir(S, S.fx.path, { keepSel: true }).catch(() => {})
+const goUp = (S) => S.fx.path && S.fx.path !== '/' && listDir(S, S.fx.path.replace(/\/[^/]+$/, '') || '/').catch(() => {})
+
+function sorted(S) {
+  const fx = S.fx
+  const q = fx.filter.trim().toLowerCase()
+  const { key, dir } = fx.sort
+  const items = fx.entries.filter((e) => (fx.hidden || !e.name.startsWith('.')) && (!q || e.name.toLowerCase().includes(q)))
+  const coll = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' })
+  items.sort((a, b) => {
+    const da = isDir(a), db = isDir(b)
+    if (da !== db) return da ? -1 : 1
+    let c = 0
+    if (key === 'size') c = (a.size || 0) - (b.size || 0)
+    else if (key === 'mtime') c = (a.mtime || 0) - (b.mtime || 0)
+    else if (key === 'perms') c = (a.perms || '').localeCompare(b.perms || '')
+    else if (key === 'owner') c = coll.compare(a.owner || '', b.owner || '')
+    if (!c) c = coll.compare(a.name, b.name)
+    return c * dir
+  })
+  return items
+}
+
+function renderList(S) {
+  const fx = S.fx
+  const ui = fx.ui
+  ui.path.value = fx.path || ''
+  ui.crumbs.textContent = ''
+  if (fx.path) {
+    const parts = fx.path.split('/').filter(Boolean)
+    ui.crumbs.append(el('span', { onclick: () => listDir(S, '/'), class: parts.length ? '' : 'cur' }, '/'))
+    parts.forEach((p, i) => {
+      if (i) ui.crumbs.append(el('i', {}, '/'))
+      const target = '/' + parts.slice(0, i + 1).join('/')
+      ui.crumbs.append(el('span', { class: i === parts.length - 1 ? 'cur' : '', onclick: () => listDir(S, target) }, p))
+    })
+  }
+  const view = fx.view = sorted(S)
+  const th = (key, label, cls) => el('th', { class: cls, onclick: () => {
+    fx.sort = { key, dir: fx.sort.key === key ? -fx.sort.dir : 1 }; renderList(S) } },
+  label, fx.sort.key === key ? el('span', { class: 'arr' }, fx.sort.dir > 0 ? '▲' : '▼') : null)
+  const table = el('table', { class: 'ft' }, el('thead', {}, el('tr', {}, th('name', 'Nom', 'c-name'), th('size', 'Taille', 'c-size'),
+    th('mtime', 'Modifié', 'c-date'), th('perms', 'Droits', 'c-perm'), th('owner', 'Propriétaire', 'c-own'))))
+  const tbody = el('tbody')
+  if (fx.path && fx.path !== '/' && !fx.filter) {
+    tbody.append(el('tr', { class: 'row', ondblclick: () => goUp(S) }, el('td', { colspan: 5 }, el('span', { class: 'fi' }, '↩'), '..')))
+  }
+  view.forEach((e, i) => {
+    const cls = ['row', fx.sel.has(e.name) && 'sel', fx.cursor === e.name && 'cursor'].filter(Boolean).join(' ')
+    const nameCell = el('td', { class: 'c-name', title: e.link_target ? `${e.name} → ${e.link_target}` : e.name },
+      el('span', { class: 'fi' }, fileIcon(e)), e.name, e.link_target ? el('span', { class: 'lnk' }, `→ ${e.link_target}`) : null)
+    const tr = el('tr', { class: cls, 'data-i': i },
+      nameCell,
+      el('td', { class: 'c-size' }, isDir(e) ? '' : fmtSize(e.size)),
+      el('td', { class: 'c-date' }, fmtDate(e.mtime)),
+      el('td', { class: 'c-perm', title: e.mode }, (isDir(e) ? 'd' : e.type === 'link' ? 'l' : '-') + (e.perms || '')),
+      el('td', { class: 'c-own', title: `${e.owner}:${e.group}` }, e.owner || ''))
+    tr.addEventListener('mousedown', (ev) => rowClick(S, ev, e, i))
+    tr.addEventListener('dblclick', () => openEntry(S, e))
+    tr.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault()
+      if (!fx.sel.has(e.name)) { fx.sel = new Set([e.name]); fx.cursor = e.name; paintSelection(S) }
+      menu(ev.clientX, ev.clientY, entryMenuItems(S))
+    })
+    tbody.append(tr)
+  })
+  table.append(tbody)
+  const scroll = ui.list.scrollTop
+  ui.list.textContent = ''
+  ui.list.append(table)
+  if (!view.length) ui.list.append(el('div', { class: 'fempty' }, fx.filter ? 'Aucun élément ne correspond au filtre' :
+    fx.entries.length ? 'Uniquement des fichiers cachés (👁 pour les afficher)' : 'Dossier vide — glissez des fichiers ici pour les envoyer'))
+  ui.list.scrollTop = scroll
+  paintSelection(S)
+}
+
+function rowClick(S, ev, e, i) {
+  const fx = S.fx
+  S.fx.ui.list.focus()
+  if (ev.button === 2) return
+  if (ev.shiftKey && fx.anchor != null) {
+    const a = fx.view.findIndex((x) => x.name === fx.anchor)
+    const [lo, hi] = a < i ? [a, i] : [i, a]
+    const range = fx.view.slice(lo, hi + 1).map((x) => x.name)
+    fx.sel = ev.ctrlKey ? new Set([...fx.sel, ...range]) : new Set(range)
+  } else if (ev.ctrlKey) {
+    fx.sel.has(e.name) ? fx.sel.delete(e.name) : fx.sel.add(e.name)
+    fx.anchor = e.name
+  } else {
+    fx.sel = new Set([e.name])
+    fx.anchor = e.name
+  }
+  fx.cursor = e.name
+  paintSelection(S)
+}
+
+function paintSelection(S) {
+  const fx = S.fx
+  for (const tr of $$('tr.row[data-i]', fx.ui.list)) {
+    const e = fx.view[+tr.dataset.i]
+    tr.classList.toggle('sel', fx.sel.has(e.name))
+    tr.classList.toggle('cursor', fx.cursor === e.name)
+  }
+  const cur = $('tr.cursor', fx.ui.list)
+  if (cur) {
+    const r = cur.getBoundingClientRect(), lr = fx.ui.list.getBoundingClientRect()
+    if (r.top < lr.top + 26 || r.bottom > lr.bottom) cur.scrollIntoView({ block: 'nearest' })
+  }
+  renderStatus(S)
+}
+
+function renderStatus(S) {
+  const fx = S.fx, view = fx.view || []
+  const dirs = view.filter(isDir).length
+  const selSize = view.filter((e) => fx.sel.has(e.name) && !isDir(e)).reduce((a, e) => a + (e.size || 0), 0)
+  fx.ui.status.textContent = ''
+  fx.ui.status.append(...[el('span', {}, `${dirs} dossier(s), ${view.length - dirs} fichier(s)`),
+    fx.sel.size ? el('span', {}, `· ${fx.sel.size} sélectionné(s)${selSize ? ' — ' + fmtSize(selSize) : ''}`) : null,
+    el('span', { class: 'sp' }), el('span', { class: 'mono' }, S.info.target)].filter(Boolean))
+}
+
+function selected(S) {
+  return S.fx.view.filter((e) => S.fx.sel.has(e.name))
+}
+
+function explorerKey(S, e) {
+  const fx = S.fx
+  if (e.target.tagName === 'INPUT') return
+  const view = fx.view || []
+  const idx = view.findIndex((x) => x.name === fx.cursor)
+  const move = (to) => {
+    if (!view.length) return
+    to = Math.max(0, Math.min(view.length - 1, to))
+    const name = view[to].name
+    if (e.shiftKey) {
+      const a = view.findIndex((x) => x.name === (fx.anchor ?? name))
+      const [lo, hi] = a < to ? [a, to] : [to, a]
+      fx.sel = new Set(view.slice(lo, hi + 1).map((x) => x.name))
+    } else { fx.sel = new Set([name]); fx.anchor = name }
+    fx.cursor = name
+    paintSelection(S)
+  }
+  const k = e.key
+  if (k === 'ArrowDown') { e.preventDefault(); move(idx + 1) }
+  else if (k === 'ArrowUp') { e.preventDefault(); move(idx < 0 ? 0 : idx - 1) }
+  else if (k === 'Home') { e.preventDefault(); move(0) }
+  else if (k === 'End') { e.preventDefault(); move(view.length - 1) }
+  else if (k === 'PageDown') { e.preventDefault(); move(idx + 15) }
+  else if (k === 'PageUp') { e.preventDefault(); move(idx - 15) }
+  else if (k === 'Enter' && idx >= 0) { e.preventDefault(); openEntry(S, view[idx]) }
+  else if (k === 'Backspace') { e.preventDefault(); goUp(S) }
+  else if (k === 'F5') { e.preventDefault(); refresh(S) }
+  else if (k === 'F2' && fx.sel.size === 1) { e.preventDefault(); renameEntry(S, selected(S)[0]) }
+  else if (k === 'Delete' && fx.sel.size) { e.preventDefault(); deleteEntries(S, selected(S)) }
+  else if (k === 'a' && e.ctrlKey) { e.preventDefault(); fx.sel = new Set(view.map((x) => x.name)); paintSelection(S) }
+  else if (k === 'Escape') { fx.sel.clear(); paintSelection(S) }
+  else if (k.length === 1 && !e.ctrlKey && !e.altKey) {
+    const now = Date.now()
+    fx.typed = (now - (fx.typedAt || 0) < 800 ? fx.typed || '' : '') + k.toLowerCase()
+    fx.typedAt = now
+    const hit = view.findIndex((x) => x.name.toLowerCase().startsWith(fx.typed))
+    if (hit >= 0) move(hit)
+  }
+}
+
+function openEntry(S, e) {
+  if (isDir(e)) listDir(S, joinPath(S.fx.path, e.name)).catch(() => {})
+  else if (e.size > 2 * 1024 * 1024) download(S, [e])
+  else editFile(S, joinPath(S.fx.path, e.name))
+}
+
+function entryMenuItems(S) {
+  const sel = selected(S)
+  const one = sel.length === 1 ? sel[0] : null
+  return [
+    one && isDir(one) && { icon: '📂', label: 'Ouvrir', key: 'Entrée', fn: () => openEntry(S, one) },
+    one && !isDir(one) && { icon: '✎', label: 'Éditer', key: 'Entrée', fn: () => editFile(S, joinPath(S.fx.path, one.name)) },
+    { icon: '⬇', label: sel.length > 1 ? `Télécharger (${sel.length})` : 'Télécharger', fn: () => download(S, sel) },
+    one && isDir(one) && { icon: '⌨', label: 'Ouvrir dans le terminal (cd)', fn: () => cdHere(S, joinPath(S.fx.path, one.name)) },
+    '-',
+    { icon: '✏', label: 'Renommer', key: 'F2', disabled: !one, fn: () => renameEntry(S, one) },
+    { icon: '🔒', label: 'Droits (chmod)…', fn: () => chmodEntries(S, sel) },
+    { icon: '⎘', label: sel.length > 1 ? 'Copier les chemins' : 'Copier le chemin', fn: () => copyText(sel.map((e) => joinPath(S.fx.path, e.name)).join('\n')) },
+    '-',
+    { icon: '🗑', label: 'Supprimer', key: 'Suppr', danger: true, fn: () => deleteEntries(S, sel) },
+  ]
+}
+
+function folderMenuItems(S) {
+  return [
+    { icon: '📁', label: 'Nouveau dossier', fn: () => newItem(S, true) },
+    { icon: '📄', label: 'Nouveau fichier', fn: () => newItem(S, false) },
+    { icon: '⬆', label: 'Envoyer des fichiers…', fn: () => $('input[type=file]', S.files).click() },
+    '-',
+    { icon: '↻', label: 'Actualiser', key: 'F5', fn: () => refresh(S) },
+    { icon: '⌨', label: 'Ouvrir dans le terminal (cd)', fn: () => cdHere(S, S.fx.path) },
+    { icon: '⎘', label: 'Copier le chemin', fn: () => copyText(S.fx.path) },
+  ]
+}
+
+async function op(S, action, payload, okMsg) {
+  try {
+    const r = await call(action, { sid: S.sid, ...payload }, { timeout: 120000 })
+    if (okMsg) toast(okMsg)
+    return r
+  } catch (e) {
+    toast(e.message, false)
+    return null
+  }
+}
+
+async function newItem(S, dir) {
+  const a = await ask({ title: dir ? 'Nouveau dossier' : 'Nouveau fichier', label: 'Nom', value: dir ? 'nouveau-dossier' : 'nouveau.txt', confirm: 'Créer' })
+  const name = a?.value?.trim()
+  if (!name) return
+  if (name.includes('/')) return toast('Le nom ne peut pas contenir « / »', false)
+  const r = await op(S, dir ? 'sftp_mkdir' : 'sftp_touch', { path: joinPath(S.fx.path, name) })
+  if (r) await listDir(S, S.fx.path, { focus: name }).catch(() => {})
+}
+
+async function renameEntry(S, e) {
+  if (!e) return
+  const a = await ask({ title: 'Renommer', label: 'Nouveau nom', value: e.name, confirm: 'Renommer' })
+  const name = a?.value?.trim()
+  if (!name || name === e.name) return
+  const dst = name.startsWith('/') ? name : joinPath(S.fx.path, name)
+  const r = await op(S, 'sftp_rename', { src: joinPath(S.fx.path, e.name), dst })
+  if (r) await listDir(S, S.fx.path, { focus: name.includes('/') ? undefined : name }).catch(() => {})
+}
+
+async function deleteEntries(S, sel) {
+  if (!sel.length) return
+  const dirs = sel.filter((e) => e.type === 'dir').length
+  const msg = sel.length === 1 ? `Supprimer définitivement « ${sel[0].name} »${dirs ? ' et tout son contenu' : ''} ?`
+    : `Supprimer définitivement ${sel.length} éléments${dirs ? ` (dont ${dirs} dossier(s) et leur contenu)` : ''} ?`
+  if (!await confirmBox({ title: 'Supprimer', message: msg, confirm: 'Supprimer', danger: true })) return
+  const r = await op(S, 'sftp_delete', { paths: sel.map((e) => joinPath(S.fx.path, e.name)) })
+  if (r) toast(`${r.deleted} élément(s) supprimé(s)`)
+  await listDir(S, S.fx.path).catch(() => {})
+}
+
+async function chmodEntries(S, sel) {
+  if (!sel.length) return
+  const first = sel[0]
+  const bits = el('div', { style: { display: 'grid', gridTemplateColumns: '90px repeat(3, 1fr)', gap: '6px', alignItems: 'center' } })
+  const cur = parseInt(first.mode || '644', 8)
+  const boxes = []
+  bits.append(el('span'), ...['Lecture', 'Écriture', 'Exécution'].map((x) => el('span', { class: 'muted' }, x)))
+  ;['Propriétaire', 'Groupe', 'Autres'].forEach((who, w) => {
+    bits.append(el('span', {}, who))
+    ;[4, 2, 1].forEach((b) => {
+      const shift = (2 - w) * 3
+      const cb = el('input', { type: 'checkbox', checked: !!(cur & (b << shift)) })
+      cb.addEventListener('change', sync)
+      boxes.push({ cb, v: b << shift })
+      bits.append(el('label', { class: 'chk' }, cb))
+    })
+  })
+  const special = cur & ~0o777
+  const input = el('input', { class: 'mono', value: (special | (cur & 0o777)).toString(8).padStart(3, '0'), style: { width: '80px' } })
+  function sync() { input.value = (special | boxes.reduce((a, x) => a | (x.cb.checked ? x.v : 0), 0)).toString(8).padStart(3, '0') }
+  input.addEventListener('input', () => { const v = parseInt(input.value, 8); if (!isNaN(v)) boxes.forEach((x) => { x.cb.checked = !!(v & x.v) }) })
+  const node = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } }, bits,
+    el('div', { class: 'fl' }, el('label', {}, 'Valeur octale'), input),
+    sel.length > 1 ? el('div', { class: 'muted' }, `Appliqué à ${sel.length} éléments (non récursif).`) : null)
+  if (!await confirmBox({ title: `Droits — ${sel.length > 1 ? sel.length + ' éléments' : first.name}`, node, confirm: 'Appliquer' })) return
+  const r = await op(S, 'sftp_chmod', { paths: sel.map((e) => joinPath(S.fx.path, e.name)), mode: input.value }, 'Droits modifiés')
+  if (r) await listDir(S, S.fx.path, { keepSel: true }).catch(() => {})
+}
+
+/* ── Editor ─────────────────────────────────────────────────────────────── */
+
+async function editFile(S, path) {
+  let doc
+  try { doc = await call('sftp_read', { sid: S.sid, path }, { timeout: 60000 }) } catch (e) {
+    if (e.code === 'BINARY' || e.code === 'TOO_LARGE') {
+      const name = path.split('/').pop()
+      toast(e.message, false, { label: 'Télécharger', fn: () => download(S, [{ name, type: 'file' }]) })
+    } else toast(e.message, false)
+    return
+  }
+  const ta = el('textarea', { spellcheck: 'false' })
+  ta.value = doc.content
+  let saved = doc.content
+  const info = el('span', { class: 'muted', style: { fontSize: '12px' } })
+  const updInfo = () => {
+    const pos = ta.value.slice(0, ta.selectionStart).split('\n')
+    info.textContent = `Ligne ${pos.length}, col ${pos[pos.length - 1].length + 1} · ${doc.encoding.toUpperCase()}${doc.crlf ? ' · CRLF' : ' · LF'}${ta.value !== saved ? ' · modifié' : ''}`
+  }
+  ;['input', 'click', 'keyup'].forEach((ev) => ta.addEventListener(ev, updInfo))
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !e.ctrlKey) {
+      e.preventDefault()
+      const s = ta.selectionStart, en = ta.selectionEnd
+      ta.setRangeText('\t', s, en, 'end')
+      updInfo()
+    }
+    if (e.key === 's' && e.ctrlKey) { e.preventDefault(); save() }
+  })
+  const saveBtn = el('button', { class: 'primary', onclick: () => save() }, 'Enregistrer')
+  async function save(force = false) {
+    saveBtn.disabled = true
+    try {
+      const r = await call('sftp_write', { sid: S.sid, path, content: ta.value, encoding: doc.encoding, crlf: doc.crlf, expected_mtime: doc.mtime, force }, { timeout: 60000 })
+      doc.mtime = r.mtime
+      saved = ta.value
+      updInfo()
+      toast('Fichier enregistré')
+      refresh(S)
+    } catch (e) {
+      if (e.code === 'CONFLICT') {
+        if (await confirmBox({ title: 'Conflit', message: `${e.message}. Écraser la version du serveur ?`, confirm: 'Écraser', danger: true })) return save(true)
+      } else toast(e.message, false)
+    } finally { saveBtn.disabled = false }
+  }
+  const canClose = async () => ta.value === saved ||
+    confirmBox({ title: 'Modifications non enregistrées', message: 'Fermer sans enregistrer ?', confirm: 'Fermer', danger: true })
+  const m = modal({ title: `✎ ${path}`, wide: true, body: el('div', { class: 'editor' }, ta), beforeClose: canClose,
+    buttons: [info, 'sp', el('button', { onclick: async () => { if (await canClose()) m.close() } }, 'Fermer'), saveBtn] })
+  setTimeout(() => { ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0; updInfo() }, 40)
+}
+
+/* ── Transfers ──────────────────────────────────────────────────────────── */
+
+function addTransfer(S, t) {
+  t.row = el('div', { class: 'tr' }, el('span', {}, t.kind === 'up' ? '⬆' : '⬇'), el('span', { class: 'nm', title: t.name }, t.name),
+    el('div', { class: 'pb' }, el('i')), el('span', { class: 'st' }, ''),
+    el('button', { class: 'ghost', title: 'Annuler', onclick: () => { t.cancel = true; t.onCancel?.() } }, '✕'))
+  t.state = 'run'
+  S.transfers.push(t)
+  S.fx.ui.transfers.classList.remove('hidden')
+  S.fx.ui.transfers.prepend(t.row)
+  return t
+}
+function updTransfer(t, pct, text) {
+  $('.pb i', t.row).style.width = `${Math.max(0, Math.min(100, pct))}%`
+  if (text != null) $('.st', t.row).textContent = text
+}
+function endTransfer(S, t, ok, text, action) {
+  t.state = ok ? 'ok' : 'fail'
+  t.row.classList.add(ok ? 'ok' : 'fail')
+  updTransfer(t, 100, text)
+  const btn = $('button', t.row)
+  if (action) { btn.textContent = action.label; btn.title = ''; btn.onclick = action.fn } else btn.remove()
+  setTimeout(() => {
+    t.row.remove()
+    S.transfers = S.transfers.filter((x) => x !== t)
+    if (!S.transfers.length) S.fx.ui.transfers.classList.add('hidden')
+  }, ok ? 6000 : 15000)
+}
+
+function b64(buf) {
+  const bytes = new Uint8Array(buf)
+  let s = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+  return btoa(s)
+}
+
+let overwriteAll = null
+async function uploadFiles(S, files, dir) {
+  if (!files.length || S.dead) return
+  dir = dir || S.fx.path
+  overwriteAll = null
+  for (const file of files) {
+    const t = addTransfer(S, { kind: 'up', name: file.name })
+    let token = null
+    try {
+      let begin
+      try {
+        begin = await call('upload_begin', { sid: S.sid, dir, name: file.name, size: file.size })
+      } catch (e) {
+        if (e.code !== 'EXISTS') throw e
+        let yes = overwriteAll
+        if (yes === null) {
+          const cb = el('input', { type: 'checkbox' })
+          yes = await confirmBox({ title: 'Fichier existant', message: `« ${file.name} » existe déjà dans ${dir}. Le remplacer ?`, confirm: 'Remplacer',
+            node: files.length > 1 ? el('label', { class: 'chk' }, cb, 'Appliquer aux fichiers suivants') : null })
+          if (cb.checked) overwriteAll = yes
+        }
+        if (!yes) { endTransfer(S, t, false, 'ignoré'); continue }
+        begin = await call('upload_begin', { sid: S.sid, dir, name: file.name, size: file.size, overwrite: true })
+      }
+      token = begin.token
+      t.onCancel = () => {}
+      let off = 0
+      const start = Date.now()
+      while (off < file.size) {
+        if (t.cancel) throw Object.assign(new Error('annulé'), { code: 'CANCELLED' })
+        const buf = await file.slice(off, off + CHUNK).arrayBuffer()
+        await call('upload_chunk', { sid: S.sid, token, data: b64(buf) }, { timeout: 120000 })
+        off += buf.byteLength
+        const rate = off / Math.max(0.2, (Date.now() - start) / 1000)
+        updTransfer(t, (off / file.size) * 100, `${Math.round((off / file.size) * 100)}% · ${fmtSize(rate)}/s`)
+      }
+      await call('upload_end', { sid: S.sid, token }, { timeout: 60000 })
+      token = null
+      endTransfer(S, t, true, fmtSize(file.size))
+    } catch (e) {
+      if (token) call('upload_abort', { sid: S.sid, token }).catch(() => {})
+      endTransfer(S, t, false, e.code === 'CANCELLED' ? 'annulé' : 'échec')
+      if (e.code !== 'CANCELLED') toast(`${file.name} : ${e.message}`, false)
+    }
+  }
+  if (dir === S.fx.path) refresh(S)
+}
+
+async function download(S, sel) {
+  sel = sel || selected(S)
+  if (!sel.length) return toast('Sélectionnez des fichiers ou dossiers à télécharger', false)
+  const name = sel.length === 1 ? sel[0].name : `${sel.length} éléments`
+  const t = addTransfer(S, { kind: 'down', name })
+  let jobId = null
+  t.onCancel = () => jobId && L.cancel(MID, jobId).catch(() => {})
+  try {
+    const r = await L.run(MID, 'download', { sid: S.sid, paths: sel.map((e) => joinPath(S.fx.path, e.name)) }, {
+      onStart: (id) => { jobId = id },
+      onProgress: (p) => updTransfer(t, p.percent ?? 0, p.percent != null ? `${Math.round(p.percent)}%` : ''),
+    })
+    const open = () => call('open_local', { path: r.first, select: true }).catch((e) => toast(e.message, false))
+    endTransfer(S, t, true, fmtSize(r.bytes), { label: 'Afficher', fn: open })
+    toast(`${r.files} fichier(s) téléchargé(s) dans ${r.folder}`, true, { label: 'Afficher', fn: open })
+  } catch (e) {
+    endTransfer(S, t, false, t.cancel ? 'annulé' : 'échec')
+    if (!t.cancel) toast(e.message, false)
+  }
+}
+
+/* ── Known hosts, import, quick connect ─────────────────────────────────── */
+
+async function showKnown() {
+  let r
+  try { r = await call('known_hosts_list') } catch (e) { return toast(e.message, false) }
+  const list = el('div', { class: 'klist' })
+  const draw = () => {
+    list.textContent = ''
+    if (!r.known.length) list.append(el('div', { class: 'muted' }, 'Aucune clé mémorisée.'))
+    r.known.forEach((k) => list.append(el('div', { class: 'krow' },
+      el('div', { class: 't' }, el('div', {}, k._id, el('span', { class: 'muted' }, `  ${k.key_type || ''}`)), el('div', {}, (k.fingerprints || []).join(', '))),
+      el('button', { class: 'danger', onclick: async () => {
+        try { await call('known_host_forget', { id: k._id }); r.known = r.known.filter((x) => x !== k); draw() } catch (e) { toast(e.message, false) }
+      } }, 'Oublier'))))
+  }
+  draw()
+  const m = modal({ title: 'Clés de serveurs connues', body: el('div', { class: 'modal-b' },
+    el('div', { class: 'muted' }, 'Empreintes acceptées lors des premières connexions. Une clé oubliée sera redemandée à la prochaine connexion.'), list),
+  buttons: [el('button', { onclick: () => m.close() }, 'Fermer')] })
+}
+
+async function importConfig() {
+  try {
+    const r = await call('import_ssh_config')
+    toast(r.added ? `${r.added} accès importé(s) depuis ${r.path}${r.skipped ? ` (${r.skipped} ignoré(s))` : ''}` : `Rien de nouveau dans ${r.path}`)
+    loadHosts()
+  } catch (e) { toast(e.message, false) }
+}
+
+function quickConnect() {
+  const v = $('#quick').value.trim()
+  const m = v.match(/^(?:ssh\s+)?(?:-p\s*(\d+)\s+)?([^@\s]+)@([^:\s]+)(?::(\d+))?(?:\s+-p\s*(\d+))?$/)
+  if (!m) return toast('Format attendu : utilisateur@hôte ou utilisateur@hôte:port', false)
+  const port = parseInt(m[1] || m[4] || m[5] || '22', 10)
+  connectHost(null, { name: `${m[2]}@${m[3]}`, host: m[3], port, username: m[2], auth: 'agent' })
+}
+
+/* ── Init ───────────────────────────────────────────────────────────────── */
+
+$('#btn-new').onclick = () => editHost(null)
+$('#welcome-new').onclick = () => editHost(null)
+$('#btn-known').onclick = showKnown
+$('#btn-import').onclick = importConfig
+$('#quick-go').onclick = quickConnect
+$('#quick').addEventListener('keydown', (e) => { if (e.key === 'Enter') quickConnect() })
+$('#search').addEventListener('input', (e) => { state.search = e.target.value; renderHosts() })
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'Tab' && state.order.length > 1) {
+    e.preventDefault()
+    const i = state.order.indexOf(state.current)
+    activate(state.order[(i + (e.shiftKey ? -1 : 1) + state.order.length) % state.order.length])
+  }
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyT' && state.current && !e.target.closest('.xterm')) {
+    e.preventDefault(); duplicateSession(state.sessions.get(state.current))
+  }
+}, true)
+
+;(async function init() {
+  try { state.info = { ...state.info, ...await call('info') } } catch {}
+  if (state.info.asyncssh === false) toast('La bibliothèque asyncssh est absente : réactivez le module.', false)
+  await loadHosts()
+  try {
+    const { sessions } = await call('sessions_list')
+    for (const info of sessions) {
+      const { data } = await call('term_replay', { sid: info.sid }).catch(() => ({ data: '' }))
+      openSession(info, data)
+    }
+  } catch {}
+})()
+</script>
+</body>
+</html>

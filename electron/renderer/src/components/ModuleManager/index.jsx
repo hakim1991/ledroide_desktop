@@ -30,7 +30,7 @@ const STATUS_FILTERS = [
   { id: 'error',    label: 'En erreur',   test: (m) => m.status === 'error' },
 ]
 
-export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeactivated, showToast, onHotReload, onRestartBackend, onOpenEnv, op }) {
+export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, showToast, onHotReload, onRestartBackend, onOpenEnv, op }) {
   const busy = !!op
   const [tab, setTab]         = useState('installed')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
@@ -232,7 +232,6 @@ export default function CatalogPanel({ modules, onRefresh, onClose, onModuleDeac
           >
             {op === 'restarting' ? <span className="cp-spinner" /> : '⟳'} Redémarrer
           </button>
-          <button className="btn btn-ghost cp-close" onClick={onClose}>✕</button>
         </div>
       </header>
 

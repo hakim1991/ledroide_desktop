@@ -1,0 +1,75 @@
+{
+  "id": "ssh-terminal",
+  "name": "Terminal SSH",
+  "version": "1.0.0",
+  "description": "Terminal SSH multi-onglets avec accès enregistrés (mots de passe et clés chiffrés par Windows), vérification des clés serveur et explorateur de fichiers distant (SFTP) : parcourir, envoyer, télécharger, renommer, supprimer, droits, édition de fichiers texte.",
+  "category": "Réseau",
+  "tags": [
+    "ssh",
+    "sftp",
+    "terminal",
+    "serveur",
+    "fichiers"
+  ],
+  "icon": "🖥️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network",
+    "filesystem"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "asyncssh>=2.14,<3",
+      "bcrypt>=4,<6"
+    ],
+    "modules": []
+  },
+  "config_schema": {
+    "download_dir": {
+      "type": "string",
+      "title": "Dossier des téléchargements (vide = Téléchargements\\Ledroide SSH)",
+      "default": ""
+    },
+    "font_size": {
+      "type": "integer",
+      "title": "Taille de la police du terminal",
+      "default": 14,
+      "minimum": 9,
+      "maximum": 28
+    },
+    "scrollback": {
+      "type": "integer",
+      "title": "Lignes conservées dans le terminal",
+      "default": 5000,
+      "minimum": 500,
+      "maximum": 100000
+    },
+    "show_hidden": {
+      "type": "boolean",
+      "title": "Afficher les fichiers cachés par défaut",
+      "default": false
+    },
+    "keepalive": {
+      "type": "integer",
+      "title": "Intervalle keepalive (secondes, 0 = désactivé)",
+      "default": 30,
+      "minimum": 0,
+      "maximum": 600
+    },
+    "connect_timeout": {
+      "type": "integer",
+      "title": "Délai de connexion (secondes)",
+      "default": 15,
+      "minimum": 3,
+      "maximum": 120
+    }
+  }
+}

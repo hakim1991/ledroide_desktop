@@ -177,6 +177,15 @@ button.btn-ghost     { background: transparent; color: var(--text-mid); border-c
 
 .app-tab-btn:hover { color: var(--text-hi); }
 
+.app-tab-icon { font-size: .9rem; line-height: 1; }
+
+.app-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-frames {
   flex: 1;
   min-height: 0;

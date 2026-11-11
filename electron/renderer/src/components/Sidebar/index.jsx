@@ -1,7 +1,7 @@
 import React from 'react'
 import './Sidebar.css'
 
-const NAV = [
+export const NAV = [
   { id: 'modules', icon: '⊞', label: 'Modules' },
   { id: 'catalog', icon: '🗂', label: 'Catalogue' },
   { id: 'env',     icon: '🔑', label: 'Variables' },
@@ -10,7 +10,7 @@ const NAV = [
 
 
 export default function Sidebar({ view, onNavigate, badges = {} }) {
-  const activeNav = view === 'module' ? 'modules' : view
+  const activeNav = view
 
   return (
     <aside className="sidebar">
