@@ -49,7 +49,7 @@ export default function ModuleFrame({ module, hidden = false, reloadKey = 0 }) {
       className="mf-iframe"
       style={hidden ? { display: 'none' } : undefined}
       src={src}
-      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
       title={module.name}
     />
   )

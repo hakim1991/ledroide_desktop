@@ -64,6 +64,12 @@ try {
   await frame.locator('.btn-inc').click()
   await frame.locator('#count', { hasText: '1' }).waitFor()
 
+  const shown = []
+  win.on('dialog', (d) => { shown.push(d.type()); d.accept() })
+  const moduleFrame = await (await win.locator('iframe.mf-iframe').elementHandle()).contentFrame()
+  const confirmed = await moduleFrame.evaluate(() => window.confirm('e2e ?'))
+  assert.deepEqual([confirmed, shown], [true, ['confirm']], 'module iframes can show confirm()')
+
   const forbidden = await win.evaluate(async () => {
     const r = await fetch(`${window.ledroide.backendOrigin}/modules`)
     return r.status
