@@ -1,0 +1,94 @@
+{
+  "id": "litellm-agent",
+  "name": "Agent LiteLLM",
+  "version": "1.0.0",
+  "description": "Chat et agent IA via un proxy LiteLLM : conversations multiples en streaming, prompt système, profils d'agent, outils (fichiers, shell, HTTP, plan), serveurs MCP, skills (SKILL.md) et validation des appels d'outils.",
+  "category": "Productivité",
+  "tags": [
+    "ia",
+    "llm",
+    "litellm",
+    "agent",
+    "mcp",
+    "chat",
+    "assistant"
+  ],
+  "icon": "🧠",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network",
+    "filesystem",
+    "process"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "openai>=1,<3",
+      "mcp>=1.10,<2"
+    ],
+    "modules": []
+  },
+  "env": [
+    {
+      "key": "LITELLM_BASE_URL",
+      "description": "URL du proxy LiteLLM (ex. https://litellm.example.com)",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "LITELLM_API_KEY",
+      "description": "Clé d'API du proxy LiteLLM (sk-…)",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "config_schema": {
+    "default_model": {
+      "type": "string",
+      "title": "Modèle par défaut (identifiant LiteLLM)",
+      "default": ""
+    },
+    "max_iterations": {
+      "type": "integer",
+      "title": "Nombre maximal d'itérations de l'agent par message",
+      "default": 25,
+      "minimum": 1,
+      "maximum": 200
+    },
+    "context_budget": {
+      "type": "integer",
+      "title": "Budget de contexte (tokens estimés) avant compression automatique",
+      "default": 100000,
+      "minimum": 4000,
+      "maximum": 2000000
+    },
+    "max_tokens": {
+      "type": "integer",
+      "title": "Longueur maximale d'une réponse (0 = valeur du modèle)",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "request_timeout": {
+      "type": "integer",
+      "title": "Délai maximal d'un appel au modèle (secondes)",
+      "default": 600,
+      "minimum": 10,
+      "maximum": 3600
+    },
+    "tool_timeout": {
+      "type": "integer",
+      "title": "Délai maximal d'un outil (secondes)",
+      "default": 120,
+      "minimum": 5,
+      "maximum": 3600
+    }
+  }
+}

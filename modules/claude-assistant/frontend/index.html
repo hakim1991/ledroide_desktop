@@ -175,6 +175,12 @@
   #toast.show { opacity: 1; }
   #toast.err { border-color: rgba(239,68,68,.5); color: #fca5a5; }
   #toast.ok { border-color: rgba(34,197,94,.45); }
+  .ask-back { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center;
+              justify-content: center; z-index: 200; }
+  .ask-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px;
+             width: min(420px, calc(100vw - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+  .ask-box p { line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .ask-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 </style>
 </head>
 <body>
@@ -450,6 +456,38 @@ function toast(msg, kind) {
   toastTimer = setTimeout(() => { t.className = ''; }, kind === 'err' ? 5000 : 2500);
 }
 
+function askConfirm(message, okLabel) {
+  return new Promise((resolve) => {
+    const back = document.createElement('div');
+    back.className = 'ask-back';
+    const box = document.createElement('div');
+    box.className = 'ask-box';
+    const p = document.createElement('p');
+    p.textContent = message;
+    const btns = document.createElement('div');
+    btns.className = 'ask-btns';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Annuler';
+    const ok = document.createElement('button');
+    ok.className = 'danger';
+    ok.textContent = okLabel || 'Confirmer';
+    btns.append(cancel, ok);
+    box.append(p, btns);
+    back.append(box);
+    const close = (v) => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); close(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); close(true); }
+    };
+    cancel.onclick = () => close(false);
+    ok.onclick = () => close(true);
+    back.onclick = (e) => { if (e.target === back) close(false); };
+    document.addEventListener('keydown', onKey, true);
+    document.body.append(back);
+    ok.focus();
+  });
+}
+
 function api(action, payload, timeout) {
   return L.call(MODULE_ID, action, payload || {}, { timeout: timeout || 20000 });
 }
@@ -603,7 +641,7 @@ async function newConv(focus) {
 
 async function deleteConv(id) {
   const c = state.convs.find((x) => x._id === id);
-  if (!confirm('Supprimer la conversation « ' + (c ? c.title : '') + ' » ? Cette action est définitive.')) return;
+  if (!await askConfirm('Supprimer la conversation « ' + (c ? c.title : '') + ' » ? Cette action est définitive.', 'Supprimer')) return;
   try {
     await api('conv:delete', { id });
     state.convs = state.convs.filter((x) => x._id !== id);

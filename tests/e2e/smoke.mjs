@@ -38,7 +38,7 @@ try {
     await win.locator('.cc', { hasText: name }).locator('.cc-badge-active').waitFor()
   }
 
-  await win.locator('.cp-close').click()
+  await win.getByText('Modules').first().click()
   const homeSearch = win.locator('.mg-toolbar .flt-search-input')
   const tiles = await win.locator('.mg-tile').count()
   assert.ok(tiles >= 2)
