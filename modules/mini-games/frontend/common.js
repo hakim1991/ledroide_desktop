@@ -186,7 +186,7 @@ export function createInput() {
   const typing = (t) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
 
   const onDown = (e) => {
-    if (typing(e.target) || document.querySelector('.dlg-back')) return
+    if (typing(e.target) || document.querySelector('.dlg-back') || e.ctrlKey || e.metaKey || e.altKey) return
     const action = KEYMAP[e.code]
     if (!action) return
     e.preventDefault()

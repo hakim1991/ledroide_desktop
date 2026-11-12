@@ -1,14 +1,16 @@
 {
   "id": "mini-games",
   "name": "Mini-jeux",
-  "version": "1.0.0",
-  "description": "Démineur, Sudoku, Fusion, Taquin, Mémoire, Serpent, Blocs, Casse-briques, Mot du jour, Pendu, Puissance 4, Morpion et Othello. Scores, statistiques, parties reprises, clavier et manette.",
+  "version": "1.1.0",
+  "description": "Démineur, Sudoku, Fusion, Taquin, Mémoire, Solitaire, Serpent, Blocs, Casse-briques, Mot du jour, Pendu, Quatre en ligne, Morpion, Reversi, Échecs et Dames. Scores, statistiques, parties reprises, clavier et manette.",
   "category": "Jeux",
   "tags": [
     "jeux",
     "puzzle",
     "arcade",
-    "mots"
+    "mots",
+    "cartes",
+    "échecs"
   ],
   "icon": "🕹️",
   "author": "LedroideDesktop",

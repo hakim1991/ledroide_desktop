@@ -93,7 +93,7 @@
            transition: opacity .3s, transform .3s; animation: rise .2s; }
   .toast.ok { border-color: rgba(34,197,94,.5); } .toast.err { border-color: rgba(239,68,68,.5); color: #fca5a5; }
   .toast.out { opacity: 0; transform: translateY(6px); }
-  @media (max-width: 1000px) {
+  @media (max-width: 1250px) {
     #gameHeader .vol input, #gameTitle span:last-child { display: none; }
     #gameHeader { gap: 4px; padding: 6px 8px; }
   }
@@ -132,7 +132,8 @@ const GAMES = [
   { id: 'sudoku', group: 'Réflexion', icon: '🔢', name: 'Sudoku', desc: 'Grilles générées à solution unique, 4 niveaux, notes au crayon, indices, annuler.' },
   { id: 'fusion', group: 'Réflexion', icon: '🔷', name: 'Fusion', desc: 'Faites glisser les tuiles, fusionnez les nombres identiques et visez toujours plus haut.' },
   { id: 'slider', group: 'Réflexion', icon: '🔲', name: 'Taquin', desc: 'Remettez les pièces dans l’ordre, de 3×3 à 5×5. Indices calculés par un solveur.' },
-  { id: 'memory', group: 'Réflexion', icon: '🃏', name: 'Mémoire', desc: 'Retrouvez les paires. Solo ou à deux, emoji ou vos propres images.' },
+  { id: 'memory', group: 'Réflexion', icon: '🧠', name: 'Mémoire', desc: 'Retrouvez les paires. Solo ou à deux, emoji ou vos propres images.' },
+  { id: 'solitaire', group: 'Réflexion', icon: '🃏', name: 'Solitaire', desc: 'La patience classique à 7 colonnes : tirage 1 ou 3 cartes, annuler, indices, fin automatique.' },
   { id: 'snake', group: 'Arcade', icon: '🐍', name: 'Serpent', desc: 'Mangez, grandissez, ne vous mordez pas la queue. Murs, bords ouverts, obstacles.' },
   { id: 'blocks', group: 'Arcade', icon: '🟦', name: 'Blocs', desc: 'Empilez les pièces qui tombent et complétez des lignes. Pièce suivante, réserve, niveaux.' },
   { id: 'breakout', group: 'Arcade', icon: '🏓', name: 'Casse-briques', desc: 'Brisez tous les murs de briques. Niveaux intégrés et éditeur de niveaux.' },
@@ -141,6 +142,8 @@ const GAMES = [
   { id: 'connect4', group: 'Duel', icon: '🔴', name: 'Quatre en ligne', desc: 'Alignez quatre jetons avant l’adversaire. Contre l’ordinateur (3 niveaux) ou à deux.' },
   { id: 'tictactoe', group: 'Duel', icon: '❌', name: 'Morpion', desc: 'Le classique en 3×3, ou en grand plateau avec 5 alignés. IA ou à deux.' },
   { id: 'reversi', group: 'Duel', icon: '⚫', name: 'Reversi', desc: 'Encadrez les pions adverses pour les retourner. IA 3 niveaux ou à deux.' },
+  { id: 'chess', group: 'Duel', icon: '♟️', name: 'Échecs', desc: 'Toutes les règles (roque, prise en passant, promotion, nulles). IA 3 niveaux ou à deux.' },
+  { id: 'checkers', group: 'Duel', icon: '⚪', name: 'Dames', desc: 'Dames internationales 10×10 ou 8×8 : prises obligatoires, rafles, dames volantes. IA ou à deux.' },
 ]
 
 const $ = (s) => document.querySelector(s)

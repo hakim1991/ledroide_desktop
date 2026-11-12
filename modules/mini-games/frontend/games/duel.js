@@ -1,5 +1,8 @@
-// Shared shell for the two-player board games (connect4, tictactoe, reversi): setup, players, AI worker,
+// Shared shell for the two-player board games (connect4, tictactoe, reversi, chess…): setup, players, AI worker,
 // undo, save/resume, session score, stats. Each game supplies its rules and its board view (see mountDuel).
+// Optional spec extras: init/replay receive a custom start (S.start, e.g. a FEN) as last argument and the worker gets it
+// as `start`; view api.load({ start, moves, first }) starts an imported (unrated) game; api.state() exposes the record;
+// spec.firstLabel renames « Qui commence ? »; spec.note(pos) appends a short remark to the turn message.
 import { h } from '../common.js'
 
 export const LEVELS = [['easy', 'Facile'], ['medium', 'Moyen'], ['hard', 'Difficile']]
@@ -67,6 +70,8 @@ export async function mountDuel(root, ctx, spec) {
   const view = spec.view(ctx, {
     pick: (m) => tryHuman(m),
     canPlay: () => humanTurn(),
+    state: () => S,
+    load: (opts) => newGame(false, { ...opts, imported: true }),
   })
   hostEl.append(view.el)
 
@@ -102,11 +107,12 @@ export async function mountDuel(root, ctx, spec) {
     if (!S) return show('')
     if (S.over) {
       const w = S.over.winner
-      return show(w < 0 ? 'Match nul.' : `${S.players[w].name} a gagné.`)
+      return show(w < 0 ? 'Match nul.' : S.mode === 'ai' && !S.players[w].ai ? 'Vous avez gagné.' : `${S.players[w].name} a gagné.`)
     }
     const p = S.players[spec.toMove(pos)]
-    if (thinking) return show('Réflexion…')
-    show(S.mode === 'ai' ? 'À vous de jouer.' : `À ${p.name} de jouer.`)
+    const note = spec.note?.(pos)
+    if (thinking) return show(note ? `${note} Réflexion…` : 'Réflexion…', !!note)
+    show((S.mode === 'ai' ? 'À vous de jouer.' : `À ${p.name} de jouer.`) + (note ? ` ${note}` : ''), !!note)
   }
 
   function renderBar() {
@@ -185,22 +191,26 @@ export async function mountDuel(root, ctx, spec) {
     root.querySelector(':scope > .overlay')?.remove()
   }
 
-  async function newGame(force = false) {
+  async function newGame(force = false, opts = {}) {
     if (!force && S && !S.over && S.moves.some((e) => !S.players[e.p].ai && e.m !== -1)) {
-      if (!(await ctx.confirm('Abandonner la partie en cours ?', { ok: 'Nouvelle partie' }))) return
+      if (!(await ctx.confirm('Abandonner la partie en cours ?', { ok: 'Nouvelle partie' }))) return false
     }
     stopAI()
     closeOverlay()
-    const players = buildPlayers(prefs.mode, prefs.first)
+    const players = buildPlayers(prefs.mode, opts.first ?? prefs.first)
     ctx.prefs.set(prefs)
     S = { v: 1, game: spec.id, mode: prefs.mode, level: prefs.level, variant: prefs.variant, players, moves: [], over: null }
-    pos = spec.init(S.variant)
+    if (opts.start != null) S.start = opts.start
+    if (opts.imported) S.imported = true
+    pos = spec.init(S.variant, S.start)
+    for (const m of opts.moves || []) { S.moves.push({ p: spec.toMove(pos), m }); spec.apply(pos, m) }
     lastAnim = null
     view.reset?.(pos, S.variant)
     fit()
     render()
     save()
     proceed()
+    return true
   }
 
   function save() {
@@ -256,7 +266,7 @@ export async function mountDuel(root, ctx, spec) {
     const delay = Math.max(0, (spec.animMs?.(lastAnim) ?? 0) - 100)
     aiTimer = setTimeout(() => {
       if (token !== aiToken || destroyed) return
-      ensureWorker().postMessage({ token, level: S.level, variant: S.variant, moves: S.moves.map((e) => e.m) })
+      ensureWorker().postMessage({ token, level: S.level, variant: S.variant, moves: S.moves.map((e) => e.m), start: S.start ?? null })
     }, delay)
   }
 
@@ -305,7 +315,7 @@ export async function mountDuel(root, ctx, spec) {
       if (e.m === -1) continue
       if (S.mode === 'pvp' || !S.players[e.p].ai) break
     }
-    pos = spec.replay(S.variant, S.moves.map((e) => e.m))
+    pos = spec.replay(S.variant, S.moves.map((e) => e.m), S.start)
     lastAnim = null
     ctx.sfx('move')
     message('Coup annulé.', false, 1200)
@@ -323,7 +333,11 @@ export async function mountDuel(root, ctx, spec) {
     let title, text = spec.endText?.(pos, res) || ''
     let scoreRes = null
     const hi = S.mode === 'ai' ? S.players.findIndex((p) => !p.ai) : -1
-    if (S.mode === 'ai') {
+    if (S.imported) {
+      ctx.sfx(w < 0 ? 'line' : S.mode === 'ai' && w !== hi ? 'lose' : 'win')
+      title = w < 0 ? '🤝 Match nul' : S.mode === 'ai' ? (w === hi ? '🎉 Victoire !' : '😞 Défaite') : `🎉 ${S.players[w].name} gagne !`
+      text += '\nPartie importée : non comptée dans les statistiques.'
+    } else if (S.mode === 'ai') {
       const outcome = w < 0 ? 'd' : w === hi ? 'w' : 'l'
       const s = (session.ai[S.level] ??= { w: 0, d: 0, l: 0 }); s[outcome]++
       ctx.sfx(outcome === 'w' ? 'win' : outcome === 'l' ? 'lose' : 'line')
@@ -391,7 +405,7 @@ export async function mountDuel(root, ctx, spec) {
       h('div', { class: 'row' }, h('label', null, 'Mode'), mode.el),
       variant ? h('div', { class: 'row' }, h('label', null, 'Variante'), variant.el) : null,
       levelRow,
-      h('div', { class: 'row' }, h('label', null, 'Qui commence ?'), firstHost),
+      h('div', { class: 'row' }, h('label', null, spec.firstLabel || 'Qui commence ?'), firstHost),
       h('div', { class: 'row' }, h('label', null, 'Noms des joueurs'), h('div', { class: 'names' }, n1, n2)))
     const ok = await ctx.dialog({
       title: 'Réglages de la partie', body,
@@ -457,7 +471,7 @@ export async function mountDuel(root, ctx, spec) {
     try {
       S = { ...saved, over: null }
       if (spec.variants && !spec.variants.some(([v]) => v === S.variant)) throw new Error('variant')
-      pos = spec.replay(S.variant, S.moves.map((e) => e.m))
+      pos = spec.replay(S.variant, S.moves.map((e) => e.m), S.start)
       if (spec.result(pos)) throw new Error('finished')
       view.reset?.(pos, S.variant)
       fit()
