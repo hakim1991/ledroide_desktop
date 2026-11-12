@@ -1,0 +1,30 @@
+{
+  "id": "mini-games",
+  "name": "Mini-jeux",
+  "version": "1.0.0",
+  "description": "Démineur, Sudoku, Fusion, Taquin, Mémoire, Serpent, Blocs, Casse-briques, Mot du jour, Pendu, Puissance 4, Morpion et Othello. Scores, statistiques, parties reprises, clavier et manette.",
+  "category": "Jeux",
+  "tags": [
+    "jeux",
+    "puzzle",
+    "arcade",
+    "mots"
+  ],
+  "icon": "🕹️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}
