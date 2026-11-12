@@ -398,16 +398,43 @@ async def _reader(s: Session):
     await s.close(reason)
 
 
+_PEM_BLOCK = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
+
+
+def _fix_mislabeled_key(data: str) -> str:
+    """OpenSSH-format keys are sometimes wrapped in a PEM header (BEGIN RSA PRIVATE KEY…);
+    asyncssh then fails to parse them as DER, so re-label the block from its content."""
+    m = _PEM_BLOCK.search(data)
+    if not m or m.group(1) == "OPENSSH PRIVATE KEY":
+        return data
+    body = "".join(line.strip() for line in m.group(2).splitlines() if line.strip() and ":" not in line)
+    try:
+        raw = base64.b64decode(body, validate=True)
+    except ValueError:
+        return data
+    if not raw.startswith(b"openssh-key-v1\0"):
+        return data
+    lines = "\n".join(body[i:i + 70] for i in range(0, len(body), 70))
+    return f"-----BEGIN OPENSSH PRIVATE KEY-----\n{lines}\n-----END OPENSSH PRIVATE KEY-----\n"
+
+
 def _key_from(host: dict, secrets: dict, passphrase: str | None):
     asyncssh = _ssh()
     key_data = secrets.get("key_data")
     try:
-        if key_data:
-            return asyncssh.import_private_key(key_data, passphrase or None)
-        path = Path(os.path.expandvars(os.path.expanduser(host.get("key_path") or "")))
-        if not path.is_file():
-            raise SshError(f"Clé privée introuvable : {path}", "KEY_NOT_FOUND")
-        return asyncssh.read_private_key(str(path), passphrase or None)
+        if not key_data:
+            path = Path(os.path.expandvars(os.path.expanduser(host.get("key_path") or "")))
+            if not path.is_file():
+                raise SshError(f"Clé privée introuvable : {path}", "KEY_NOT_FOUND")
+            raw = path.read_bytes()
+            try:
+                text = raw.decode("ascii")
+            except UnicodeDecodeError:
+                return asyncssh.import_private_key(raw, passphrase or None)
+            if not text.lstrip().startswith("-----"):
+                return asyncssh.import_private_key(raw, passphrase or None)
+            key_data = text
+        return asyncssh.import_private_key(_fix_mislabeled_key(key_data), passphrase or None)
     except asyncssh.KeyImportError as exc:
         if "passphrase" in str(exc).lower() and not passphrase:
             raise SshError("Cette clé privée est protégée par une phrase de passe", "NEED_PASSPHRASE")
