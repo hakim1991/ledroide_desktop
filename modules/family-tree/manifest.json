@@ -1,0 +1,30 @@
+{
+  "id": "family-tree",
+  "name": "Arbre généalogique",
+  "version": "1.0.0",
+  "description": "Créez des arbres généalogiques : personnes (dates, lieux, profession, photo, notes), couples, enfants. Vue arbre ascendants/descendants navigable, liste, import/export GEDCOM et JSON, export image SVG/PNG.",
+  "category": "Productivité",
+  "tags": [
+    "généalogie",
+    "famille",
+    "arbre",
+    "gedcom"
+  ],
+  "icon": "🌳",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}
