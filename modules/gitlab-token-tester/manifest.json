@@ -1,0 +1,52 @@
+{
+  "id": "gitlab-token-tester",
+  "name": "Testeur de jetons GitLab",
+  "version": "1.0.0",
+  "description": "Vérifie des jetons d'accès GitLab (personnels, projet/groupe, OAuth, CI/CD, runner, déploiement, flux) : validité, expiration, révocation, portées, utilisateur associé, accès effectif à un projet et au dépôt git. Test unitaire ou en lot, historique sans jamais stocker les jetons.",
+  "category": "Sécurité",
+  "tags": [
+    "gitlab",
+    "token",
+    "api",
+    "authentification",
+    "git"
+  ],
+  "icon": "🦊",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {
+    "default_url": {
+      "type": "string",
+      "title": "URL GitLab par défaut",
+      "default": "https://gitlab.com"
+    },
+    "timeout_s": {
+      "type": "integer",
+      "title": "Délai maximal par requête (secondes)",
+      "default": 15,
+      "minimum": 2,
+      "maximum": 120
+    },
+    "history_size": {
+      "type": "integer",
+      "title": "Nombre d'entrées conservées dans l'historique",
+      "default": 100,
+      "minimum": 10,
+      "maximum": 1000
+    }
+  }
+}

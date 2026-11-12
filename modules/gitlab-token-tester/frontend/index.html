@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Testeur de jetons GitLab</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #fc6d26; --accent-h: #fca326;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #e65f1f; border-color: #e65f1f; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.mini { padding: 1px 7px; font-size: 11.5px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 6px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; font-family: var(--mono); width: 100%; }
+  .mono { font-family: var(--mono); }
+  .hidden { display: none !important; }
+
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .topbar .title { font-weight: 600; font-size: 14px; }
+  .topbar .spacer { flex: 1; }
+  .modes { display: flex; gap: 4px; }
+  .modes button.active { background: var(--bg); border-color: var(--accent); color: #fff; }
+  .main { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; align-items: start; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .card + .card, .grid + .card, .card + .grid, .banner + .grid { margin-top: 12px; }
+  .card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin-bottom: 10px;
+             display: flex; align-items: center; gap: 6px; }
+  .card h3 .sp { flex: 1; }
+  .form { display: grid; grid-template-columns: 140px 1fr; gap: 8px 10px; align-items: center; }
+  .form label { color: var(--muted); }
+  .form .full { grid-column: 1 / -1; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; min-width: 120px; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .hint code, code { font-family: var(--mono); color: var(--accent-h); }
+  .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
+  .detected { font-size: 11.5px; color: var(--info); min-height: 15px; }
+
+  .banner { display: flex; gap: 12px; align-items: center; border-radius: 8px; padding: 12px 14px; margin-top: 12px; border: 1px solid; }
+  .banner .ico { font-size: 26px; }
+  .banner .t { font-size: 16px; font-weight: 600; }
+  .banner .m { color: var(--text); opacity: .85; margin-top: 2px; }
+  .banner .meta { margin-left: auto; text-align: right; color: var(--muted); font-size: 11.5px; }
+  .st-ok { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.35); }
+  .st-ok .t { color: #86efac; }
+  .st-warn { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.35); }
+  .st-warn .t { color: #fcd34d; }
+  .st-bad { background: rgba(239,68,68,.08); border-color: rgba(239,68,68,.35); }
+  .st-bad .t { color: #fca5a5; }
+  .st-info { background: rgba(56,189,248,.07); border-color: rgba(56,189,248,.3); }
+  .st-info .t { color: #7dd3fc; }
+
+  .warns { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+  .warns div { color: var(--warn); font-size: 12px; }
+  .warns div::before { content: '⚠ '; }
+
+  table.kv { width: 100%; border-collapse: collapse; }
+  table.kv td { padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.kv td.k { color: var(--muted); width: 38%; white-space: nowrap; }
+  table.kv td.v { word-break: break-word; }
+  .scopes { display: flex; flex-direction: column; gap: 4px; }
+  .scope { display: flex; gap: 8px; align-items: baseline; }
+  .scope code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--accent-h); }
+  .scope.broad code { border-color: rgba(245,158,11,.5); color: #fcd34d; }
+  .scope span { color: var(--muted); font-size: 11.5px; }
+
+  table.list { width: 100%; border-collapse: collapse; }
+  table.list th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; padding: 5px 6px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+  table.list td { padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.list tr.clickable { cursor: pointer; }
+  table.list tr.clickable:hover td { background: var(--surface2); }
+  td.url { font-family: var(--mono); font-size: 11.5px; color: var(--muted); word-break: break-all; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); white-space: nowrap; }
+  .pill.ok { color: #86efac; border-color: rgba(34,197,94,.4); background: rgba(34,197,94,.1); }
+  .pill.bad { color: #fca5a5; border-color: rgba(239,68,68,.4); background: rgba(239,68,68,.1); }
+  .pill.warn { color: #fcd34d; border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.1); }
+  .pill.info { color: #7dd3fc; border-color: rgba(56,189,248,.4); background: rgba(56,189,248,.1); }
+  .yes { color: var(--ok); } .no { color: var(--err); }
+  .empty { color: var(--muted); padding: 18px; text-align: center; }
+  .progress { height: 6px; background: var(--surface2); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+  .progress div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .summary { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .error-box { color: #fca5a5; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: 6px; padding: 9px 11px; margin-top: 12px; white-space: pre-wrap; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2);
+           border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0;
+           transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.bad { border-color: var(--err); color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="title">🦊 Testeur de jetons GitLab</div>
+  <div class="spacer"></div>
+  <div class="modes" id="modes">
+    <button data-mode="single" class="active" title="Alt+1">Tester</button>
+    <button data-mode="batch" title="Alt+2">En lot</button>
+    <button data-mode="history" title="Alt+3">Historique</button>
+  </div>
+</div>
+
+<datalist id="urls"></datalist>
+
+<div class="main">
+  <div class="card">
+    <h3>Instance &amp; options</h3>
+    <div class="form">
+      <label for="url">URL GitLab</label>
+      <input id="url" list="urls" placeholder="https://gitlab.com" spellcheck="false" />
+      <label for="type">Type de jeton</label>
+      <select id="type"><option value="auto">Détection automatique (préfixe)</option></select>
+      <label for="project">Projet (optionnel)</label>
+      <input id="project" placeholder="groupe/sous-groupe/projet ou URL du projet" spellcheck="false" />
+      <label for="username" id="username-label">Utilisateur (déploiement)</label>
+      <input id="username" placeholder="gitlab+deploy-token-42 (jetons de déploiement uniquement)" spellcheck="false" />
+      <span></span>
+      <label class="check"><input type="checkbox" id="verify" checked /> Vérifier le certificat SSL</label>
+    </div>
+    <div class="hint" style="margin-top:8px">Le projet permet de vérifier le niveau d'accès, l'API du dépôt et l'accès git en lecture/écriture
+      (requêtes <code>info/refs</code>, rien n'est poussé). Les jetons ne sont jamais enregistrés : l'historique ne garde qu'une version masquée et une empreinte.</div>
+  </div>
+
+  <section data-panel="single">
+    <div class="card">
+      <h3>Jeton</h3>
+      <div class="row">
+        <input id="token" class="grow mono" type="password" placeholder="glpat-xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+        <button class="ghost" id="toggle-token" title="Afficher / masquer">👁</button>
+        <button class="primary" id="run" title="Ctrl+Entrée">Tester</button>
+      </div>
+      <div class="detected" id="detected"></div>
+    </div>
+    <div id="single-result"></div>
+  </section>
+
+  <section data-panel="batch" class="hidden">
+    <div class="card">
+      <h3>Jetons à tester <span class="sp"></span><span class="hint">un par ligne, lignes commençant par # ignorées, 200 max</span></h3>
+      <textarea id="tokens" rows="7" spellcheck="false" placeholder="glpat-…&#10;glpat-…&#10;gldt-…"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="run-batch">Tester tout</button>
+        <button id="cancel-batch" class="hidden">Annuler</button>
+        <button class="ghost" id="clear-tokens">Vider</button>
+        <span class="hint" id="batch-msg"></span>
+      </div>
+      <div class="progress hidden" id="batch-progress"><div></div></div>
+    </div>
+    <div id="batch-result"></div>
+  </section>
+
+  <section data-panel="history" class="hidden">
+    <div class="card">
+      <h3>Historique <span class="sp"></span>
+        <input id="hist-filter" placeholder="Filtrer…" style="text-transform:none;letter-spacing:0;font-weight:400" />
+        <button class="mini" id="hist-clear">Tout effacer</button></h3>
+      <div id="history"></div>
+    </div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'gitlab-token-tester'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s) => document.querySelector(s)
+const $$ = (s) => [...document.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const STATUS = {
+  valid: ['st-ok', '✅', 'ok'], limited: ['st-warn', '🟡', 'warn'], expired: ['st-bad', '⌛', 'bad'],
+  revoked: ['st-bad', '⛔', 'bad'], inactive: ['st-bad', '⛔', 'bad'], invalid: ['st-bad', '❌', 'bad'],
+  error: ['st-bad', '⚠️', 'bad'], untested: ['st-info', 'ℹ️', 'info'], identified: ['st-info', '🔎', 'info'],
+}
+let types = []
+let history = []
+let batchJob = null
+
+function toast(msg, bad = false) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toast.timer)
+  toast.timer = setTimeout(() => { t.className = '' }, 2600)
+}
+
+function fmtDate(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  if (isNaN(d)) return esc(v)
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(String(v))
+  return dateOnly ? d.toLocaleDateString('fr-FR', { timeZone: 'UTC' }) : d.toLocaleString('fr-FR')
+}
+
+function relDays(days) {
+  if (days === null || days === undefined) return ''
+  if (days < 0) return ` <span class="no">(expiré depuis ${-days} j)</span>`
+  if (days === 0) return ' <span class="no">(expire aujourd\'hui)</span>'
+  const cls = days <= 30 ? 'no' : 'yes'
+  return ` <span class="${cls}">(dans ${days} j)</span>`
+}
+
+const yn = (v) => v === true ? '<span class="yes">Oui</span>' : v === false ? '<span class="no">Non</span>' : '—'
+const pill = (status, label) => `<span class="pill ${(STATUS[status] || [])[2] || ''}">${esc(label || status)}</span>`
+const kv = (rows) => '<table class="kv">' + rows.filter((r) => r && r[1] !== undefined && r[1] !== null && r[1] !== '')
+  .map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td class="v">${v}</td></tr>`).join('') + '</table>'
+const link = (url, text) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--accent-h)">${esc(text || url)}</a>` : ''
+
+function options() {
+  return {
+    url: $('#url').value.trim(), type: $('#type').value, project: $('#project').value.trim(),
+    username: $('#username').value.trim(), verify_ssl: $('#verify').checked,
+  }
+}
+
+// ── Single test ─────────────────────────────────────────────────────────────
+
+let detectTimer
+$('#token').addEventListener('input', () => {
+  clearTimeout(detectTimer)
+  detectTimer = setTimeout(async () => {
+    const token = $('#token').value
+    if (!token.trim()) { $('#detected').textContent = ''; return }
+    try {
+      const r = await call('detect', { token })
+      $('#detected').textContent = r.type ? `Type détecté : ${r.label}` : ''
+    } catch { $('#detected').textContent = '' }
+  }, 250)
+})
+
+$('#toggle-token').addEventListener('click', () => {
+  const input = $('#token')
+  input.type = input.type === 'password' ? 'text' : 'password'
+})
+
+async function runSingle() {
+  const token = $('#token').value
+  if (!token.trim()) { toast('Collez un jeton à tester', true); $('#token').focus(); return }
+  const btn = $('#run')
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span> Test…'
+  $('#single-result').innerHTML = ''
+  try {
+    const r = await call('test', { ...options(), token }, { timeout: 180000 })
+    $('#single-result').innerHTML = renderResult(r)
+    rememberUrl(r.base_url)
+  } catch (e) {
+    $('#single-result').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Tester'
+  }
+}
+
+$('#run').addEventListener('click', runSingle)
+$('#token').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSingle() })
+
+function renderResult(r) {
+  const [cls, ico] = STATUS[r.status] || STATUS.error
+  let html = `<div class="banner ${cls}"><div class="ico">${ico}</div><div>
+    <div class="t">${esc(r.status_label)}</div><div class="m">${esc(r.message)}</div></div>
+    <div class="meta"><div class="mono">${esc(r.masked)}</div><div>${esc(r.type_label)}</div>
+    <div>${esc(r.base_url)} · ${r.elapsed_ms} ms</div></div></div>`
+  if (r.warnings?.length) html += `<div class="warns">${r.warnings.map((w) => `<div>${esc(w)}</div>`).join('')}</div>`
+
+  const cards = []
+  const t = r.token
+  if (t && Object.keys(t).length) {
+    const scopes = t.scopes?.length ? '<div class="scopes">' + t.scopes.map((s) =>
+      `<div class="scope ${s.broad ? 'broad' : ''}"><code>${esc(s.scope)}</code><span>${esc(s.desc)}</span></div>`).join('') + '</div>' : null
+    const expires = t.expires_at ? fmtDate(t.expires_at) + relDays(t.days_left)
+      : ('days_left' in t && r.type === 'pat' ? '<span class="no">Jamais</span>' : null)
+    cards.push(`<div class="card"><h3>Jeton</h3>${kv([
+      ['Nom', esc(t.name)], ['Description', esc(t.description)], ['ID', esc(t.id)],
+      ['Actif', t.active === undefined ? null : yn(t.active)], ['Révoqué', t.revoked === undefined ? null : yn(t.revoked)],
+      ['Créé le', t.created_at ? fmtDate(t.created_at) : null], ['Expire le', expires],
+      ['Dernière utilisation', t.last_used_at !== undefined ? fmtDate(t.last_used_at) : null],
+      ['Dernières IP', t.last_used_ips?.length ? `<span class="mono">${t.last_used_ips.map(esc).join(', ')}</span>` : null],
+      ['Application OAuth', t.application ? `<span class="mono">${esc(t.application)}</span>` : null],
+      ['Empreinte SHA-256', `<span class="mono">${esc(r.fingerprint)}</span>`],
+      ['Portées', scopes],
+    ])}</div>`)
+  }
+  const u = r.user
+  if (u) {
+    cards.push(`<div class="card"><h3>Utilisateur associé</h3>${kv([
+      ['Type', esc(u.kind)], ['Nom d\'utilisateur', u.username ? link(u.web_url, '@' + u.username) || esc(u.username) : null],
+      ['Nom', esc(u.name)], ['E-mail', esc(u.email)], ['ID', esc(u.id)], ['État', esc(u.state)],
+      ['Administrateur', u.is_admin === undefined || u.is_admin === null ? null : yn(u.is_admin)],
+      ['2FA activée', u.two_factor_enabled === undefined || u.two_factor_enabled === null ? null : yn(u.two_factor_enabled)],
+      ['Peut créer des projets', u.can_create_project === undefined || u.can_create_project === null ? null : yn(u.can_create_project)],
+      ['Compte créé le', u.created_at ? fmtDate(u.created_at) : null],
+      ['Dernière activité', u.last_activity_on ? fmtDate(u.last_activity_on) : null],
+    ])}</div>`)
+  }
+  const access = []
+  if (r.counts) {
+    access.push(['Projets (membre)', r.counts.projects_ok ? esc(r.counts.projects ?? '> 10 000 ou inconnu') : '<span class="no">Refusé</span>'])
+    access.push(['Groupes', r.counts.groups_ok ? esc(r.counts.groups ?? 'inconnu') : '<span class="no">Refusé</span>'])
+  }
+  if (r.instance) {
+    access.push(['Version GitLab', `<span class="mono">${esc(r.instance.version)}</span>` + (r.instance.enterprise === true ? ' (EE)' : r.instance.enterprise === false ? ' (CE)' : '')])
+  }
+  if (r.rate_limit) access.push(['Limite de débit', `${esc(r.rate_limit.remaining)} / ${esc(r.rate_limit.limit)} restantes`])
+  if (r.job) {
+    access.push(['Job', `${link(r.job.web_url, '#' + r.job.id) || esc(r.job.id)} ${esc(r.job.name)} (${esc(r.job.status)})`])
+    access.push(['Pipeline / projet', `#${esc(r.job.pipeline_id)} · projet ${esc(r.job.project_id)}`])
+    access.push(['Référence', `<span class="mono">${esc(r.job.ref)}</span>`])
+  }
+  if (r.runner) access.push(['Runner', `ID ${esc(r.runner.id)}`])
+  if (access.length) cards.push(`<div class="card"><h3>Accès &amp; instance</h3>${kv(access)}</div>`)
+
+  const p = r.project
+  if (p) {
+    const gitRow = (ok, status) => status === undefined ? null
+      : ok ? '<span class="yes">Autorisé</span>' : `<span class="no">Refusé</span> <span class="hint">(HTTP ${esc(status ?? '—')})</span>`
+    cards.push(`<div class="card"><h3>Projet</h3>${kv([
+      ['Projet', p.name ? link(p.web_url, p.name) : `<span class="mono">${esc(p.path)}</span>`],
+      ['API projet', p.api_status === undefined ? null : p.api_status === 200 ? '<span class="yes">Accessible</span>' : `<span class="no">HTTP ${esc(p.api_status ?? 'erreur')}</span>`],
+      ['Visibilité', esc(p.visibility)], ['Archivé', p.archived === undefined ? null : yn(p.archived)],
+      ['Niveau d\'accès', esc(p.access_label)], ['Branche par défaut', p.default_branch ? `<span class="mono">${esc(p.default_branch)}</span>` : null],
+      ['API du dépôt', p.branches_ok === undefined ? null : p.branches_ok ? '<span class="yes">Autorisé</span>' : '<span class="no">Refusé</span>'],
+      ['Git : clone / pull', gitRow(p.git_read, p.git_read_status)],
+      ['Git : push', gitRow(p.git_write, p.git_write_status)],
+      ['Remarque', esc(p.git_note)],
+    ])}</div>`)
+  }
+  if (cards.length) html += `<div class="grid" style="margin-top:12px">${cards.join('')}</div>`
+
+  if (r.steps?.length) {
+    html += `<div class="card"><h3>Requêtes effectuées</h3><table class="list"><thead><tr>
+      <th>Vérification</th><th>Requête</th><th>Statut</th><th>Durée</th><th>Détail</th></tr></thead><tbody>` +
+      r.steps.map((s) => `<tr><td>${esc(s.label)}</td><td class="url">${esc(s.method)} ${esc(s.url)}</td>
+        <td>${s.status ? `<span class="pill ${s.ok ? 'ok' : s.status < 400 ? 'warn' : 'bad'}">${s.status}</span>` : '<span class="pill bad">—</span>'}</td>
+        <td class="hint">${s.ms !== null && s.ms !== undefined ? s.ms + ' ms' : ''}</td><td class="hint">${esc(s.note)}</td></tr>`).join('') +
+      '</tbody></table></div>'
+  }
+  return html
+}
+
+// ── Batch ───────────────────────────────────────────────────────────────────
+
+$('#run-batch').addEventListener('click', async () => {
+  const tokens = $('#tokens').value
+  if (!tokens.trim()) { toast('Collez au moins un jeton', true); return }
+  $('#run-batch').disabled = true
+  $('#cancel-batch').classList.remove('hidden')
+  $('#batch-progress').classList.remove('hidden')
+  $('#batch-progress div').style.width = '0'
+  $('#batch-result').innerHTML = ''
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'batch', { ...options(), tokens }, {
+      onStart: (id) => { batchJob = id },
+      onProgress: (d) => {
+        $('#batch-progress div').style.width = (d.percent || 0) + '%'
+        $('#batch-msg').textContent = d.message || ''
+      },
+    })
+    $('#batch-msg').textContent = `${r.results.length} jeton(s) testé(s)`
+    $('#batch-result').innerHTML = renderBatch(r)
+    rememberUrl(r.results.find((x) => x.base_url)?.base_url)
+  } catch (e) {
+    $('#batch-result').innerHTML = `<div class="error-box">${esc(e.message)}</div>`
+    $('#batch-msg').textContent = ''
+  } finally {
+    batchJob = null
+    $('#run-batch').disabled = false
+    $('#cancel-batch').classList.add('hidden')
+    $('#batch-progress').classList.add('hidden')
+  }
+})
+
+$('#cancel-batch').addEventListener('click', () => { if (batchJob) call('job:cancel', { job_id: batchJob }).catch(() => {}) })
+$('#clear-tokens').addEventListener('click', () => { $('#tokens').value = ''; $('#batch-result').innerHTML = '' })
+
+let batchResults = []
+function renderBatch(r) {
+  batchResults = r.results
+  const summary = Object.entries(r.summary).map(([st, n]) => pill(st, `${n} · ${r.results.find((x) => x.status === st)?.status_label || st}`)).join('')
+  return `<div class="card"><h3>Résultats</h3><div class="summary" style="margin:0 0 10px">${summary}</div>
+    <table class="list"><thead><tr><th>Jeton</th><th>Type</th><th>Statut</th><th>Nom</th><th>Utilisateur</th><th>Portées</th><th>Expire</th></tr></thead><tbody>` +
+    r.results.map((x, i) => `<tr class="clickable" data-i="${i}" title="${esc(x.message)}">
+      <td class="mono">${esc(x.masked)}</td><td class="hint">${esc(x.type_label)}</td><td>${pill(x.status, x.status_label)}</td>
+      <td>${esc(x.token?.name)}</td><td>${x.user?.username ? '@' + esc(x.user.username) : esc(x.user?.name)}</td>
+      <td class="hint">${esc((x.token?.scopes || []).map((s) => s.scope).join(', '))}</td>
+      <td>${x.token?.expires_at ? fmtDate(x.token.expires_at) + relDays(x.token.days_left) : ''}</td></tr>`).join('') +
+    '</tbody></table><div class="hint" style="margin-top:8px">Cliquez sur une ligne pour voir le détail.</div></div><div id="batch-detail"></div>'
+}
+
+$('#batch-result').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-i]')
+  if (!tr) return
+  const x = batchResults[+tr.dataset.i]
+  if (x?.base_url) {
+    $('#batch-detail').innerHTML = renderResult(x)
+    $('#batch-detail').scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+})
+
+// ── History ─────────────────────────────────────────────────────────────────
+
+async function loadHistory() {
+  try {
+    history = (await call('history_list')).items
+  } catch (e) { toast(e.message, true); history = [] }
+  renderHistory()
+}
+
+function renderHistory() {
+  const q = $('#hist-filter').value.trim().toLowerCase()
+  const items = history.filter((h) => !q || [h.masked, h.name, h.username, h.base_url, h.type_label, h.status_label, h.fingerprint, h.project]
+    .some((v) => String(v || '').toLowerCase().includes(q)))
+  if (!items.length) { $('#history').innerHTML = '<div class="empty">Aucun test enregistré.</div>'; return }
+  $('#history').innerHTML = `<table class="list"><thead><tr><th>Date</th><th>Instance</th><th>Jeton</th><th>Statut</th>
+    <th>Nom / utilisateur</th><th>Portées</th><th>Expire</th><th></th></tr></thead><tbody>` +
+    items.map((h) => `<tr title="${esc(h.message)}"><td class="hint">${fmtDate(h.tested_at)}${h.source === 'lot' ? ' · lot' : ''}</td>
+      <td class="url">${esc(h.base_url)}${h.project ? '<br>' + esc(h.project) : ''}</td>
+      <td><span class="mono">${esc(h.masked)}</span><br><span class="hint">${esc(h.type_label)}</span></td>
+      <td>${pill(h.status, h.status_label)}</td>
+      <td>${esc(h.name || '')}${h.username ? `<br><span class="hint">@${esc(h.username)}</span>` : ''}</td>
+      <td class="hint">${esc((h.scopes || []).join(', '))}</td>
+      <td>${h.expires_at ? fmtDate(h.expires_at) : ''}</td>
+      <td><button class="ghost mini" data-del="${esc(h._id)}" title="Supprimer">✕</button></td></tr>`).join('') + '</tbody></table>'
+}
+
+$('#hist-filter').addEventListener('input', renderHistory)
+$('#history').addEventListener('click', async (e) => {
+  const id = e.target.closest('[data-del]')?.dataset.del
+  if (!id) return
+  await call('history_delete', { id }).catch((err) => toast(err.message, true))
+  history = history.filter((h) => h._id !== id)
+  renderHistory()
+})
+$('#hist-clear').addEventListener('click', async () => {
+  if (!history.length || !confirm('Effacer tout l\'historique ?')) return
+  await call('history_clear').catch((err) => toast(err.message, true))
+  history = []
+  renderHistory()
+})
+
+// ── Misc ────────────────────────────────────────────────────────────────────
+
+function rememberUrl(url) {
+  if (!url || [...$('#urls').options].some((o) => o.value === url)) return
+  $('#urls').insertAdjacentHTML('afterbegin', `<option value="${esc(url)}">`)
+}
+
+function setMode(mode) {
+  $$('#modes button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode))
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== mode))
+  if (mode === 'history') loadHistory()
+}
+$$('#modes button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)))
+
+document.addEventListener('keydown', (e) => {
+  if (e.altKey && ['1', '2', '3'].includes(e.key)) { setMode(['single', 'batch', 'history'][+e.key - 1]); e.preventDefault() }
+  if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault()
+    if (!$('[data-panel="single"]').classList.contains('hidden')) runSingle()
+    else if (!$('[data-panel="batch"]').classList.contains('hidden') && !$('#run-batch').disabled) $('#run-batch').click()
+  }
+})
+
+;(async () => {
+  try {
+    const init = await call('init')
+    types = init.types
+    $('#type').insertAdjacentHTML('beforeend', types.map((t) =>
+      `<option value="${esc(t.id)}">${esc(t.label)}${t.testable ? '' : ' — identification seule'}</option>`).join(''))
+    $('#url').value = init.urls[0] || init.default_url || 'https://gitlab.com'
+    $('#urls').innerHTML = [...new Set([...init.urls, init.default_url].filter(Boolean))].map((u) => `<option value="${esc(u)}">`).join('')
+  } catch (e) {
+    toast(e.message, true)
+  }
+  $('#token').focus()
+})()
+</script>
+</body>
+</html>
