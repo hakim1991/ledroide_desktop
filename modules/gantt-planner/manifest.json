@@ -1,0 +1,30 @@
+{
+  "id": "gantt-planner",
+  "name": "Planning Gantt",
+  "version": "1.0.0",
+  "description": "Planification de tâches de projet avec vue Gantt : tâches, groupes, jalons, avancement, dépendances avec replanification automatique, glisser-déposer, zoom jour/semaine/mois, export/import JSON et CSV.",
+  "category": "Productivité",
+  "tags": [
+    "gantt",
+    "planification",
+    "projet",
+    "tâches"
+  ],
+  "icon": "📊",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}
