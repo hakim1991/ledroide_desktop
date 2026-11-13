@@ -28,7 +28,12 @@ const STATUS_FILTERS = [
   { id: 'active',   label: 'Activés',     test: (m) => m.status === 'active' },
   { id: 'inactive', label: 'Non activés', test: (m) => m.status === 'installed' },
   { id: 'error',    label: 'En erreur',   test: (m) => m.status === 'error' },
+  { id: 'updates',  label: 'Mises à jour', test: (m) => !!m.update_available },
 ]
+const CONDITIONAL_FILTERS = new Set(['error', 'updates'])
+
+const depsOf = (m) => m.dependencies?.python ?? []
+const sameDeps = (a, b) => [...a].sort().join('\n') === [...b].sort().join('\n')
 
 export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, showToast, onHotReload, onRestartBackend, onOpenEnv, op }) {
   const busy = !!op
@@ -39,8 +44,9 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
   const [syncing, setSyncing]   = useState(false)
   const [modal, setModal]     = useState(null)
   const [selected, setSelected] = useState(() => new Set())
-  const [batch, setBatch]       = useState(null)      // null | { index, total }
-  // modal: null | { mod, type: 'activate'|'deactivate'|'uninstall'|'config'|'meta', loading, loadingMsg, log: [] }
+  const [batch, setBatch]       = useState(null)      // null | { index, total, kind: 'install'|'update' }
+  const [repairing, setRepairing] = useState(false)
+  // modal: null | { mod, type: 'activate'|'deactivate'|'uninstall'|'config'|'meta'|'update'|'deps', loading, loadingMsg, log: [] }
 
   const inTab      = modules.filter((m) => (tab === 'installed' ? isInstalled(m) : m.status === 'available'))
   const matching   = filterModules(inTab, filters)
@@ -53,6 +59,7 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
   const filteredIds = filtered.map((m) => m.id)
   const nSelFilter  = filteredIds.filter((id) => selected.has(id)).length
   const allSelected = filteredIds.length > 0 && nSelFilter === filteredIds.length
+  const updatable   = modules.filter((m) => isInstalled(m) && m.update_available)
 
   useEffect(() => {
     api('/modules/catalog').then(setCatalog).catch(() => {})
@@ -69,7 +76,14 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
       setCatalog(info)
       await onRefresh()
       if (info.error) showToast(info.error, false)
-      else showToast(info.new_modules?.length ? `${info.new_modules.length} nouveau(x) module(s) disponible(s)` : 'Catalogue à jour')
+      else {
+        const mods = await api('/modules').catch(() => [])
+        const nUpd = mods.filter((m) => isInstalled(m) && m.update_available).length
+        const parts = []
+        if (info.new_modules?.length) parts.push(`${info.new_modules.length} nouveau(x) module(s) disponible(s)`)
+        if (nUpd) parts.push(`${nUpd} mise${nUpd > 1 ? 's' : ''} à jour disponible${nUpd > 1 ? 's' : ''}`)
+        showToast(parts.length ? parts.join(' · ') : 'Catalogue à jour')
+      }
     } catch (err) {
       showToast(err.message, false)
     } finally {
@@ -144,11 +158,74 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
     }
   }
 
+  // Returns true when the backend must restart (new dependencies loaded by an active module).
+  async function update(mod) {
+    if (mod.status === 'active') onModuleDeactivated(mod.id)
+    const r = await api(`/modules/${mod.id}/update`, { method: 'POST' })
+    if (r.status === 'error') throw new Error(`Mis à jour en v${r.version}, mais la réactivation a échoué : ${r.error}`)
+    return r
+  }
+
+  async function updateOne(mod) {
+    const r = await update(mod)
+    if (r.restart) await onRestartBackend()
+    else await onRefresh()
+    showToast(`${mod.name} mis à jour : v${r.previous_version} → v${r.version}`)
+  }
+
+  async function updateAll() {
+    const list = [...updatable]
+    if (!list.length) return
+    const failed = []
+    let restart = false
+    try {
+      for (const [index, mod] of list.entries()) {
+        setBatch({ index, total: list.length, kind: 'update' })
+        try {
+          restart = (await update(mod)).restart || restart
+        } catch (err) {
+          failed.push(`${mod.name} (${err.message})`)
+        }
+      }
+    } finally {
+      setBatch(null)
+    }
+    if (restart) await onRestartBackend()
+    else await onRefresh()
+    const ok = list.length - failed.length
+    if (!failed.length) showToast(`${ok} module${ok > 1 ? 's' : ''} mis à jour`)
+    else showToast(`${ok} mis à jour, ${failed.length} en échec : ${failed.join(', ')}`, false)
+  }
+
+  async function repairAll() {
+    setRepairing(true)
+    try {
+      const r = await api('/modules/repair', { method: 'POST' })
+      if (r.restart) await onRestartBackend()
+      else await onRefresh()
+      if (r.ok) showToast(r.activated.length ? `${r.activated.length} module(s) réparé(s) et réactivé(s)` : 'Modules vérifiés : tout est en ordre')
+      else if (!r.pip_ok) showToast('Échec de l’installation des bibliothèques — voir le bandeau', false)
+      else showToast(`${r.failed.length} module(s) toujours en erreur : ${r.failed.map((f) => f.name).join(', ')}`, false)
+    } catch (err) {
+      showToast(err.message, false)
+    } finally {
+      setRepairing(false)
+    }
+  }
+
+  async function reinstallDeps(mod) {
+    const d = await api(`/modules/${mod.id}/deps?reinstall=true`, { method: 'POST' })
+    if (!d.ok) throw Object.assign(new Error('Échec de la réinstallation des dépendances'), { output: d.output })
+    if (mod.status === 'active') await onRestartBackend()
+    else await onRefresh()
+    showToast(`Dépendances de ${mod.name} réinstallées`)
+  }
+
   async function installSelected() {
     const ids = [...selected]
     const names = Object.fromEntries(modules.map((m) => [m.id, m.name]))
-    setBatch({ index: 0, total: ids.length })
-    const off = window.ledroide.on(SYSTEM, 'modules:install', (d) => setBatch({ index: d.index, total: d.total }))
+    setBatch({ index: 0, total: ids.length, kind: 'install' })
+    const off = window.ledroide.on(SYSTEM, 'modules:install', (d) => setBatch({ index: d.index, total: d.total, kind: 'install' }))
     try {
       const d = await api('/modules/install', { method: 'POST', body: { ids } })
       const failed = d.results.filter((r) => r.status === 'error')
@@ -173,9 +250,11 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
 
   async function confirmModal(extra) {
     const { mod, type } = modal
-    const hasDeps = (mod.dependencies?.python ?? []).length > 0
+    const hasDeps = depsOf(mod).length > 0
     const loadingMsg = {
       activate: hasDeps ? 'Installation des dépendances…' : 'Activation…',
+      update: 'Mise à jour…',
+      deps: 'Réinstallation des dépendances…',
       deactivate: 'Désactivation…',
       uninstall: 'Désinstallation…',
       config: 'Enregistrement…',
@@ -187,6 +266,8 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
       if (type === 'activate')   await activate(mod)
       if (type === 'deactivate') await deactivate(mod)
       if (type === 'uninstall')  await uninstall(mod)
+      if (type === 'update')     await updateOne(mod)
+      if (type === 'deps')       await reinstallDeps(mod)
       if (type === 'config') {
         await api(`/modules/${mod.id}/config`, { method: 'PUT', body: extra })
         showToast('Configuration enregistrée')
@@ -225,6 +306,14 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
             {op === 'reloading' ? <span className="cp-spinner" /> : '↺'} Recharger
           </button>
           <button
+            className="btn btn-ghost cp-sys-btn"
+            onClick={repairAll}
+            disabled={busy || repairing || !!batch}
+            title="Installer les bibliothèques manquantes des modules activés et réactiver ceux en erreur"
+          >
+            {repairing ? <span className="cp-spinner" /> : '🛠'} Réparer
+          </button>
+          <button
             className="btn btn-ghost cp-sys-btn cp-sys-restart"
             onClick={onRestartBackend}
             disabled={busy}
@@ -252,7 +341,7 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
         ))}
         {tab === 'installed' && (
           <div className="cp-status" role="group" aria-label="Filtrer par état">
-            {STATUS_FILTERS.filter((s) => s.id !== 'error' || statusCounts.error > 0 || statusFilter === 'error').map((s) => (
+            {STATUS_FILTERS.filter((s) => !CONDITIONAL_FILTERS.has(s.id) || statusCounts[s.id] > 0 || statusFilter === s.id).map((s) => (
               <button
                 key={s.id}
                 className={`cp-status-btn st-${s.id}${statusFilter === s.id ? ' active' : ''}`}
@@ -268,6 +357,22 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
       </nav>
 
       <div className="cp-content">
+        {tab === 'installed' && updatable.length > 0 && (
+          <div className="cp-repo cp-updates">
+            <span className="cp-repo-icon">↑</span>
+            <span className="cp-repo-text">
+              <span className="cp-repo-updates">
+                {updatable.length} mise{updatable.length > 1 ? 's' : ''} à jour disponible{updatable.length > 1 ? 's' : ''}
+              </span>
+              {' · '}{updatable.map((m) => `${m.name} v${m.remote_version}`).join(', ')}
+            </span>
+            <button className="btn btn-primary" onClick={updateAll} disabled={!!batch || busy} title="Mettre à jour tous les modules qui ont une nouvelle version">
+              {batch?.kind === 'update'
+                ? <><span className="cp-spinner" /> Mise à jour {Math.min(batch.index + 1, batch.total)}/{batch.total}…</>
+                : `Tout mettre à jour (${updatable.length})`}
+            </button>
+          </div>
+        )}
         {tab === 'available' && catalog?.enabled && (
           <div className={`cp-repo ${catalog.error ? 'err' : ''}`}>
             <span className="cp-repo-icon">⎇</span>
@@ -319,7 +424,7 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
           <p className="cp-empty">
             {inTab.length > 0
               ? (matching.length > 0 && statusFilter !== 'all'
-                  ? `Aucun module ${{ active: 'activé', inactive: 'non activé', error: 'en erreur' }[statusFilter]}.`
+                  ? (statusFilter === 'updates' ? 'Tous les modules sont à jour.' : `Aucun module ${{ active: 'activé', inactive: 'non activé', error: 'en erreur' }[statusFilter]}.`)
                   : 'Aucun module ne correspond aux filtres.')
               : tab === 'installed' ? 'Aucun module installé.' : (catalog?.enabled && !catalog.error && catalog.count > 0 ? 'Tous les modules du dépôt sont déjà installés.' : 'Aucun module disponible dans le catalogue.')}
           </p>
@@ -332,6 +437,7 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
               onAction={(type) => setModal({ mod, type, loading: false, loadingMsg: '', log: [] })}
               onInstall={install}
               installing={!!batch}
+              busy={!!batch || busy}
               selected={selectable && selected.has(mod.id)}
               onToggle={selectable && !batch ? () => toggleSelected(mod.id) : null}
               activeTags={filters.tags}
@@ -360,13 +466,15 @@ export default function CatalogPanel({ modules, onRefresh, onModuleDeactivated, 
 
 const TITLES = {
   activate: 'Activer', deactivate: 'Désactiver', uninstall: 'Désinstaller', config: 'Configurer', meta: 'Classer',
+  update: 'Mettre à jour', deps: 'Dépendances de',
 }
 
 function ConfirmModal({ modal, setModal, onConfirm, onCancel, categories }) {
   const { mod, type, loading, loadingMsg, error, log } = modal
-  const pythonDeps = mod.dependencies?.python ?? []
+  const pythonDeps = depsOf(mod)
   const hasDeps    = pythonDeps.length > 0
   const logRef     = useRef(null)
+  const [remoteDeps, setRemoteDeps] = useState(null)
   const [config, setConfig] = useState(null)
   const [meta, setMeta]     = useState(() => ({ category: mod.category ?? '', tags: (mod.tags ?? []).join(', ') }))
 
@@ -376,7 +484,12 @@ function ConfirmModal({ modal, setModal, onConfirm, onCancel, categories }) {
   }, [type, mod.id, setModal])
 
   useEffect(() => {
-    if (!loading || type !== 'activate' || !hasDeps) return
+    if (type !== 'update') return
+    api('/modules').then((mods) => setRemoteDeps(mods.find((m) => m.id === mod.id)?.remote_dependencies ?? null)).catch(() => {})
+  }, [type, mod.id])
+
+  useEffect(() => {
+    if (!loading || !(type === 'deps' || type === 'update' || (type === 'activate' && hasDeps))) return
     return window.ledroide.on(SYSTEM, 'deps:log', (d) => {
       if (d.module_id !== mod.id) return
       setModal((m) => m && ({ ...m, log: [...(m.log ?? []), d.line].slice(-30) }))
@@ -393,6 +506,8 @@ function ConfirmModal({ modal, setModal, onConfirm, onCancel, categories }) {
     uninstall: 'Désinstaller',
     config: 'Enregistrer',
     meta: 'Enregistrer',
+    update: `Mettre à jour en v${mod.remote_version}`,
+    deps: 'Réinstaller',
   }[type]
 
   const payload = type === 'meta'
@@ -417,6 +532,27 @@ function ConfirmModal({ modal, setModal, onConfirm, onCancel, categories }) {
               <span className="cp-spinner cc-modal-spinner" />
               <span className="cc-modal-progress-msg">{loadingMsg}</span>
             </div>
+          ) : type === 'update' ? (
+            <>
+              <p className="cc-modal-text">
+                Mettre à jour <strong>{mod.name}</strong> de <strong>v{mod.version}</strong> vers <strong>v{mod.remote_version}</strong> ?
+                Ses données et sa configuration sont conservées.
+              </p>
+              {mod.status === 'active' && <p className="cc-modal-text">Le module est actif : il sera désactivé le temps de la mise à jour puis réactivé.</p>}
+              {remoteDeps && !sameDeps(remoteDeps, pythonDeps) && (
+                <>
+                  <p className="cc-modal-text">Ses dépendances changent et seront installées :</p>
+                  <ul className="cc-modal-deps">{remoteDeps.map((d) => <li key={d}>{d}</li>)}</ul>
+                  {mod.status === 'active' && <p className="cc-modal-warn">Le backend Python sera redémarré après l'installation.</p>}
+                </>
+              )}
+            </>
+          ) : type === 'deps' ? (
+            <>
+              <p className="cc-modal-text">Réinstaller les dépendances Python de <strong>{mod.name}</strong> (téléchargement d'une copie neuve) :</p>
+              <ul className="cc-modal-deps">{pythonDeps.map((d) => <li key={d}>{d}</li>)}</ul>
+              {mod.status === 'active' && <p className="cc-modal-warn">Le backend Python sera redémarré après la réinstallation.</p>}
+            </>
           ) : type === 'deactivate' ? (
             <p className="cc-modal-text">Désactiver le module <strong>{mod.name}</strong> ?</p>
           ) : type === 'uninstall' ? (
@@ -541,8 +677,8 @@ function ConfigForm({ schema, values, onChange }) {
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 
-function CatalogCard({ mod, onAction, onInstall, installing, selected, onToggle, activeTags, onTagClick, onCategoryClick, onOpenEnv }) {
-  const pythonDeps = mod.dependencies?.python ?? []
+function CatalogCard({ mod, onAction, onInstall, installing, busy, selected, onToggle, activeTags, onTagClick, onCategoryClick, onOpenEnv }) {
+  const pythonDeps = depsOf(mod)
   const hasConfig  = Object.keys(mod.config_schema ?? {}).length > 0
   const canSelect  = mod.status === 'available' && !!onToggle
 
@@ -565,8 +701,12 @@ function CatalogCard({ mod, onAction, onInstall, installing, selected, onToggle,
         <ModuleIcon id={mod.id} fallback={mod.icon} size={40} className="cc-icon" />
         <div className="cc-info">
           <span className="cc-name">{mod.name}</span>
-          <span className="cc-version">v{mod.version}</span>
+          <span className="cc-version">
+            v{mod.version}
+            {mod.update_available && <span className="cc-version-new" title="Nouvelle version dans le dépôt"> → v{mod.remote_version}</span>}
+          </span>
         </div>
+        {mod.update_available && <span className="cc-badge-update">Mise à jour</span>}
         {mod.status === 'active' && <span className="cc-badge-active">Actif</span>}
         {mod.status === 'available' && mod.source === 'remote' && <span className="cc-badge-remote" title="Module du dépôt GitHub">Dépôt</span>}
         {mod.status === 'error' && <span className="cc-badge-error">Erreur</span>}
@@ -620,6 +760,11 @@ function CatalogCard({ mod, onAction, onInstall, installing, selected, onToggle,
 
         {isInstalled(mod) && (
           <>
+            {mod.update_available && (
+              <button className="btn btn-primary" onClick={() => onAction('update')} disabled={busy} title={`Installer la v${mod.remote_version}`}>
+                Mettre à jour
+              </button>
+            )}
             {(mod.status === 'installed' || mod.status === 'error') && (
               <button className="btn btn-primary" onClick={() => onAction('activate')}>
                 {mod.status === 'error' ? 'Réessayer' : 'Activer'}
@@ -631,6 +776,9 @@ function CatalogCard({ mod, onAction, onInstall, installing, selected, onToggle,
             <button className="btn btn-ghost" onClick={() => onAction('meta')} title="Catégorie et tags">Tags</button>
             {hasConfig && (
               <button className="btn btn-ghost" onClick={() => onAction('config')} title="Configurer">⚙</button>
+            )}
+            {pythonDeps.length > 0 && (
+              <button className="btn btn-ghost" onClick={() => onAction('deps')} disabled={busy} title={`Réinstaller les dépendances : ${pythonDeps.join(', ')}`}>📦</button>
             )}
             <button className="btn btn-ghost cc-uninstall" onClick={() => onAction('uninstall')}>
               Désinstaller

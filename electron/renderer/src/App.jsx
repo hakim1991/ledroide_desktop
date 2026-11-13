@@ -129,6 +129,9 @@ export default function App() {
         {backend.status !== 'ready' && (
           <BackendBanner backend={backend} onRestart={restartBackend} busy={!!op} />
         )}
+        {backend.status === 'ready' && (
+          <RepairBanner onChanged={fetchModules} onOpenCatalog={() => navigate('catalog')} showToast={showToast} />
+        )}
 
         {visibleTabs.length > 0 && (
           <nav className="app-tabs">
@@ -212,6 +215,86 @@ export default function App() {
           </div>
         ))}
       </main>
+    </div>
+  )
+}
+
+const REPAIR_REASON = {
+  update: 'Mise à jour de l’application détectée',
+  startup: 'Bibliothèques manquantes',
+  manual: 'Réparation des modules',
+}
+
+// Startup self-repair: modules whose Python libraries vanished are restored in the background
+// by the backend; this banner follows its `modules:repair` events.
+function RepairBanner({ onChanged, onOpenCatalog, showToast }) {
+  const [st, setSt] = useState(null)
+  const [retrying, setRetrying] = useState(false)
+  const hideTimer = useRef(null)
+
+  useEffect(() => {
+    let alive = true
+    api('/modules/repair').then((d) => { if (alive && d.running) setSt(d) }).catch(() => {})
+    const off = window.ledroide.on('__system__', 'modules:repair', (d) => {
+      clearTimeout(hideTimer.current)
+      setSt((prev) => ({ ...prev, ...d, log: d.log ?? prev?.log }))
+      if (d.stage === 'end') {
+        onChanged()
+        if (!d.failed?.length) {
+          if (d.reason !== 'manual' && d.activated?.length) {
+            showToast(`${d.activated.length} module${d.activated.length > 1 ? 's' : ''} restauré${d.activated.length > 1 ? 's' : ''}`)
+          }
+          hideTimer.current = setTimeout(() => setSt(null), 400)
+        }
+      }
+    })
+    return () => { alive = false; off?.(); clearTimeout(hideTimer.current) }
+  }, [onChanged, showToast])
+
+  if (!st) return null
+
+  async function retry() {
+    setRetrying(true)
+    try {
+      await api('/modules/repair', { method: 'POST' })
+    } catch (err) {
+      showToast(err.message, false)
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  if (st.running) {
+    const n = st.modules?.length ?? 0
+    const pk = st.packages ?? []
+    const what = st.stage === 'deps'
+      ? `installation de ${pk.length} bibliothèque${pk.length > 1 ? 's' : ''} pour ${n} module${n > 1 ? 's' : ''} (${pk.slice(0, 4).join(', ')}${pk.length > 4 ? '…' : ''})`
+      : `réactivation des modules (${Math.min((st.done ?? 0) + 1, n)}/${n})`
+    return (
+      <div className="app-banner info">
+        <span className="cp-spinner" />
+        <span className="app-banner-text">
+          {REPAIR_REASON[st.reason] ?? REPAIR_REASON.manual} : {what}…
+          {st.log && <span className="app-banner-log">{st.log}</span>}
+        </span>
+      </div>
+    )
+  }
+
+  const failed = st.failed ?? []
+  if (!failed.length) return null
+  return (
+    <div className="app-banner error">
+      <span className="app-banner-text">
+        {failed.length} module{failed.length > 1 ? 's' : ''} n’{failed.length > 1 ? 'ont' : 'a'} pas pu être restauré{failed.length > 1 ? 's' : ''}
+        {st.pip_ok === false ? ' (installation des bibliothèques impossible — connexion Internet ?)' : ''} :{' '}
+        <span title={failed.map((f) => `${f.name} : ${f.error}`).join('\n')}>{failed.map((f) => f.name).join(', ')}</span>
+      </span>
+      <button className="btn btn-ghost" onClick={onOpenCatalog}>Catalogue</button>
+      <button className="btn btn-primary" onClick={retry} disabled={retrying}>
+        {retrying ? <span className="cp-spinner" /> : 'Réessayer'}
+      </button>
+      <button className="btn btn-ghost" onClick={() => setSt(null)} title="Masquer">✕</button>
     </div>
   )
 }

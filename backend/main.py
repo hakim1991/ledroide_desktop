@@ -131,8 +131,23 @@ async def module_icon(module_id: str):
 
 
 @app.post("/modules/{module_id}/deps")
-async def install_deps(module_id: str):
-    return await registry.install_deps(module_id)
+async def install_deps(module_id: str, reinstall: bool = False):
+    return await registry.install_deps(module_id, reinstall=reinstall)
+
+
+@app.get("/modules/repair")
+async def repair_status():
+    return registry.repair_status()
+
+
+@app.post("/modules/repair")
+async def repair_modules(reinstall: bool = False):
+    return await registry.repair(reinstall=reinstall)
+
+
+@app.post("/modules/{module_id}/update")
+async def update_module(module_id: str):
+    return await registry.update(module_id)
 
 
 @app.put("/modules/{module_id}/meta")

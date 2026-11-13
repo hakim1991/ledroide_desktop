@@ -207,5 +207,6 @@ button.btn-ghost     { background: transparent; color: var(--text-mid); border-c
 .app-banner.error { background: rgba(239,68,68,.1); color: #fca5a5; }
 .app-banner.info  { background: rgba(99,102,241,.1); color: #c7d2fe; }
 .app-banner-text  { flex: 1; }
+.app-banner-log   { display: block; margin-top: 2px; font-size: .72rem; opacity: .65; font-family: 'Cascadia Code', Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90ch; }
 
 button.btn:disabled { opacity: .5; cursor: not-allowed; }

@@ -18,7 +18,8 @@ from fastapi.staticfiles import StaticFiles
 from core import settings
 from core.errors import LedroideError, error_body
 from core.ipc import Connection, WsCall, WsEvent, WsResponse
-from core.packages import run_pip
+from core.deps import missing_requirements
+from core.packages import _installed, _protected, normalize, requirement_name, run_pip
 from core.remote_catalog import RemoteCatalog
 
 log = logging.getLogger("ledroide.registry")
@@ -79,6 +80,22 @@ def _read_json(path: Path, default):
         return default
 
 
+def version_key(version) -> tuple[int, ...]:
+    """Numeric part of a version ("1.10.0-beta" -> (1, 10, 0)), zero-padded for comparison."""
+    core = str(version or "").strip().lstrip("vV").split("-")[0].split("+")[0]
+    nums = [int(x) for x in re.findall(r"\d+", core)][:6]
+    return tuple(nums + [0] * (6 - len(nums)))
+
+
+def is_newer(candidate, current) -> bool:
+    return version_key(candidate) > version_key(current)
+
+
+def _python_deps(mod: dict) -> list[str]:
+    deps = (mod.get("dependencies") or {}).get("python") or []
+    return [d.strip() for d in deps if isinstance(d, str) and d.strip()]
+
+
 def _rmtree_force(path: Path):
     def onerror(func, p, _exc):
         os.chmod(p, stat.S_IWRITE)
@@ -101,6 +118,9 @@ class ModuleRegistry:
         self._lock = asyncio.Lock()
         self.remote = RemoteCatalog()
         self._bg_tasks: set[asyncio.Task] = set()
+        self._remote_manifests: dict[str, dict] = {}
+        self._repair_lock = asyncio.Lock()
+        self._repair: dict = {"running": False}
 
     def _save_meta(self):
         _atomic_write_json(settings.DATA_DIR / "module_meta.json", self._meta)
@@ -125,10 +145,20 @@ class ModuleRegistry:
         settings.AVAILABLE_DIR.mkdir(exist_ok=True)
         settings.USER_MODULES_DIR.mkdir(parents=True, exist_ok=True)
         self._scan()
+        after_update = self._check_environment()
 
+        # Modules whose libraries vanished (app or Python update, other interpreter) are not
+        # imported now: their dependencies are reinstalled in the background, then they are
+        # reactivated. They stay in active_modules whatever happens, so the next start retries.
+        pending: list[str] = []
         for mod_id in list(self._state.get("active_modules", [])):
             if mod_id not in self._modules or self._modules[mod_id]["status"] == "available":
                 self._state["active_modules"].remove(mod_id)
+                continue
+            missing = missing_requirements(_python_deps(self._modules[mod_id]))
+            if missing:
+                self._mark_missing(mod_id, missing)
+                pending.append(mod_id)
                 continue
             log.info("auto-reactivating %s", mod_id)
             try:
@@ -136,13 +166,101 @@ class ModuleRegistry:
             except LedroideError as exc:
                 log.error("auto-reactivation of %s failed: %s", mod_id, exc.message)
         self._save_state()
+        if pending:
+            log.info("restoring %d module(s) with missing dependencies: %s", len(pending), ", ".join(pending))
+            self._spawn(self._repair_bg(pending, "update" if after_update else "startup"))
         if self.remote.repo:
             self.schedule_catalog_refresh(force=False)
 
-    def schedule_catalog_refresh(self, force: bool = False):
-        task = asyncio.create_task(self._refresh_catalog_bg(force))
+    def _check_environment(self) -> bool:
+        """Records the app and Python versions; True when either changed since the last start."""
+        current = {"app": os.environ.get("LEDROIDE_APP_VERSION", ""), "python": f"{sys.version_info[0]}.{sys.version_info[1]}"}
+        previous = self._state.get("environment")
+        self._state["environment"] = current
+        changed = bool(previous) and previous != current
+        if changed:
+            log.info("environment changed: %s -> %s", previous, current)
+        return changed
+
+    def _mark_missing(self, module_id: str, missing: list[str]):
+        mod = self._modules[module_id]
+        mod["status"] = "error"
+        mod["missing_deps"] = missing
+        mod["last_error"] = f"Dépendances manquantes : {', '.join(missing)}"
+
+    def _spawn(self, coro):
+        task = asyncio.create_task(coro)
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
+
+    async def _repair_bg(self, ids: list[str], reason: str):
+        try:
+            await self.repair(ids, reason=reason)
+        except Exception:
+            log.exception("background repair failed")
+
+    def repair_status(self) -> dict:
+        return dict(self._repair)
+
+    async def repair(self, ids: list[str] | None = None, reinstall: bool = False, reason: str = "manual") -> dict:
+        """Installs the dependencies of the given modules (default: every module marked active or in
+        error), then activates those that should be active. `reinstall` forces fresh copies."""
+        if self._repair_lock.locked():
+            raise LedroideError("REPAIR_RUNNING", "Une réparation des modules est déjà en cours", 409)
+        async with self._repair_lock:
+            active = self._state.get("active_modules", [])
+            if ids is None:
+                ids = [m for m in active if m in self._modules] + \
+                      [m for m, d in self._modules.items() if d["status"] == "error" and m not in active]
+            targets = [m for m in dict.fromkeys(ids) if m in self._modules and self._modules[m]["status"] != "available"]
+            packages = list(dict.fromkeys(d for m in targets for d in _python_deps(self._modules[m])))
+            loaded_with_deps = [m for m in targets if self._modules[m]["status"] == "active" and _python_deps(self._modules[m])]
+            self._repair = {"running": True, "reason": reason, "modules": targets, "packages": packages,
+                            "stage": "deps" if packages else "activate", "line": "", "done": 0}
+            await self.broadcast(SYSTEM_CHANNEL, "modules:repair", self.repair_status())
+
+            async def emit(line: str):
+                self._repair["line"] = line
+                await self.broadcast(SYSTEM_CHANNEL, "modules:repair", {**self.repair_status(), "log": line})
+
+            ok, output = True, []
+            if packages:
+                if reinstall:
+                    protected = _protected(_installed())
+                    forced = [d for d in packages if normalize(requirement_name(d) or d) not in protected]
+                    if forced:
+                        ok, lines = await run_pip(["install", "--force-reinstall", "--no-deps", "--no-cache-dir", *forced], emit)
+                        output += lines
+                if ok:
+                    ok, lines = await run_pip(["install", *packages], emit)
+                    output += lines
+                log.info("repair: pip install of %d package(s): %s", len(packages), "OK" if ok else "FAILED")
+
+            self._repair["stage"] = "activate"
+            activated, failed = [], []
+            for index, mod_id in enumerate(targets):
+                mod = self._modules[mod_id]
+                self._repair["done"] = index
+                if mod["status"] == "active":
+                    continue
+                if mod_id not in active and mod["status"] != "error":
+                    continue
+                await self.broadcast(SYSTEM_CHANNEL, "modules:repair", self.repair_status())
+                try:
+                    await self.activate(mod_id)
+                    activated.append(mod_id)
+                except LedroideError as exc:
+                    failed.append({"id": mod_id, "name": mod.get("name", mod_id), "error": exc.message})
+            result = {"ok": ok and not failed, "pip_ok": ok, "activated": activated, "failed": failed,
+                      "restart": bool(reinstall and ok and loaded_with_deps), "output": "\n".join(output[-200:])}
+            self._repair = {"running": False, "reason": reason, "stage": "end", "modules": targets, "packages": packages,
+                            "activated": activated, "failed": failed, "pip_ok": ok}
+            await self.broadcast(SYSTEM_CHANNEL, "modules:repair", self.repair_status())
+            await self.broadcast(SYSTEM_CHANNEL, "modules:changed", {"repaired": activated})
+            return result
+
+    def schedule_catalog_refresh(self, force: bool = False):
+        self._spawn(self._refresh_catalog_bg(force))
 
     async def _refresh_catalog_bg(self, force: bool):
         try:
@@ -215,6 +333,11 @@ class ModuleRegistry:
 
         # Remote repository: modules not present locally.
         remote_dirs = self.remote.module_dirs()
+        self._remote_manifests = {}
+        for mod_id, module_dir in remote_dirs.items():
+            manifest = _read_json(module_dir / "manifest.json", None)
+            if manifest and manifest.get("id") == mod_id:
+                self._remote_manifests[mod_id] = manifest
         for mod_id in [m for m, d in self._modules.items() if d.get("source") == "remote" and d["status"] == "available"]:
             if mod_id not in remote_dirs:
                 self._modules.pop(mod_id)
@@ -238,6 +361,9 @@ class ModuleRegistry:
     def _describe(self, mod: dict) -> dict:
         override = self._meta.get(mod["id"], {})
         env_decl = normalize_env_decl(mod.get("env"))
+        installed = mod["status"] != "available"
+        remote = self._remote_manifests.get(mod["id"]) if installed else None
+        remote_version = str(remote.get("version", "")) if remote else None
         return {
             **mod,
             "category": override.get("category") or mod.get("category") or DEFAULT_CATEGORY,
@@ -245,6 +371,9 @@ class ModuleRegistry:
             "meta_overridden": bool(override),
             "env": env_decl,
             "env_missing": [e["key"] for e in env_decl if e["required"] and not os.environ.get(e["key"])],
+            "remote_version": remote_version,
+            "update_available": bool(remote_version and is_newer(remote_version, mod.get("version"))),
+            "remote_dependencies": _python_deps(remote) if remote else None,
         }
 
     # ── Category / tags ──────────────────────────────────────────────────────
@@ -270,6 +399,12 @@ class ModuleRegistry:
                 return {"status": "active", "id": module_id}
             if mod["status"] == "available":
                 raise LedroideError("MODULE_NOT_INSTALLED", f"Module '{module_id}' non installé", 409)
+
+            missing = missing_requirements(_python_deps(mod))
+            if missing:
+                self._mark_missing(module_id, missing)
+                raise LedroideError("MISSING_DEPS", mod["last_error"], 409)
+            mod.pop("missing_deps", None)
 
             try:
                 await self._load_backend(module_id)
@@ -402,24 +537,101 @@ class ModuleRegistry:
         self._scan()
         return {"status": "uninstalled", "id": module_id}
 
-    async def install_deps(self, module_id: str) -> dict:
+    async def update(self, module_id: str) -> dict:
+        """Replaces an installed module by the remote catalog's copy, keeping its data and state.
+
+        The new files go to the user modules dir, which takes precedence over a bundled copy.
+        An active module is deactivated during the swap and reactivated afterwards.
+        """
         mod = self._get(module_id)
-        deps = [d for d in mod.get("dependencies", {}).get("python", []) if isinstance(d, str) and d.strip()]
+        if mod["status"] == "available":
+            raise LedroideError("MODULE_NOT_INSTALLED", f"Module '{module_id}' non installé", 409)
+        source = self.remote.module_dirs().get(module_id)
+        manifest = _read_json(source / "manifest.json", None) if source else None
+        if not manifest or manifest.get("id") != module_id:
+            raise LedroideError("UPDATE_UNAVAILABLE", f"'{module_id}' est absent du dépôt de modules", 404)
+
+        previous = str(mod.get("version", ""))
+        old_deps = _python_deps(mod)
+        was_active = mod["status"] == "active"
+        if mod["status"] in ("active", "error"):
+            await self.deactivate(module_id)
+
+        root = settings.USER_MODULES_DIR
+        root.mkdir(parents=True, exist_ok=True)
+        target, staging, backup = root / module_id, root / f".{module_id}.new", root / f".{module_id}.old"
+        for p in (staging, backup):
+            if p.exists():
+                await asyncio.to_thread(_rmtree_force, p)
+        await asyncio.to_thread(shutil.copytree, source, staging)
+        if target.exists():
+            os.replace(target, backup)
+        try:
+            os.replace(staging, target)
+        except OSError:
+            if backup.exists():
+                os.replace(backup, target)
+            raise
+        if backup.exists():
+            await asyncio.to_thread(_rmtree_force, backup)
+
+        self._modules[module_id] = {**manifest, "status": "installed", "bundled": False}
+        self._dirs[module_id] = target
+        log.info("updated %s %s -> %s", module_id, previous, manifest.get("version"))
+
+        result = {"id": module_id, "status": "installed", "version": manifest.get("version"),
+                  "previous_version": previous, "deps": None, "restart": False}
+        new_deps = _python_deps(manifest)
+        if new_deps and sorted(new_deps) != sorted(old_deps):
+            deps = await self.install_deps(module_id)
+            result["deps"] = deps
+            if not deps["ok"]:
+                await self.broadcast(SYSTEM_CHANNEL, "modules:changed", {"updated": [module_id]})
+                raise LedroideError("DEPS_FAILED", "Module mis à jour, mais l'installation des dépendances a échoué", 500)
+            result["restart"] = was_active
+        if was_active:
+            try:
+                result["status"] = (await self.activate(module_id))["status"]
+            except LedroideError as exc:
+                result.update(status="error", error=exc.message)
+        await self.broadcast(SYSTEM_CHANNEL, "modules:changed", {"updated": [module_id]})
+        return result
+
+    async def install_deps(self, module_id: str, reinstall: bool = False) -> dict:
+        """pip install of the manifest's Python dependencies. `reinstall` first forces a fresh copy
+        of each declared package (core packages excepted), then installs whatever they require."""
+        mod = self._get(module_id)
+        deps = _python_deps(mod)
         if not deps:
             return {"ok": True, "output": "", "message": "Aucune dépendance Python déclarée"}
         for dep in deps:
             if dep.startswith("-"):
                 raise LedroideError("INVALID_DEPENDENCY", f"Dépendance invalide : {dep}", 422)
 
-        await self.broadcast(SYSTEM_CHANNEL, "deps:start", {"module_id": module_id, "packages": deps})
+        await self.broadcast(SYSTEM_CHANNEL, "deps:start", {"module_id": module_id, "packages": deps, "reinstall": reinstall})
 
         async def emit(line: str):
             await self.broadcast(SYSTEM_CHANNEL, "deps:log", {"module_id": module_id, "line": line})
 
-        ok, lines = await run_pip(["install", *deps], emit)
+        output: list[str] = []
+        ok = True
+        if reinstall:
+            protected = _protected(_installed())
+            forced = [d for d in deps if normalize(requirement_name(d) or d) not in protected]
+            skipped = [d for d in deps if d not in forced]
+            if skipped:
+                line = f"Paquets du cœur non réinstallés : {', '.join(skipped)}"
+                output.append(line)
+                await emit(line)
+            if forced:
+                ok, lines = await run_pip(["install", "--force-reinstall", "--no-deps", "--no-cache-dir", *forced], emit)
+                output += lines
+        if ok:
+            ok, lines = await run_pip(["install", *deps], emit)
+            output += lines
         await self.broadcast(SYSTEM_CHANNEL, "deps:end", {"module_id": module_id, "ok": ok})
-        log.info("pip install %s for %s: %s", deps, module_id, "OK" if ok else "FAILED")
-        return {"ok": ok, "output": "\n".join(lines[-200:])}
+        log.info("pip %s %s for %s: %s", "reinstall" if reinstall else "install", deps, module_id, "OK" if ok else "FAILED")
+        return {"ok": ok, "output": "\n".join(output[-200:])}
 
     # ── Config ───────────────────────────────────────────────────────────────
 
