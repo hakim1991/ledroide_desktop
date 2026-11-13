@@ -22,7 +22,8 @@ let mainWindow = null
 let pythonProcess = null
 let expectedExit = false
 let recentCrashes = []
-let backendLogStream = null
+let backendLogFd = null
+let backendLogSize = 0
 let quitting = false
 
 // ── Logging ──────────────────────────────────────────────────────────────────
@@ -31,10 +32,54 @@ function backendLogPath() {
   return path.join(app.getPath('userData'), 'backend.log')
 }
 
+const LOG_MAX_BYTES = 5 * 1024 * 1024
+const LOG_ARCHIVES = 2  // backend.1.log, backend.2.log
+
+// Synchronous writes on a raw fd: the file can be closed and renamed immediately on rotation
+// (Windows refuses to rename a file a pending write stream still holds open).
+function openBackendLog() {
+  const file = backendLogPath()
+  try {
+    backendLogSize = fs.statSync(file).size
+  } catch {
+    backendLogSize = 0
+  }
+  if (backendLogSize >= LOG_MAX_BYTES) {
+    rotateBackendLog(file)
+    backendLogSize = 0
+  }
+  backendLogFd = fs.openSync(file, 'a')
+}
+
+function rotateBackendLog(file) {
+  const archive = (i) => file.replace(/\.log$/, `.${i}.log`)
+  try {
+    fs.rmSync(archive(LOG_ARCHIVES), { force: true })
+    for (let i = LOG_ARCHIVES - 1; i >= 1; i--) {
+      if (fs.existsSync(archive(i))) fs.renameSync(archive(i), archive(i + 1))
+    }
+    fs.renameSync(file, archive(1))
+  } catch (err) {
+    // Rotation is best effort: if the file is locked, truncate rather than grow without bound.
+    console.error('log rotation failed:', err.message)
+    try { fs.truncateSync(file, 0) } catch { /* ignore */ }
+  }
+}
+
 function logBackend(line) {
-  if (!backendLogStream) backendLogStream = fs.createWriteStream(backendLogPath(), { flags: 'a' })
-  backendLogStream.write(`[${new Date().toISOString()}] ${line}\n`)
+  const text = `[${new Date().toISOString()}] ${line}\n`
   console.log(line)
+  try {
+    if (backendLogFd === null) openBackendLog()
+    if (backendLogSize >= LOG_MAX_BYTES) {
+      fs.closeSync(backendLogFd)
+      backendLogFd = null
+      openBackendLog()
+    }
+    backendLogSize += fs.writeSync(backendLogFd, text)
+  } catch (err) {
+    console.error('backend log write failed:', err.message)
+  }
 }
 
 // ── Python process ───────────────────────────────────────────────────────────
