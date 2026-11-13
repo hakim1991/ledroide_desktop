@@ -1,0 +1,31 @@
+{
+  "id": "habit-tracker",
+  "name": "Habitudes",
+  "version": "1.0.0",
+  "description": "Suivi d'habitudes : quotidiennes, x fois par semaine ou certains jours, oui/non ou quantité, coche rapide, séries actuelle et record, taux de réussite, calendrier annuel, objectifs, notes du jour, archivage, rappels et export/import JSON.",
+  "category": "Productivité",
+  "tags": [
+    "habitudes",
+    "suivi",
+    "objectifs",
+    "routine",
+    "calendrier"
+  ],
+  "icon": "💶",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

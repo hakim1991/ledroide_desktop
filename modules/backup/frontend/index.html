@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sauvegarde</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.link { background: none; border: none; color: var(--accent-h); padding: 0 4px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+  textarea { resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .small { font-size: 11.5px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; background: var(--surface2); padding: 0 4px; border-radius: 4px; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; }
+  #main { flex: 1; min-height: 0; display: flex; }
+  #side { width: 290px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .set { border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; cursor: pointer; background: var(--surface2); }
+  .set:hover { border-color: #3f3f46; }
+  .set.sel { border-color: var(--accent); background: rgba(99,102,241,.10); }
+  .set .n { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+  .set .n span.t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .set .l { color: var(--muted); font-size: 11.5px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #52525b; }
+  .dot.ok { background: var(--ok); } .dot.error { background: var(--err); } .dot.warning, .dot.cancelled { background: var(--warn); }
+  .dot.busy { background: var(--accent-h); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .mini { height: 3px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .mini > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .badge { font-size: 10.5px; padding: 1px 6px; border-radius: 10px; background: #27272a; color: #a1a1aa; font-weight: 500; }
+  .badge.off { color: #fca5a5; }
+
+  #content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; text-align: center; max-width: 460px; }
+  .card h2 { font-size: 17px; margin-bottom: 6px; }
+  .card p { color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+  #detail { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .dhead { padding: 12px 14px 8px; display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+  .dhead h2 { font-size: 16px; }
+  .dhead .meta { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.6; }
+  .dhead .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .warnbar { margin: 8px 14px 0; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.08); color: #fcd34d; font-size: 12px; }
+  .errbar { margin: 8px 14px 0; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(239,68,68,.4); background: rgba(239,68,68,.08); color: #fecaca; font-size: 12px; }
+  #prog { margin: 8px 14px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); display: flex; gap: 10px; align-items: center; }
+  #prog .bar { flex: 0 0 220px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  #prog .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  #prog .msg { flex: 1; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabs { display: flex; gap: 2px; padding: 8px 14px 0; border-bottom: 1px solid var(--border); }
+  .tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 6px 12px; }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .pane { flex: 1; min-height: 0; display: flex; }
+  #snaps { width: 270px; flex-shrink: 0; border-right: 1px solid var(--border); overflow-y: auto; }
+  .snap { padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .snap:hover { background: #1c1c21; }
+  .snap.sel { background: rgba(99,102,241,.14); }
+  .snap .d { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .snap .s { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .snap .s b { color: #86efac; font-weight: 500; } .snap .s i { color: #fcd34d; font-style: normal; }
+  #browser { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .btool { display: flex; gap: 6px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .crumbs { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; flex: 1; min-width: 160px; }
+  .crumbs button { background: none; border: none; padding: 2px 5px; color: var(--accent-h); }
+  .crumbs span { color: var(--muted); }
+  #flist { flex: 1; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th { position: sticky; top: 0; background: var(--surface); text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; }
+  tr.tr:hover td { background: #1c1c21; }
+  td:first-child, th:first-child { padding: 0 8px; text-overflow: clip; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; color: #a1a1aa; }
+  td.nm { cursor: default; }
+  td.nm.dir { cursor: pointer; color: var(--text); }
+  .bfoot { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+  .placeholder { padding: 40px; text-align: center; color: var(--muted); line-height: 1.7; }
+  #journal { flex: 1; overflow-y: auto; }
+  .st { font-size: 11px; padding: 1px 7px; border-radius: 10px; }
+  .st.ok { background: rgba(34,197,94,.15); color: #86efac; } .st.error { background: rgba(239,68,68,.15); color: #fca5a5; }
+  .st.warning, .st.cancelled { background: rgba(245,158,11,.15); color: #fcd34d; } .st.running { background: rgba(99,102,241,.2); color: #c7d2fe; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(640px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.small { width: min(460px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > label, .flabel { font-size: 11.5px; color: var(--muted); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row > .grow { flex: 1; min-width: 0; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .grid4 input { width: 100%; }
+  .srcs { display: flex; flex-direction: column; gap: 4px; }
+  .src { display: flex; gap: 6px; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 4px 3px 8px; }
+  .src span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .days { display: flex; gap: 4px; }
+  .days label { display: flex; align-items: center; gap: 3px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; cursor: pointer; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  .testres { font-size: 12px; padding: 6px 9px; border-radius: 6px; background: var(--surface2); border: 1px solid var(--border); }
+  .testres.good { border-color: rgba(34,197,94,.4); color: #bbf7d0; } .testres.bad { border-color: rgba(239,68,68,.4); color: #fecaca; }
+  .picker { height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+  .pick { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+  .pick:hover { background: #1c1c21; }
+  .drives { display: flex; gap: 4px; flex-wrap: wrap; }
+  pre.log { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; max-height: 240px; overflow: auto; font-size: 11.5px; white-space: pre-wrap; user-select: text; }
+  .kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 10px; font-size: 12.5px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .plan { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .plan div { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px; text-align: center; }
+  .plan b { display: block; font-size: 17px; }
+  .plan span { font-size: 11px; color: var(--muted); }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">🗄️ Sauvegarde</span>
+  <button class="primary" id="btnNew">＋ Nouveau jeu</button>
+  <span class="spacer"></span>
+  <span class="muted small" id="schedInfo"></span>
+  <button id="btnAllRuns" title="Journal de toutes les exécutions">📜 Journal global</button>
+</header>
+<div id="main">
+  <aside id="side"></aside>
+  <section id="content">
+    <div id="empty">
+      <div class="card">
+        <h2>Aucun jeu de sauvegarde</h2>
+        <p>Un jeu regroupe des dossiers à sauvegarder, une destination (disque externe, partage réseau, SFTP), des exclusions,
+          une planification et une politique de rotation. Chaque exécution crée un instantané incrémental.</p>
+        <button class="primary" id="emptyNew">Créer un jeu de sauvegarde</button>
+      </div>
+    </div>
+    <div id="detail" class="hidden">
+      <div class="dhead">
+        <div style="min-width:0">
+          <h2 id="dName"></h2>
+          <div class="meta" id="dMeta"></div>
+        </div>
+        <div class="acts">
+          <button class="primary" id="btnRun">▶ Sauvegarder maintenant</button>
+          <button id="btnVerify" title="Relit tous les fichiers des instantanés et contrôle leur empreinte SHA-256">✔ Vérifier</button>
+          <button id="btnRotate" title="Applique la politique de conservation">♻ Rotation</button>
+          <button id="btnEdit">✏️ Modifier</button>
+          <button class="icon danger" id="btnDelSet" title="Supprimer le jeu">🗑</button>
+        </div>
+      </div>
+      <div id="bars"></div>
+      <div id="prog" class="hidden">
+        <span id="progLbl" style="font-weight:600"></span>
+        <div class="bar"><div id="progBar"></div></div>
+        <span class="msg" id="progMsg"></span>
+        <button class="danger" id="btnCancel">Annuler</button>
+      </div>
+      <div class="tabs">
+        <button data-tab="snaps" class="on">Instantanés</button>
+        <button data-tab="journal">Journal</button>
+      </div>
+      <div class="pane" id="paneSnaps">
+        <div id="snaps"></div>
+        <div id="browser">
+          <div class="btool">
+            <div class="crumbs" id="crumbs"></div>
+            <input id="search" placeholder="Rechercher un fichier…" style="width:200px" />
+          </div>
+          <div id="flist"></div>
+          <div class="bfoot">
+            <label class="small muted" style="white-space:nowrap"><input type="checkbox" id="chkAll" /> Tout cocher</label>
+            <span class="muted small" id="selInfo"></span>
+            <span class="spacer"></span>
+            <button id="btnVerifySnap">✔ Vérifier</button>
+            <button id="btnExport">🗜 Exporter en zip…</button>
+            <button class="danger" id="btnDelSnap">🗑 Supprimer</button>
+            <button class="primary" id="btnRestore">↩ Restaurer…</button>
+          </div>
+        </div>
+      </div>
+      <div class="pane hidden" id="paneJournal"><div id="journal"></div></div>
+    </div>
+  </section>
+</div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'backup'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, r = document) => r.querySelector(s)
+const $$ = (s, r = document) => [...r.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+const KIND = { backup: 'Sauvegarde', restore: 'Restauration', verify: 'Vérification', rotate: 'Rotation', export: 'Export zip', delete: 'Suppression' }
+const STATUS = { ok: 'Réussie', error: 'Échec', warning: 'Avec avertissements', cancelled: 'Annulée', running: 'En cours' }
+
+const state = { info: null, sets: [], sel: null, snaps: [], snap: null, path: '', listing: null, checked: new Set(),
+                tab: 'snaps', progress: {}, jobs: {}, unavailable: null }
+
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 6000 : 2600)
+}
+async function act(action, payload, opts) {
+  try { return await call(action, payload, opts) } catch (e) { toast(e.message || String(e), true); return null }
+}
+function fmtSize(n) {
+  if (n == null) return ''
+  if (n < 1024) return `${n} o`
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} Ko`
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} Mo`
+  return `${(n / 1024 ** 3).toFixed(2)} Go`
+}
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+const fmtTs = (t) => t ? new Date(t * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
+function snapDate(id) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})/.exec(id || '')
+  if (!m) return id
+  return new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+function relDate(iso) {
+  if (!iso) return ''
+  const d = (new Date(iso) - Date.now()) / 60000
+  const a = Math.abs(d)
+  const s = a < 1 ? "moins d'une minute" : a < 60 ? `${Math.round(a)} min` : a < 1440 ? `${Math.round(a / 60)} h` : `${Math.round(a / 1440)} j`
+  return d >= 0 ? `dans ${s}` : `il y a ${s}`
+}
+function scheduleText(s) {
+  if (!s || s.type === 'manual') return 'Manuelle'
+  if (s.type === 'interval') return `Toutes les ${s.hours} h`
+  if (s.type === 'daily') return `Chaque jour à ${s.time}`
+  return `${s.weekdays.map((d) => DAYS[d]).join(', ')} à ${s.time}`
+}
+const curSet = () => state.sets.find((s) => s.id === state.sel)
+
+// ── Dialog helper ─────────────────────────────────────────────────────────────
+function dialog(title, html, { small = false, buttons = [] } = {}) {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${small ? 'small' : ''}"><h3>${esc(title)}</h3><div class="content">${html}</div>
+    <div class="foot"><span class="spacer"></span>${buttons.map((b, i) => `<button data-i="${i}" class="${b.cls || ''}">${esc(b.label)}</button>`).join('')}</div></div>`
+  document.body.appendChild(ov)
+  const close = () => ov.remove()
+  $$('.foot button', ov).forEach((btn) => btn.onclick = async () => {
+    const b = buttons[+btn.dataset.i]
+    if (!b.onClick) return close()
+    btn.disabled = true
+    try { if ((await b.onClick(ov)) !== false) close() } finally { btn.disabled = false }
+  })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') close() })
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) close() })
+  return { el: ov, close }
+}
+
+// ── Folder picker ─────────────────────────────────────────────────────────────
+function pickFolder(title, start) {
+  return new Promise((resolve) => {
+    let cur = start || ''
+    const d = dialog(title, `
+      <div class="drives" id="pkDrives"></div>
+      <div class="row"><input class="grow" id="pkPath" placeholder="Chemin (ex. D:\\Sauvegardes ou \\\\serveur\\partage)" /><button id="pkGo">Aller</button></div>
+      <div class="picker" id="pkList"></div>
+      <div class="row"><input class="grow" id="pkNew" placeholder="Nouveau dossier…" /><button id="pkMk">Créer</button></div>`,
+      { buttons: [{ label: 'Annuler', onClick: () => resolve(null) },
+                  { label: 'Choisir ce dossier', cls: 'primary', onClick: () => { const p = $('#pkPath', d.el).value.trim(); if (!p) { toast('Choisissez un dossier', true); return false } resolve(p) } }] })
+    async function go(p) {
+      const r = await act('fs.list', { path: p })
+      if (!r) return
+      cur = r.path
+      $('#pkPath', d.el).value = r.path
+      $('#pkDrives', d.el).innerHTML = r.drives.map((x) => `<button data-p="${esc(x)}">💽 ${esc(x)}</button>`).join('') +
+        `<button data-p="${esc(r.home)}">🏠 Dossier personnel</button>`
+      const items = []
+      if (r.parent !== null && r.path) items.push(`<div class="pick" data-p="${esc(r.parent)}">⬆️ <span>..</span></div>`)
+      if (!r.path) items.push(`<div class="placeholder">Choisissez un lecteur ci-dessus ou saisissez un chemin.</div>`)
+      for (const n of r.dirs) items.push(`<div class="pick" data-p="${esc(r.path.replace(/[\\/]$/, '') + '\\' + n)}">📁 <span>${esc(n)}</span></div>`)
+      if (r.path && !r.dirs.length) items.push(`<div class="placeholder">Aucun sous-dossier</div>`)
+      $('#pkList', d.el).innerHTML = items.join('')
+      $$('[data-p]', d.el).forEach((el) => el.onclick = () => go(el.dataset.p))
+    }
+    $('#pkGo', d.el).onclick = () => go($('#pkPath', d.el).value.trim())
+    $('#pkPath', d.el).onkeydown = (e) => { if (e.key === 'Enter') go(e.target.value.trim()) }
+    $('#pkMk', d.el).onclick = async () => {
+      const name = $('#pkNew', d.el).value.trim()
+      if (!cur || !name) return toast('Ouvrez un dossier puis saisissez un nom', true)
+      const r = await act('fs.mkdir', { path: cur, name })
+      if (r) { $('#pkNew', d.el).value = ''; go(r.path) }
+    }
+    const origClose = d.close
+    d.el.addEventListener('mousedown', (e) => { if (e.target === d.el) resolve(null) })
+    go(start || '')
+  })
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+async function loadSets(keepSnap = true) {
+  const r = await act('sets.list')
+  if (!r) return
+  state.sets = r.sets
+  if (!state.sets.some((s) => s.id === state.sel)) state.sel = state.sets[0]?.id ?? null
+  renderSide()
+  renderDetail()
+}
+async function selectSet(id) {
+  state.sel = id; localSet('bk-sel', id)
+  state.snap = null; state.path = ''; state.listing = null; state.checked.clear()
+  renderSide(); renderDetail()
+  await loadSnaps()
+  if (state.tab === 'journal') loadJournal()
+}
+async function loadSnaps() {
+  const s = curSet()
+  if (!s) return
+  $('#snaps').innerHTML = '<div class="placeholder">Chargement…</div>'
+  const r = await act('snapshots.list', { id: s.id }, { timeout: 60000 })
+  if (!r || s.id !== state.sel) return
+  state.snaps = r.snapshots
+  state.unavailable = r.unavailable || null
+  if (!state.snaps.some((x) => x.id === state.snap)) state.snap = state.snaps[0]?.id ?? null
+  renderBars(); renderSnaps()
+  if (state.snap) openSnap(state.snap, state.path)
+  else renderBrowser()
+}
+async function openSnap(id, path = '') {
+  state.snap = id; state.path = path; state.checked.clear()
+  renderSnaps()
+  const q = $('#search').value.trim()
+  const r = await act('snapshot.browse', { id: state.sel, snapshot: id, path, search: q }, { timeout: 60000 })
+  if (!r) return
+  state.listing = r
+  renderBrowser()
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderSide() {
+  $('#empty').classList.toggle('hidden', state.sets.length > 0)
+  $('#detail').classList.toggle('hidden', !state.sets.length)
+  $('#side').classList.toggle('hidden', !state.sets.length)
+  $('#side').innerHTML = state.sets.map((s) => {
+    const busy = s.busy || state.progress[s.id]
+    const p = state.progress[s.id]
+    const dot = busy ? 'busy' : (s.last_status || '')
+    return `<div class="set ${s.id === state.sel ? 'sel' : ''}" data-id="${s.id}">
+      <div class="n"><span class="dot ${dot}"></span><span class="t">${esc(s.name)}</span>
+        ${s.enabled ? '' : '<span class="badge off">désactivé</span>'}
+        ${s.config.dest_type === 'sftp' ? '<span class="badge">SFTP</span>' : ''}</div>
+      <div class="l">${busy ? esc(KIND[busy.kind || busy] || 'En cours') + '…' : 'Dernière : ' + (s.last_success ? esc(relDate(s.last_success)) : 'jamais')}</div>
+      <div class="l">${esc(scheduleText(s.config.schedule))}${s.next_run ? ' · prochaine ' + esc(relDate(s.next_run)) : ''}</div>
+      ${s.dest_available === false ? '<div class="l" style="color:#fcd34d">⚠ Destination indisponible</div>' : ''}
+      ${p ? `<div class="mini"><div style="width:${p.percent || 0}%"></div></div>` : ''}
+    </div>`
+  }).join('')
+  $$('.set', $('#side')).forEach((el) => el.onclick = () => selectSet(+el.dataset.id))
+}
+
+function renderDetail() {
+  const s = curSet()
+  if (!s) return
+  const c = s.config
+  $('#dName').textContent = s.name
+  const src = c.sources.map((x) => `<code>${esc(x)}</code>`).join(' ')
+  $('#dMeta').innerHTML = `Sources : ${src}<br>Destination : <code>${esc(s.dest_label)}</code> · Mode : ${
+    { auto: 'automatique', hardlink: 'liens physiques', dedup: 'dédupliqué' }[c.mode]}${c.compress ? ' + compression' : ''}<br>
+    Planification : ${esc(scheduleText(c.schedule))}${s.enabled ? '' : ' (désactivée)'}${s.next_run ? ' · prochaine : ' + esc(fmtDate(s.next_run)) : ''}
+    · Conservation : ${c.retention.last} dernières, ${c.retention.daily} j, ${c.retention.weekly} sem., ${c.retention.monthly} mois`
+  const busy = !!(s.busy || state.progress[s.id])
+  $$('#btnRun, #btnVerify, #btnRotate, #btnEdit, #btnDelSet, #btnRestore, #btnExport, #btnDelSnap, #btnVerifySnap').forEach((b) => (b.disabled = busy))
+  const p = state.progress[s.id]
+  $('#prog').classList.toggle('hidden', !busy)
+  if (busy) {
+    $('#progLbl').textContent = (KIND[p?.kind || s.busy] || 'Opération') + '…'
+    $('#progBar').style.width = `${p?.percent || 0}%`
+    $('#progMsg').textContent = p?.message || ''
+  }
+  renderBars()
+}
+function renderBars() {
+  const s = curSet()
+  if (!s) return
+  const out = []
+  if (state.unavailable) out.push(`<div class="warnbar">⚠ ${esc(state.unavailable)} — branchez le disque ou vérifiez le partage ; la sauvegarde planifiée sera retentée.</div>`)
+  if (s.last_status === 'error' && s.last_message) out.push(`<div class="errbar">Dernière sauvegarde en échec (${esc(fmtDate(s.last_attempt))}) : ${esc(s.last_message)}</div>`)
+  if (s.config.dest_type === 'sftp' && !state.info?.sftp_available) out.push('<div class="errbar">asyncssh n’est pas installé : installez-le depuis le menu « Bibliothèques » pour utiliser SFTP.</div>')
+  $('#bars').innerHTML = out.join('')
+}
+function renderSnaps() {
+  if (!state.snaps.length) {
+    $('#snaps').innerHTML = `<div class="placeholder">Aucun instantané.<br>Cliquez sur <b>Sauvegarder maintenant</b>.</div>`
+    return
+  }
+  $('#snaps').innerHTML = state.snaps.map((x) => {
+    const st = x.stats || {}
+    return `<div class="snap ${x.id === state.snap ? 'sel' : ''}" data-id="${esc(x.id)}">
+      <div class="d">${esc(snapDate(x.id))}</div>
+      <div class="s">${st.files ?? '?'} fichiers · ${fmtSize(st.bytes_total)}${st.bytes_copied != null ? ' · ' + fmtSize(st.bytes_copied) + ' copiés' : ''}</div>
+      <div class="s"><b>+${st.new ?? 0}</b> · <i>~${st.changed ?? 0}</i> · −${st.removed ?? 0}${st.errors ? ` · <span style="color:#fca5a5">${st.errors} erreur(s)</span>` : ''}</div>
+    </div>`
+  }).join('')
+  $$('.snap').forEach((el) => el.onclick = () => { $('#search').value = ''; openSnap(el.dataset.id, '') })
+}
+function renderBrowser() {
+  const L = state.listing
+  if (!state.snap || !L) {
+    $('#crumbs').innerHTML = ''
+    $('#flist').innerHTML = `<div class="placeholder">${state.snaps.length ? 'Sélectionnez un instantané.' : 'Les fichiers sauvegardés apparaîtront ici.'}</div>`
+    updateSel(); return
+  }
+  const parts = L.path ? L.path.split('/') : []
+  const crumbs = [`<button data-p="">${esc(snapDate(state.snap))}</button>`]
+  parts.forEach((p, i) => crumbs.push(`<span>›</span><button data-p="${esc(parts.slice(0, i + 1).join('/'))}">${esc(p)}</button>`))
+  $('#crumbs').innerHTML = L.search ? `<span class="muted">Résultats pour « ${esc(L.search)} » (${L.files.length}${L.truncated ? '+' : ''})</span>` : crumbs.join('')
+  $$('#crumbs button').forEach((b) => b.onclick = () => openSnap(state.snap, b.dataset.p))
+  const rows = []
+  for (const d of L.dirs) {
+    const isSrc = !L.path && L.sources[d.name]
+    rows.push(`<tr class="tr"><td style="width:32px"><input type="checkbox" data-c="${esc(d.path)}" ${state.checked.has(d.path) ? 'checked' : ''}></td>
+      <td class="nm dir" data-d="${esc(d.path)}">📁 ${esc(d.name)}${isSrc ? ` <span class="muted small">← ${esc(L.sources[d.name])}</span>` : ''}</td>
+      <td class="num">${d.files} fichier(s)</td><td class="num">${fmtSize(d.size)}</td><td class="num"></td></tr>`)
+  }
+  for (const f of L.files) {
+    rows.push(`<tr class="tr"><td style="width:32px"><input type="checkbox" data-c="${esc(f.path)}" ${state.checked.has(f.path) ? 'checked' : ''}></td>
+      <td class="nm" title="${esc(f.path)}">📄 ${esc(L.search ? f.path : f.name)}</td><td class="num"></td><td class="num">${fmtSize(f.size)}</td><td class="num">${esc(fmtTs(f.mtime))}</td></tr>`)
+  }
+  $('#flist').innerHTML = rows.length ? `<table><colgroup><col style="width:32px"><col><col style="width:110px"><col style="width:90px"><col style="width:130px"></colgroup>
+    <thead><tr><th></th><th>Nom</th><th style="text-align:right">Contenu</th><th style="text-align:right">Taille</th><th style="text-align:right">Modifié</th></tr></thead>
+    <tbody>${rows.join('')}</tbody></table>` : '<div class="placeholder">Dossier vide</div>'
+  $$('td.dir').forEach((td) => td.onclick = () => openSnap(state.snap, td.dataset.d))
+  $$('[data-c]').forEach((cb) => cb.onchange = () => { cb.checked ? state.checked.add(cb.dataset.c) : state.checked.delete(cb.dataset.c); updateSel() })
+  updateSel()
+}
+function updateSel() {
+  const n = state.checked.size
+  $('#selInfo').textContent = n ? `${n} élément(s) coché(s)` : (state.snap ? 'Rien de coché : les actions portent sur tout l’instantané' : '')
+  const all = $$('[data-c]')
+  $('#chkAll').checked = all.length > 0 && all.every((c) => c.checked)
+}
+
+async function loadJournal() {
+  const s = curSet()
+  if (!s) return
+  const r = await act('runs.list', { set_id: s.id, limit: 200 })
+  if (!r) return
+  $('#journal').innerHTML = runsTable(r.runs, false)
+  bindRuns($('#journal'))
+}
+function runsTable(runs, showSet) {
+  if (!runs.length) return '<div class="placeholder">Aucune exécution enregistrée.</div>'
+  return `<table><colgroup><col style="width:130px">${showSet ? '<col style="width:140px">' : ''}<col style="width:110px"><col style="width:95px"><col style="width:130px"><col></colgroup>
+    <thead><tr><th>Début</th>${showSet ? '<th>Jeu</th>' : ''}<th>Opération</th><th>Déclencheur</th><th>Statut</th><th>Résumé</th></tr></thead><tbody>
+    ${runs.map((r) => `<tr class="tr" data-run="${r.id}" style="cursor:pointer"><td>${esc(fmtDate(r.started_at))}</td>${showSet ? `<td>${esc(r.set_name)}</td>` : ''}
+      <td>${esc(KIND[r.kind] || r.kind)}</td><td class="muted">${esc(r.trigger)}</td><td><span class="st ${r.status}">${esc(STATUS[r.status] || r.status)}</span></td>
+      <td title="${esc(r.message)}">${esc(r.message)}</td></tr>`).join('')}</tbody></table>`
+}
+function bindRuns(root) { $$('[data-run]', root).forEach((tr) => tr.onclick = () => showRun(+tr.dataset.run)) }
+async function showRun(id) {
+  const r = await act('run.get', { id })
+  if (!r) return
+  const res = r.result || {}
+  const st = res.stats || res
+  const kv = Object.entries(st).filter(([k, v]) => typeof v !== 'object').map(([k, v]) =>
+    `<div>${esc(k)}</div><div>${esc(/bytes|size/.test(k) ? fmtSize(v) : v)}</div>`).join('')
+  const probs = (res.problems || []).map((p) => `${p.snapshot} · ${p.path} : ${p.issue}`).join('\n')
+  dialog(`${KIND[r.kind] || r.kind} — ${fmtDate(r.started_at)}`, `
+    <div><span class="st ${r.status}">${esc(STATUS[r.status] || r.status)}</span> <span class="muted">${esc(r.trigger)} · fin ${esc(fmtDate(r.finished_at))}</span></div>
+    <div>${esc(r.message)}</div>
+    ${kv ? `<div class="kv">${kv}</div>` : ''}
+    ${res.rotation?.deleted?.length ? `<div class="hint">Rotation : ${res.rotation.deleted.map(esc).join(', ')} supprimé(s)</div>` : ''}
+    ${probs ? `<div class="flabel">Problèmes</div><pre class="log">${esc(probs)}</pre>` : ''}
+    ${r.log ? `<div class="flabel">Journal détaillé</div><pre class="log">${esc(r.log)}</pre>` : ''}`,
+    { buttons: [{ label: 'Fermer', cls: 'primary' }] })
+}
+
+// ── Set editor ────────────────────────────────────────────────────────────────
+function editSet(existing) {
+  const c = existing ? JSON.parse(JSON.stringify(existing.config)) : {
+    name: '', sources: [], excludes: state.info?.default_excludes || [], dest_type: 'local', dest_path: '',
+    sftp: { host: '', port: 22, user: '', path: '/', key_file: '', password_var: 'BACKUP_SFTP_PASSWORD', passphrase_var: '', fingerprint: '' },
+    mode: 'auto', compress: false, retention: { last: 3, daily: 7, weekly: 4, monthly: 12 },
+    schedule: { type: 'manual', time: '12:00', weekdays: [0], hours: 24 }, enabled: true,
+  }
+  const d = dialog(existing ? `Modifier « ${existing.name} »` : 'Nouveau jeu de sauvegarde', `
+    <div class="field"><label>Nom</label><input id="eName" maxlength="100" placeholder="Ex. Documents personnels" /></div>
+    <div class="field"><label>Dossiers à sauvegarder</label><div class="srcs" id="eSrcs"></div>
+      <div class="row"><input class="grow" id="eSrcIn" placeholder="Chemin absolu…" /><button id="eSrcAdd">Ajouter</button><button id="eSrcPick">📁 Parcourir…</button></div></div>
+    <div class="field"><label>Exclusions (un motif par ligne)</label><textarea id="eExcl" rows="4" spellcheck="false"></textarea>
+      <div class="hint"><code>*.tmp</code>, <code>node_modules</code> s'appliquent au nom ; <code>Projet/build</code> à un chemin relatif à la source.</div></div>
+    <div class="field"><label>Destination</label>
+      <div class="row"><div class="seg" id="eDest"><button data-v="local">Dossier / disque / réseau</button><button data-v="sftp">SFTP</button></div></div></div>
+    <div id="eLocal" class="field">
+      <div class="row"><input class="grow" id="eDestPath" placeholder="E:\\Sauvegardes ou \\\\NAS\\sauvegardes" /><button id="eDestPick">📁 Parcourir…</button></div>
+      <div class="hint" id="eFolderHint"></div></div>
+    <div id="eSftp" class="field">
+      <div class="row"><input class="grow" id="sHost" placeholder="Hôte" /><input id="sPort" type="number" min="1" max="65535" style="width:80px" /><input id="sUser" placeholder="Utilisateur" style="width:140px" /></div>
+      <div class="row"><input class="grow" id="sPath" placeholder="Dossier distant (/sauvegardes)" /></div>
+      <div class="row"><input class="grow" id="sKey" placeholder="Clé privée (chemin absolu, facultatif)" /></div>
+      <div class="row"><span class="flabel">Variable du mot de passe</span><input id="sPwVar" style="width:200px" /><span class="flabel">Variable de la phrase de passe</span><input id="sPpVar" style="width:160px" /></div>
+      <div class="hint">Les secrets ne sont pas stockés ici : définissez-les dans le menu « Variables » de l'application (ex. <code>BACKUP_SFTP_PASSWORD</code>). Le mode SFTP utilise toujours le stockage dédupliqué.</div>
+      <div class="hint" id="sFp"></div></div>
+    <div class="row"><button id="eTest">🔌 Tester la destination</button><span class="grow"></span></div>
+    <div id="eTestRes" class="testres hidden"></div>
+    <div class="field"><label>Mode de stockage</label>
+      <select id="eMode"><option value="auto">Automatique (liens physiques si possible, sinon dédupliqué)</option>
+        <option value="hardlink">Liens physiques : arborescence complète consultable, fichiers inchangés liés</option>
+        <option value="dedup">Dédupliqué par empreinte (SHA-256) + manifeste</option></select>
+      <label class="small"><input type="checkbox" id="eComp" /> Compresser (deflate, comme zip ; implique le mode dédupliqué ; fichiers déjà compressés stockés tels quels)</label>
+      <div class="hint">Le mode est fixé à la première sauvegarde d'une destination.</div></div>
+    <div class="field"><label>Conservation (rotation après chaque sauvegarde)</label>
+      <div class="grid4"><div><div class="flabel">Dernières</div><input id="rLast" type="number" min="1" max="1000" /></div>
+        <div><div class="flabel">Quotidiennes</div><input id="rDaily" type="number" min="0" max="3650" /></div>
+        <div><div class="flabel">Hebdomadaires</div><input id="rWeekly" type="number" min="0" max="520" /></div>
+        <div><div class="flabel">Mensuelles</div><input id="rMonthly" type="number" min="0" max="600" /></div></div></div>
+    <div class="field"><label>Planification</label>
+      <div class="row"><select id="pType"><option value="manual">Manuelle</option><option value="interval">Intervalle</option><option value="daily">Quotidienne</option><option value="weekly">Hebdomadaire</option></select>
+        <span id="pHoursW">toutes les <input id="pHours" type="number" min="1" max="720" style="width:70px" /> h</span>
+        <span id="pTimeW">à <input id="pTime" type="time" /></span></div>
+      <div class="days" id="pDays">${DAYS.map((n, i) => `<label><input type="checkbox" value="${i}" />${n}</label>`).join('')}</div>
+      <label class="small"><input type="checkbox" id="eEnabled" /> Planification active</label>
+      <div class="hint">Les sauvegardes planifiées tournent tant que l'application est ouverte ; une échéance manquée (application fermée, disque absent) est rattrapée au démarrage, puis retentée toutes les heures en cas d'échec.</div></div>`,
+    { buttons: [{ label: 'Annuler' }, { label: existing ? 'Enregistrer' : 'Créer', cls: 'primary', onClick: save }] })
+  const el = d.el
+  const sources = [...c.sources]
+  $('#eName', el).value = c.name
+  $('#eExcl', el).value = c.excludes.join('\n')
+  $('#eDestPath', el).value = c.dest_path
+  $('#sHost', el).value = c.sftp.host; $('#sPort', el).value = c.sftp.port; $('#sUser', el).value = c.sftp.user
+  $('#sPath', el).value = c.sftp.path; $('#sKey', el).value = c.sftp.key_file
+  $('#sPwVar', el).value = c.sftp.password_var; $('#sPpVar', el).value = c.sftp.passphrase_var
+  $('#eMode', el).value = c.mode; $('#eComp', el).checked = c.compress
+  $('#rLast', el).value = c.retention.last; $('#rDaily', el).value = c.retention.daily
+  $('#rWeekly', el).value = c.retention.weekly; $('#rMonthly', el).value = c.retention.monthly
+  $('#pType', el).value = c.schedule.type; $('#pHours', el).value = c.schedule.hours; $('#pTime', el).value = c.schedule.time
+  $$('#pDays input', el).forEach((cb) => cb.checked = c.schedule.weekdays.includes(+cb.value))
+  $('#eEnabled', el).checked = c.enabled
+  let destType = c.dest_type
+  let trusted = c.sftp.fingerprint || ''
+  function renderSrcs() {
+    $('#eSrcs', el).innerHTML = sources.length ? sources.map((s, i) => `<div class="src"><span title="${esc(s)}">📁 ${esc(s)}</span><button class="icon danger" data-rm="${i}">✕</button></div>`).join('')
+      : '<div class="hint">Aucun dossier pour l’instant.</div>'
+    $$('[data-rm]', el).forEach((b) => b.onclick = () => { sources.splice(+b.dataset.rm, 1); renderSrcs() })
+  }
+  function addSrc(p) {
+    p = (p || '').trim().replace(/^"|"$/g, '')
+    if (!p) return
+    if (!sources.some((x) => x.toLowerCase() === p.toLowerCase())) sources.push(p)
+    renderSrcs()
+  }
+  function renderMode() {
+    $$('#eDest button', el).forEach((b) => b.classList.toggle('on', b.dataset.v === destType))
+    $('#eLocal', el).classList.toggle('hidden', destType !== 'local')
+    $('#eSftp', el).classList.toggle('hidden', destType !== 'sftp')
+    $('#eMode', el).disabled = destType === 'sftp'
+    const t = $('#pType', el).value
+    $('#pHoursW', el).classList.toggle('hidden', t !== 'interval')
+    $('#pTimeW', el).classList.toggle('hidden', t === 'manual' || t === 'interval')
+    $('#pDays', el).classList.toggle('hidden', t !== 'weekly')
+    const folder = existing?.config.folder || slug($('#eName', el).value)
+    $('#eFolderHint', el).innerHTML = `Les instantanés seront rangés dans le sous-dossier <code>${esc(folder)}</code> de cette destination.`
+    $('#sFp', el).innerHTML = trusted ? `Empreinte du serveur approuvée : <code>${esc(trusted)}</code>` : 'Serveur pas encore approuvé : utilisez « Tester la destination ».'
+  }
+  renderSrcs(); renderMode()
+  $('#eName', el).oninput = renderMode
+  $('#pType', el).onchange = renderMode
+  $$('#eDest button', el).forEach((b) => b.onclick = () => { destType = b.dataset.v; renderMode() })
+  $('#eSrcAdd', el).onclick = () => { addSrc($('#eSrcIn', el).value); $('#eSrcIn', el).value = '' }
+  $('#eSrcIn', el).onkeydown = (e) => { if (e.key === 'Enter') { addSrc(e.target.value); e.target.value = '' } }
+  $('#eSrcPick', el).onclick = async () => { const p = await pickFolder('Dossier à sauvegarder', sources[sources.length - 1] || ''); if (p) addSrc(p) }
+  $('#eDestPick', el).onclick = async () => { const p = await pickFolder('Dossier de destination', $('#eDestPath', el).value); if (p) $('#eDestPath', el).value = p }
+  function collect() {
+    return {
+      name: $('#eName', el).value.trim(), sources,
+      excludes: $('#eExcl', el).value.split('\n').map((x) => x.trim()).filter(Boolean),
+      dest_type: destType, dest_path: $('#eDestPath', el).value.trim(),
+      sftp: { host: $('#sHost', el).value.trim(), port: +$('#sPort', el).value || 22, user: $('#sUser', el).value.trim(),
+              path: $('#sPath', el).value.trim() || '/', key_file: $('#sKey', el).value.trim(),
+              password_var: $('#sPwVar', el).value.trim(), passphrase_var: $('#sPpVar', el).value.trim(), fingerprint: trusted },
+      mode: $('#eMode', el).value, compress: $('#eComp', el).checked,
+      retention: { last: +$('#rLast', el).value || 1, daily: +$('#rDaily', el).value || 0, weekly: +$('#rWeekly', el).value || 0, monthly: +$('#rMonthly', el).value || 0 },
+      schedule: { type: $('#pType', el).value, time: $('#pTime', el).value || '12:00', hours: +$('#pHours', el).value || 24,
+                  weekdays: $$('#pDays input', el).filter((x) => x.checked).map((x) => +x.value) },
+      enabled: $('#eEnabled', el).checked,
+    }
+  }
+  $('#eTest', el).onclick = async () => {
+    const box = $('#eTestRes', el)
+    box.className = 'testres'; box.textContent = 'Test en cours…'
+    let r
+    try { r = await call('dest.test', { id: existing?.id, set: collect() }, { timeout: 60000 }) }
+    catch (e) { box.className = 'testres bad'; box.textContent = e.message; return }
+    if (r.need_trust) {
+      if (!confirm(`Première connexion à ce serveur SFTP.\n\nEmpreinte de sa clé :\n${r.fingerprint}\n\nVérifiez-la auprès de l'administrateur. Faire confiance à ce serveur ?`)) {
+        box.className = 'testres bad'; box.textContent = 'Serveur non approuvé'; return
+      }
+      try { r = await call('dest.test', { id: existing?.id, set: collect(), trust: r.fingerprint }, { timeout: 60000 }) }
+      catch (e) { box.className = 'testres bad'; box.textContent = e.message; return }
+      trusted = r.fingerprint || trusted; renderMode()
+    }
+    box.className = 'testres good'
+    box.innerHTML = `✔ Destination accessible : <code>${esc(r.path)}</code><br>` +
+      (r.hardlink !== undefined ? `Liens physiques : ${r.hardlink ? 'pris en charge' : 'non pris en charge (mode dédupliqué)'} · ` : '') +
+      `${r.snapshots} instantané(s) existant(s)${r.mode ? ' · mode ' + (r.mode === 'hardlink' ? 'liens physiques' : 'dédupliqué') : ''}` +
+      (r.disk ? ` · ${fmtSize(r.disk.free)} libres sur ${fmtSize(r.disk.total)}` : '')
+  }
+  async function save() {
+    const pending = $('#eSrcIn', el).value.trim()
+    if (pending) { addSrc(pending); $('#eSrcIn', el).value = '' }
+    const r = await act('set.save', { id: existing?.id, set: collect() })
+    if (!r) return false
+    toast(existing ? 'Jeu enregistré' : 'Jeu créé')
+    state.sel = r.id
+    await loadSets(); selectSet(r.id)
+  }
+  setTimeout(() => $('#eName', el).focus(), 30)
+}
+function slug(n) { return (n.replace(/[^\p{L}\p{N}\-_ ]/gu, '_').trim().replace(/ /g, '_') || 'sauvegarde').slice(0, 60) }
+
+// ── Operations ────────────────────────────────────────────────────────────────
+async function runJob(action, payload, okMsg) {
+  const s = curSet()
+  if (!s) return null
+  state.progress[s.id] = { kind: { 'backup.run': 'backup', 'verify.run': 'verify', 'rotate.run': 'rotate', 'restore.run': 'restore', 'snapshot.export': 'export' }[action], percent: 0, message: '' }
+  renderSide(); renderDetail()
+  try {
+    const r = await window.ledroide.run(MODULE_ID, action, payload, {})
+    if (okMsg) toast(okMsg(r))
+    return r
+  } catch (e) {
+    toast(e.code === 'JOB_CANCELLED' ? 'Opération annulée' : e.message, e.code !== 'JOB_CANCELLED')
+    return null
+  } finally {
+    delete state.progress[s.id]
+    await loadSets()
+    if (s.id === state.sel) { await loadSnaps(); if (state.tab === 'journal') loadJournal() }
+  }
+}
+$('#btnRun').onclick = () => runJob('backup.run', { id: state.sel }, (r) => `Instantané ${r.snapshot} : ${r.stats.new} nouveau(x), ${r.stats.changed} modifié(s), ${fmtSize(r.stats.bytes_copied)} copiés`)
+async function verify(snapshot) {
+  const deep = confirm('Vérification complète (relit chaque fichier et contrôle son empreinte SHA-256) ?\n\nOK = complète · Annuler = rapide (présence et taille)')
+  const r = await runJob('verify.run', { id: state.sel, snapshot, deep })
+  if (r) showVerify(r)
+}
+function showVerify(r) {
+  const good = !r.missing && !r.corrupt && !r.problems.length
+  dialog('Résultat de la vérification', `
+    <div class="plan"><div><b>${r.snapshots}</b><span>instantané(s)</span></div><div><b>${r.ok}</b><span>fichiers intacts</span></div>
+      <div><b style="color:${r.missing ? '#fca5a5' : 'inherit'}">${r.missing}</b><span>manquants</span></div><div><b style="color:${r.corrupt ? '#fca5a5' : 'inherit'}">${r.corrupt}</b><span>corrompus</span></div></div>
+    <div class="testres ${good ? 'good' : 'bad'}">${good ? '✔ Toutes les sauvegardes vérifiées sont intactes.' : '⚠ Des problèmes ont été détectés : refaites une sauvegarde pour réécrire les fichiers concernés.'}</div>
+    ${r.problems.length ? `<pre class="log">${esc(r.problems.map((p) => `${p.snapshot} · ${p.path || '(manifeste)'} : ${p.issue}`).join('\n'))}</pre>` : ''}`,
+    { small: true, buttons: [{ label: 'Fermer', cls: 'primary' }] })
+}
+$('#btnVerify').onclick = () => verify(null)
+$('#btnVerifySnap').onclick = () => state.snap && verify(state.snap)
+$('#btnRotate').onclick = async () => {
+  const p = await act('rotate.preview', { id: state.sel }, { timeout: 60000 })
+  if (!p) return
+  if (!p.delete.length) return toast(`Rien à supprimer : ${p.keep.length} instantané(s) conservé(s)`)
+  if (!confirm(`La politique de conservation supprimera ${p.delete.length} instantané(s) :\n\n${p.delete.map(snapDate).join('\n')}\n\nContinuer ?`)) return
+  runJob('rotate.run', { id: state.sel }, (r) => `${r.deleted.length} instantané(s) supprimé(s)`)
+}
+$('#btnCancel').onclick = async () => { await act('op.cancel', { id: state.sel }); toast('Annulation demandée…') }
+$('#btnEdit').onclick = () => curSet() && editSet(curSet())
+$('#btnNew').onclick = () => editSet(null)
+$('#emptyNew').onclick = () => editSet(null)
+$('#btnDelSet').onclick = async () => {
+  const s = curSet()
+  if (!s || !confirm(`Supprimer le jeu « ${s.name} » ?\n\nLes instantanés déjà présents dans la destination ne sont PAS effacés :\n${s.dest_label}`)) return
+  if (await act('set.delete', { id: s.id })) { toast('Jeu supprimé'); state.sel = null; loadSets().then(() => state.sel && selectSet(state.sel)) }
+}
+$('#btnDelSnap').onclick = async () => {
+  if (!state.snap || !confirm(`Supprimer définitivement l'instantané du ${snapDate(state.snap)} ?`)) return
+  const r = await act('snapshot.delete', { id: state.sel, snapshot: state.snap }, { timeout: 120000 })
+  if (r) { toast('Instantané supprimé'); state.snap = null; loadSnaps() }
+}
+$('#btnExport').onclick = async () => {
+  if (!state.snap) return
+  const dir = await pickFolder('Dossier où créer l’archive zip', state.info?.home)
+  if (!dir) return
+  runJob('snapshot.export', { id: state.sel, snapshot: state.snap, paths: [...state.checked], out_dir: dir }, (r) => `Archive créée : ${r.path} (${fmtSize(r.size)})`)
+}
+$('#btnRestore').onclick = () => state.snap && restoreDialog()
+
+function restoreDialog() {
+  const paths = [...state.checked]
+  const snap = state.snap
+  let target = ''
+  const d = dialog('Restaurer', `
+    <div class="hint">Instantané du <b>${esc(snapDate(snap))}</b> — ${paths.length ? `${paths.length} élément(s) coché(s)` : 'tout l’instantané'}</div>
+    <div class="field"><label>Destination</label>
+      <label><input type="radio" name="rt" value="orig" checked /> Emplacement d’origine</label>
+      <label><input type="radio" name="rt" value="other" /> Autre dossier :</label>
+      <div class="row"><input class="grow" id="rTarget" placeholder="Dossier de restauration" disabled /><button id="rPick" disabled>📁 Parcourir…</button></div></div>
+    <div id="rPlan" class="hint">Analyse…</div>
+    <div class="field" id="rPolicyW"><label>Fichiers déjà présents et différents</label>
+      <select id="rPolicy"><option value="skip">Les conserver (ignorer)</option><option value="rename">Restaurer à côté, renommé « (restauré) »</option><option value="overwrite">Les écraser</option></select></div>`,
+    { buttons: [{ label: 'Annuler' }, { label: 'Restaurer', cls: 'primary', onClick: go }] })
+  const el = d.el
+  let plan = null, lastMode = null
+  async function refresh() {
+    const mode = $('input[name=rt]:checked', el).value
+    $('#rTarget', el).disabled = $('#rPick', el).disabled = mode !== 'other'
+    const t = mode === 'other' ? $('#rTarget', el).value.trim() : ''
+    if (plan && t === target && lastMode === mode) return
+    target = t; lastMode = mode
+    if (mode === 'other' && !target) { $('#rPlan', el).textContent = 'Choisissez un dossier.'; plan = null; return }
+    $('#rPlan', el).style.opacity = '.5'
+    plan = await act('restore.plan', { id: state.sel, snapshot: snap, paths, target }, { timeout: 120000 })
+    $('#rPlan', el).style.opacity = ''
+    if (!plan) { $('#rPlan', el).textContent = ''; return }
+    $('#rPlan', el).innerHTML = `<div class="plan"><div><b>${plan.files}</b><span>fichier(s)</span></div><div><b>${fmtSize(plan.size)}</b><span>au total</span></div>
+      <div><b>${plan.identical}</b><span>déjà identiques</span></div><div><b style="color:${plan.conflicts ? '#fcd34d' : 'inherit'}">${plan.conflicts}</b><span>conflits</span></div></div>
+      ${plan.conflicts ? `<pre class="log" style="max-height:110px;margin-top:8px">${esc(plan.conflict_list.map((c) => c.target).join('\n'))}${plan.conflicts > plan.conflict_list.length ? '\n…' : ''}</pre>` : ''}`
+    $('#rPolicyW', el).classList.toggle('hidden', !plan.conflicts)
+  }
+  $$('input[name=rt]', el).forEach((r) => r.onchange = refresh)
+  $('#rTarget', el).onchange = refresh
+  $('#rPick', el).onclick = async () => { const p = await pickFolder('Dossier de restauration', $('#rTarget', el).value); if (p) { $('#rTarget', el).value = p; refresh() } }
+  async function go() {
+    await refresh()
+    if (!plan) { toast('Choisissez une destination valide', true); return false }
+    const policy = plan.conflicts ? $('#rPolicy', el).value : 'ask'
+    if (policy === 'overwrite' && !confirm(`${plan.conflicts} fichier(s) existant(s) seront écrasés. Confirmer ?`)) return false
+    d.close()
+    runJob('restore.run', { id: state.sel, snapshot: snap, paths, target, policy },
+      (r) => `Restauration : ${r.restored} fichier(s) restauré(s)${r.errors ? `, ${r.errors} erreur(s)` : ''}`)
+  }
+  refresh()
+}
+
+$('#chkAll').onchange = (e) => {
+  $$('[data-c]').forEach((cb) => { cb.checked = e.target.checked; e.target.checked ? state.checked.add(cb.dataset.c) : state.checked.delete(cb.dataset.c) })
+  updateSel()
+}
+let searchTimer
+$('#search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => state.snap && openSnap(state.snap, ''), 300) }
+$$('.tabs button').forEach((b) => b.onclick = () => {
+  state.tab = b.dataset.tab
+  $$('.tabs button').forEach((x) => x.classList.toggle('on', x === b))
+  $('#paneSnaps').classList.toggle('hidden', state.tab !== 'snaps')
+  $('#paneJournal').classList.toggle('hidden', state.tab !== 'journal')
+  if (state.tab === 'journal') loadJournal()
+})
+$('#btnAllRuns').onclick = async () => {
+  const r = await act('runs.list', { limit: 300 })
+  if (!r) return
+  const d = dialog('Journal global des exécutions', `<div style="max-height:60vh;overflow:auto">${runsTable(r.runs, true)}</div>`,
+    { buttons: [{ label: 'Vider le journal', cls: 'danger', onClick: async () => { if (!confirm('Vider tout le journal ?')) return false; await act('runs.clear', {}); toast('Journal vidé') } },
+                { label: 'Fermer', cls: 'primary' }] })
+  d.el.querySelector('.dialog').style.width = 'min(980px, calc(100vw - 32px))'
+  bindRuns(d.el)
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+window.ledroide.on(MODULE_ID, 'run:progress', (p) => {
+  state.progress[p.set_id] = { kind: p.kind, percent: p.percent, message: p.message }
+  const el = $(`.set[data-id="${p.set_id}"] .mini > div`)
+  if (el) el.style.width = `${p.percent}%`
+  else renderSide()
+  if (p.set_id === state.sel) renderDetail()
+})
+window.ledroide.on(MODULE_ID, 'run:started', (p) => {
+  state.progress[p.set_id] = state.progress[p.set_id] || { kind: p.kind, percent: 0, message: '' }
+  if (p.trigger !== 'manuel') toast(`${KIND[p.kind]} ${p.trigger} démarrée`)
+  loadSets()
+})
+window.ledroide.on(MODULE_ID, 'run:finished', (p) => {
+  delete state.progress[p.set_id]
+  if (p.status === 'error' && p.message) { const s = state.sets.find((x) => x.id === p.set_id); toast(`${s ? s.name + ' : ' : ''}${p.message}`, true) }
+  loadSets().then(() => { if (p.set_id === state.sel) { loadSnaps(); if (state.tab === 'journal') loadJournal() } })
+})
+setInterval(() => { if (!Object.keys(state.progress).length) loadSets() }, 60000)
+
+;(async () => {
+  state.info = await act('info')
+  state.sel = Number(localGet('bk-sel')) || null
+  await loadSets()
+  if (state.sel) selectSet(state.sel)
+})()
+</script>
+</body>
+</html>

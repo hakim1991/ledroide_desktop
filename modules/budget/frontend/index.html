@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Budget personnel</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --inc: #34d399; --exp: #f87171;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 11.5px; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pos { color: var(--inc); } .neg { color: var(--exp); }
+
+  header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; flex-wrap: wrap; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 8px; }
+  .monthnav { display: inline-flex; align-items: center; gap: 2px; }
+  .monthnav .lbl { min-width: 128px; text-align: center; font-weight: 600; text-transform: capitalize; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border);
+               border-radius: 8px; padding: 4px; z-index: 50; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+  #main { flex: 1; min-height: 0; display: flex; }
+  aside { width: 265px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+  aside h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 12px 14px 6px; display: flex; align-items: center; }
+  .acc { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; border-left: 3px solid transparent; }
+  .acc:hover { background: var(--surface2); }
+  .acc.on { background: rgba(99,102,241,.13); border-left-color: var(--accent); }
+  .acc .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .acc .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acc .t { font-size: 10.5px; color: var(--muted); }
+  .acc .b { font-weight: 600; }
+  .acc .edit { opacity: 0; padding: 1px 6px; font-size: 11px; }
+  .acc:hover .edit { opacity: 1; }
+  .acc.archived .n { color: var(--muted); }
+  .acc-total { padding: 10px 14px; border-top: 1px solid var(--border); margin-top: auto; display: flex; justify-content: space-between; }
+
+  #content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  nav.tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; overflow-x: auto; }
+  nav.tabs button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 9px 12px; border-bottom: 2px solid transparent; }
+  nav.tabs button:hover { color: var(--text); background: transparent; }
+  nav.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  nav.tabs { scrollbar-width: none; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  .view { flex: 1; overflow: auto; padding: 16px; }
+  @media (max-width: 1050px) { aside { width: 205px; } .grid2 { grid-template-columns: 1fr; } }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .kpi .l { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+  .kpi .v { font-size: 20px; font-weight: 650; }
+  .kpi .s { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .panel h3 .muted { font-weight: 400; font-size: 11.5px; }
+  .panel.wide { grid-column: 1 / -1; }
+  .donut-wrap { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .legend { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 3px; }
+  .legend .it { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+  .legend .it:hover, .legend .it.hl { background: var(--surface2); }
+  .legend .sw { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .legend .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend .p { color: var(--muted); width: 40px; text-align: right; font-size: 11.5px; }
+  svg text { fill: #a1a1aa; font-size: 10.5px; font-family: inherit; }
+  svg .grid { stroke: #26262b; stroke-width: 1; }
+  .empty-chart { color: var(--muted); padding: 30px 0; text-align: center; }
+
+  .bars { display: flex; flex-direction: column; gap: 9px; }
+  .brow { display: grid; grid-template-columns: minmax(120px, 1.3fr) 2.2fr auto; gap: 10px; align-items: center; }
+  .brow .n { display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; }
+  .brow .n span { overflow: hidden; text-overflow: ellipsis; }
+  .brow .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .track { position: relative; height: 9px; background: var(--surface2); border-radius: 5px; overflow: visible; }
+  .track .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--ok); max-width: 100%; }
+  .track .fill.warn { background: var(--warn); } .track .fill.over { background: var(--err); }
+  .track .pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #e4e4e7; opacity: .55; border-radius: 1px; }
+  .brow .v { text-align: right; font-size: 12px; min-width: 150px; }
+
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .filters input[type=search] { width: 220px; }
+  table.tx { width: 100%; border-collapse: collapse; }
+  table.tx th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 500;
+                padding: 6px 8px; border-bottom: 1px solid var(--border); position: sticky; top: -16px; background: var(--bg); z-index: 2; }
+  table.tx td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.tx tr:hover td { background: #16161a; }
+  table.tx tr.sel td { background: rgba(99,102,241,.12); }
+  table.tx td.r, table.tx th.r { text-align: right; }
+  table.tx .lbl { max-width: 420px; }
+  table.tx .lbl .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.tx .lbl .no { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  tr.click { cursor: pointer; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 10px; font-size: 11.5px;
+          background: color-mix(in srgb, var(--c) 18%, transparent); color: color-mix(in srgb, var(--c) 70%, #fff); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  .chip.none { --c: #71717a; font-style: italic; }
+  .badge { font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+  .badge.warn { color: #fcd34d; border-color: rgba(245,158,11,.4); }
+  .badge.bad { color: #fca5a5; border-color: rgba(239,68,68,.4); }
+  .bulk { display: flex; gap: 6px; align-items: center; padding: 6px 10px; margin-bottom: 8px; background: rgba(99,102,241,.1);
+          border: 1px solid rgba(99,102,241,.35); border-radius: 8px; }
+  .totals { display: flex; gap: 16px; padding: 10px 8px; color: var(--muted); flex-wrap: wrap; }
+  .totals b { color: var(--text); }
+
+  .list { display: flex; flex-direction: column; gap: 4px; }
+  .li { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+  .li.sub { margin-left: 26px; }
+  .li .sw { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+  .li .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .li.off { opacity: .55; }
+  .section-h { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+  .section-h h2 { font-size: 15px; }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin-bottom: 12px; max-width: 760px; }
+
+  .budget-row { display: grid; grid-template-columns: minmax(0, 1.2fr) 140px minmax(0, 2fr) 170px; gap: 12px; align-items: center;
+                padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  .budget-row.sub .n { padding-left: 22px; }
+  .budget-row.head { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom-color: var(--border); }
+  .budget-row .n { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .budget-row .n span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .budget-row input { width: 100%; text-align: right; }
+  .budget-row input.ovr { border-color: rgba(245,158,11,.6); }
+  .budget-row .v { text-align: right; font-size: 12px; }
+
+  #empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; text-align: center; max-width: 460px; }
+  .card h2 { font-size: 17px; margin-bottom: 6px; }
+  .card p { color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+  .card .actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(560px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.small { width: min(400px, calc(100vw - 32px)); }
+  .dialog.large { width: min(1000px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; display: flex; align-items: center; gap: 8px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; min-height: 0; }
+  .dialog .content.block { display: block; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .field.row { flex-direction: row; align-items: center; gap: 8px; }
+  .field textarea { min-height: 60px; resize: vertical; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  .seg button.on.exp { color: var(--exp); } .seg button.on.inc { color: var(--inc); }
+  .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+  .swatches .sw { width: 22px; height: 22px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; }
+  .swatches .sw.on { border-color: #fff; }
+  .steps { display: flex; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; font-weight: 400; }
+  .steps b { color: var(--text); }
+  .maptable { overflow: auto; max-height: 260px; border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; }
+  .maptable table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+  .maptable th, .maptable td { padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+  .maptable th { background: var(--surface2); position: sticky; top: 0; color: var(--muted); font-weight: 500; }
+  .maptable th.m { color: var(--accent-h); }
+  .maptable tr.skip td { opacity: .35; }
+  .mapgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 12px; }
+  .drop { border: 2px dashed var(--border); border-radius: 10px; padding: 28px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop:hover, .drop.over { border-color: var(--accent); color: var(--text); }
+  .err-list { color: #fcd34d; font-size: 11.5px; margin-top: 8px; max-height: 70px; overflow: auto; }
+
+  #tip { position: fixed; z-index: 80; background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+         font-size: 12px; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.5); line-height: 1.5; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">💶 Budget personnel</span>
+  <div class="monthnav">
+    <button class="icon ghost" id="mPrev" title="Mois précédent">‹</button>
+    <span class="lbl" id="mLbl"></span>
+    <button class="icon ghost" id="mNext" title="Mois suivant">›</button>
+    <button class="ghost" id="mToday">Ce mois</button>
+  </div>
+  <span class="spacer"></span>
+  <button class="primary" id="btnAddTx" title="Nouvelle opération (N)">＋ Opération</button>
+  <button id="btnTransfer">⇄ Virement</button>
+  <button id="btnImport">⬆ Importer</button>
+  <div class="menu">
+    <button class="icon" id="btnMenu" title="Plus d'actions">⋯</button>
+    <div class="menu-list hidden" id="menuList">
+      <button data-act="export">⬇️ Exporter les opérations (CSV)…</button>
+      <button data-act="apply-rules">🏷️ Catégoriser avec les règles</button>
+      <hr>
+      <button data-act="demo">🧪 Ajouter des données d'exemple</button>
+    </div>
+  </div>
+</header>
+
+<div id="main">
+  <aside>
+    <h4>Comptes <span class="spacer"></span><button class="icon ghost" id="btnAddAcc" title="Nouveau compte">＋</button></h4>
+    <div id="accList"></div>
+    <div class="acc-total"><span class="muted">Total</span><b class="num" id="accTotal"></b></div>
+  </aside>
+  <div id="content">
+    <nav class="tabs" id="tabs">
+      <button data-tab="dash">Tableau de bord</button>
+      <button data-tab="tx">Opérations</button>
+      <button data-tab="budgets">Budgets</button>
+      <button data-tab="recurring">Récurrentes</button>
+      <button data-tab="categories">Catégories</button>
+      <button data-tab="rules">Règles</button>
+    </nav>
+    <div class="view" id="view"></div>
+  </div>
+  <div id="empty" class="hidden">
+    <div class="card">
+      <h2>Bienvenue dans votre budget</h2>
+      <p>Commencez par créer un compte (courant, épargne, espèces…) avec son solde initial, puis saisissez ou importez vos opérations.</p>
+      <div class="actions">
+        <button class="primary" id="emptyAdd">＋ Créer un compte</button>
+        <button id="emptyDemo">🧪 Données d'exemple</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".csv,.txt,.tsv,.ofx,.qfx,.qif" class="hidden" />
+<div id="tip" class="hidden"></div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'budget'
+const call = (action, payload = {}, timeout = 30000) => window.ledroide.call(MODULE_ID, action, payload, { timeout })
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const COLORS = ['#6366f1', '#38bdf8', '#22c55e', '#10b981', '#eab308', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#14b8a6', '#64748b', '#a1a1aa']
+const ACC_TYPES = { courant: 'Compte courant', epargne: 'Épargne', especes: 'Espèces', carte: 'Carte à débit différé', investissement: 'Investissement', autre: 'Autre' }
+const FREQ = { daily: ['jour', 'jours'], weekly: ['semaine', 'semaines'], monthly: ['mois', 'mois'], yearly: ['an', 'ans'] }
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+const MSHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+
+const nf = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
+const nf0 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+const money = (c) => nf.format((c || 0) / 100)
+const money0 = (c) => nf0.format((c || 0) / 100)
+const signed = (c) => (c > 0 ? '+' : '') + money(c)
+const cls = (c) => (c > 0 ? 'pos' : c < 0 ? 'neg' : '')
+const fmtDate = (s) => s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : ''
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+const monthLabel = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`
+const shiftMonth = (m, d) => { let y = +m.slice(0, 4), mo = +m.slice(5, 7) - 1 + d; y += Math.floor(mo / 12); mo = ((mo % 12) + 12) % 12; return `${y}-${String(mo + 1).padStart(2, '0')}` }
+const centsToInput = (c) => c == null ? '' : (Math.abs(c) / 100).toFixed(2).replace('.', ',')
+function parseCents(s) {
+  s = String(s ?? '').replace(/[\s  €]/g, '')
+  if (!s) return null
+  if (/,\d{1,2}$/.test(s) || (s.includes(',') && !s.includes('.'))) s = s.replace(/\./g, '').replace(',', '.')
+  else s = s.replace(/,/g, '')
+  if (!/^[-+]?\d+(\.\d+)?$/.test(s)) return NaN
+  return Math.round(parseFloat(s) * 100)
+}
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+
+const state = {
+  accounts: [], categories: [], catById: new Map(), month: todayIso().slice(0, 7),
+  accountId: Number(localGet('bud-account')) || null, tab: localGet('bud-tab') || 'dash',
+  tx: { rows: [], total: 0, offset: 0, sel: new Set(), filters: { search: '', category_id: '', kind: '', scope: 'month' } },
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+async function act(action, payload, okMsg, timeout) {
+  try {
+    const r = await call(action, payload, timeout)
+    if (okMsg) toast(okMsg)
+    return r
+  } catch (e) { toast(e.message || String(e), true); return null }
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+function setCategories(list) {
+  state.categories = list
+  state.catById = new Map(list.map((c) => [c.id, c]))
+}
+function setAccounts(list) {
+  state.accounts = list
+  if (state.accountId && !list.some((a) => a.id === state.accountId)) state.accountId = null
+  renderAccounts()
+}
+const accName = (id) => state.accounts.find((a) => a.id === id)?.name ?? '—'
+const topOf = (c) => (c && c.parent_id ? state.catById.get(c.parent_id) : c)
+const catLabel = (id) => { const c = state.catById.get(id); if (!c) return ''; const p = c.parent_id && state.catById.get(c.parent_id); return p ? `${p.name} › ${c.name}` : c.name }
+function catChip(id, peer) {
+  if (peer) return `<span class="chip" style="--c:#38bdf8">⇄ ${esc(accName(peer))}</span>`
+  const c = state.catById.get(id)
+  if (!c) return '<span class="chip none">Sans catégorie</span>'
+  return `<span class="chip" style="--c:${c.color}" title="${esc(catLabel(id))}">${esc(c.name)}</span>`
+}
+function catOptions(selected, { none = 'Sans catégorie', kind } = {}) {
+  let html = none !== false ? `<option value="">${esc(none)}</option>` : ''
+  for (const kindKey of ['expense', 'income']) {
+    if (kind && kind !== kindKey) continue
+    html += `<optgroup label="${kindKey === 'expense' ? 'Dépenses' : 'Revenus'}">`
+    for (const c of state.categories.filter((x) => !x.parent_id && x.kind === kindKey)) {
+      html += `<option value="${c.id}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`
+      for (const s of state.categories.filter((x) => x.parent_id === c.id))
+        html += `<option value="${s.id}" ${s.id === selected ? 'selected' : ''}>   ↳ ${esc(s.name)}</option>`
+    }
+    html += '</optgroup>'
+  }
+  return html
+}
+const accOptions = (selected, exclude) => state.accounts.filter((a) => a.id !== exclude && (!a.archived || a.id === selected))
+  .map((a) => `<option value="${a.id}" ${a.id === selected ? 'selected' : ''}>${esc(a.name)}</option>`).join('')
+
+async function boot() {
+  const r = await act('bootstrap')
+  if (!r) return
+  setCategories(r.categories)
+  setAccounts(r.accounts)
+  if (r.generated) toast(`${r.generated} opération(s) récurrente(s) ajoutée(s)`)
+  render()
+}
+async function refreshAccounts() { const r = await act('accounts.list'); if (r) setAccounts(r.accounts) }
+async function refreshCategories() { const r = await act('categories.list'); if (r) setCategories(r.categories) }
+
+// ── Shell ─────────────────────────────────────────────────────────────────────
+
+function renderAccounts() {
+  const all = state.accounts
+  const active = all.filter((a) => !a.archived)
+  const total = active.reduce((s, a) => s + a.today_cents, 0)
+  $('#accList').innerHTML = `
+    <div class="acc ${!state.accountId ? 'on' : ''}" data-acc="">
+      <span class="dot" style="background:linear-gradient(135deg,#6366f1,#22c55e)"></span>
+      <div class="n">Tous les comptes<div class="t">${active.length} compte(s)</div></div>
+      <span class="b num ${cls(total)}">${money(total)}</span></div>
+    ${all.map((a) => `
+      <div class="acc ${a.id === state.accountId ? 'on' : ''} ${a.archived ? 'archived' : ''}" data-acc="${a.id}">
+        <span class="dot" style="background:${a.color}"></span>
+        <div class="n" title="${esc(a.name)}">${esc(a.name)}<div class="t">${ACC_TYPES[a.type] || ''}${a.archived ? ' · archivé' : ''}${a.today_cents !== a.balance_cents ? ' · à venir ' + money(a.balance_cents - a.today_cents) : ''}</div></div>
+        <button class="ghost edit" data-edit="${a.id}" title="Modifier">✎</button>
+        <span class="b num ${cls(a.today_cents)}">${money(a.today_cents)}</span>
+      </div>`).join('')}`
+  $('#accTotal').textContent = money(total)
+  $('#accTotal').className = 'num ' + cls(total)
+  const has = all.length > 0
+  $('#content').classList.toggle('hidden', !has); $('aside').classList.toggle('hidden', !has); $('#empty').classList.toggle('hidden', has)
+  for (const id of ['btnAddTx', 'btnTransfer', 'btnImport']) $('#' + id).disabled = !has
+}
+
+function render() {
+  $('#mLbl').textContent = monthLabel(state.month)
+  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.tab))
+  if (!state.accounts.length) return
+  const v = $('#view')
+  v.innerHTML = ''
+  ;({ dash: renderDash, tx: renderTx, budgets: renderBudgets, recurring: renderRecurring, categories: renderCategories, rules: renderRules })[state.tab](v)
+}
+
+$('#accList').addEventListener('click', (e) => {
+  const ed = e.target.closest('[data-edit]')
+  if (ed) { openAccountDialog(state.accounts.find((a) => a.id === +ed.dataset.edit)); return }
+  const row = e.target.closest('[data-acc]')
+  if (!row) return
+  state.accountId = row.dataset.acc ? +row.dataset.acc : null
+  localSet('bud-account', state.accountId || '')
+  state.tx.sel.clear()
+  renderAccounts(); render()
+})
+$('#tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tab]'); if (!b) return
+  state.tab = b.dataset.tab; localSet('bud-tab', state.tab); render()
+})
+$('#mPrev').onclick = () => { state.month = shiftMonth(state.month, -1); render() }
+$('#mNext').onclick = () => { state.month = shiftMonth(state.month, 1); render() }
+$('#mToday').onclick = () => { state.month = todayIso().slice(0, 7); render() }
+$('#btnAddAcc').onclick = () => openAccountDialog()
+$('#emptyAdd').onclick = () => openAccountDialog()
+$('#emptyDemo').onclick = () => seedDemo()
+$('#btnAddTx').onclick = () => openTxDialog()
+$('#btnTransfer').onclick = () => openTransferDialog()
+$('#btnImport').onclick = () => $('#fileInput').click()
+$('#btnMenu').onclick = (e) => { e.stopPropagation(); $('#menuList').classList.toggle('hidden') }
+document.addEventListener('click', () => $('#menuList').classList.add('hidden'))
+$('#menuList').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-act]'); if (!b) return
+  $('#menuList').classList.add('hidden')
+  if (b.dataset.act === 'export') openExportDialog()
+  if (b.dataset.act === 'apply-rules') { const r = await act('rules.apply', {}); if (r) { toast(`${r.updated} opération(s) catégorisée(s)`); render() } }
+  if (b.dataset.act === 'demo') seedDemo()
+})
+document.addEventListener('keydown', (e) => {
+  if ($('.overlay') || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return
+  if ((e.key === 'n' || e.key === 'N') && state.accounts.length) { e.preventDefault(); openTxDialog() }
+})
+
+async function seedDemo() {
+  const r = await act('demo.seed', {}, 'Données d\'exemple ajoutées')
+  if (r) { setAccounts(r.accounts); await refreshCategories(); render() }
+}
+
+// ── Charts (SVG) ──────────────────────────────────────────────────────────────
+
+const tip = $('#tip')
+function showTip(e, html) { tip.innerHTML = html; tip.classList.remove('hidden'); moveTip(e) }
+function moveTip(e) {
+  const r = tip.getBoundingClientRect()
+  tip.style.left = Math.min(innerWidth - r.width - 8, e.clientX + 14) + 'px'
+  tip.style.top = Math.min(innerHeight - r.height - 8, e.clientY + 14) + 'px'
+}
+const hideTip = () => tip.classList.add('hidden')
+function bindTips(root) {
+  root.querySelectorAll('[data-tip]').forEach((el) => {
+    el.addEventListener('mouseenter', (e) => showTip(e, el.dataset.tip))
+    el.addEventListener('mousemove', moveTip)
+    el.addEventListener('mouseleave', hideTip)
+  })
+}
+
+function donut(items, total) {
+  const R = 78, r = 50, C = 90
+  if (!total) return '<div class="empty-chart">Aucune dépense ce mois-ci</div>'
+  let a0 = -Math.PI / 2, paths = ''
+  items.forEach((it, i) => {
+    const frac = it.cents / total
+    const a1 = a0 + frac * Math.PI * 2
+    const large = a1 - a0 > Math.PI ? 1 : 0
+    const p = (rad, ang) => `${(C + rad * Math.cos(ang)).toFixed(2)},${(C + rad * Math.sin(ang)).toFixed(2)}`
+    const d = frac >= 0.9999
+      ? `M${C - R},${C} a${R},${R} 0 1,0 ${2 * R},0 a${R},${R} 0 1,0 ${-2 * R},0 M${C - r},${C} a${r},${r} 0 1,1 ${2 * r},0 a${r},${r} 0 1,1 ${-2 * r},0`
+      : `M${p(R, a0)} A${R},${R} 0 ${large} 1 ${p(R, a1)} L${p(r, a1)} A${r},${r} 0 ${large} 0 ${p(r, a0)} Z`
+    const sub = (it.children || []).slice(0, 6).map((c) => `<br><span class="muted">${esc(c.name)}</span> ${money(c.cents)}`).join('')
+    const tipHtml = `<b>${esc(it.name)}</b><br>${money(it.cents)} · ${(frac * 100).toFixed(1)} %${sub}`
+    paths += `<path d="${d}" fill="${it.color}" fill-rule="evenodd" stroke="#18181b" stroke-width="1.5" data-i="${i}" data-tip="${esc(tipHtml)}" style="cursor:pointer"/>`
+    a0 = a1
+  })
+  return `<svg width="180" height="180" viewBox="0 0 180 180">${paths}
+    <text x="90" y="86" text-anchor="middle" style="font-size:11px">Dépenses</text>
+    <text x="90" y="104" text-anchor="middle" style="font-size:15px;font-weight:600;fill:#e2e2e8">${esc(money0(total))}</text></svg>`
+}
+
+function niceScale(min, max, ticks = 4) {
+  if (min === max) { max = min + 100; min = min - 100 }
+  const span = max - min
+  const step0 = span / ticks
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)))
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= step0)
+  const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step
+  const out = []
+  for (let v = lo; v <= hi + step / 2; v += step) out.push(v)
+  return out
+}
+const axisMoney = (c) => {
+  const e = c / 100, a = Math.abs(e)
+  return (a >= 1000 ? (e / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' k' : Math.round(e).toLocaleString('fr-FR')) + ' €'
+}
+
+function lineChart(points, width) {
+  const W = Math.max(320, width), H = 220, L = 62, Rm = 12, T = 12, B = 26
+  if (!points.length) return '<div class="empty-chart">Pas de données</div>'
+  const vals = points.map((p) => p[1])
+  const ticks = niceScale(Math.min(0, ...vals), Math.max(...vals))
+  const y0 = ticks[0], y1 = ticks[ticks.length - 1]
+  const x = (i) => L + (i / Math.max(1, points.length - 1)) * (W - L - Rm)
+  const y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B)
+  let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" id="lineSvg">`
+  for (const t of ticks) svg += `<line class="grid" x1="${L}" x2="${W - Rm}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 3.5}" text-anchor="end">${axisMoney(t)}</text>`
+  if (y0 < 0) svg += `<line x1="${L}" x2="${W - Rm}" y1="${y(0)}" y2="${y(0)}" stroke="#52525b" stroke-dasharray="3 3"/>`
+  points.forEach((p, i) => {
+    if (p[0].slice(8) === '01') svg += `<line class="grid" x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${H - B}" opacity=".5"/><text x="${x(i) + 3}" y="${H - 9}">${MSHORT[+p[0].slice(5, 7) - 1]}</text>`
+  })
+  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join('')
+  svg += `<defs><linearGradient id="lg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".35"/><stop offset="1" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs>`
+  svg += `<path d="${path}L${x(points.length - 1)},${y(Math.max(y0, 0))}L${x(0)},${y(Math.max(y0, 0))}Z" fill="url(#lg)"/>`
+  svg += `<path d="${path}" fill="none" stroke="#818cf8" stroke-width="2"/>`
+  svg += `<line id="lineCursor" y1="${T}" y2="${H - B}" stroke="#e4e4e7" opacity="0" stroke-width="1"/><circle id="lineDot" r="4" fill="#818cf8" stroke="#fff" stroke-width="1.5" opacity="0"/>`
+  svg += `<rect x="${L}" y="${T}" width="${W - L - Rm}" height="${H - T - B}" fill="transparent" id="lineHit"/></svg>`
+  return svg
+}
+function bindLine(root, points) {
+  const svg = $('#lineSvg', root); if (!svg) return
+  const hit = $('#lineHit', svg), cur = $('#lineCursor', svg), dot = $('#lineDot', svg)
+  const W = +svg.getAttribute('width'), L = 62, Rm = 12
+  hit.addEventListener('mousemove', (e) => {
+    const box = svg.getBoundingClientRect()
+    const i = Math.max(0, Math.min(points.length - 1, Math.round((e.clientX - box.left - L) / (W - L - Rm) * (points.length - 1))))
+    const xx = L + (i / Math.max(1, points.length - 1)) * (W - L - Rm)
+    const path = svg.querySelectorAll('path')[1]
+    const vals = points.map((p) => p[1])
+    const ticks = niceScale(Math.min(0, ...vals), Math.max(...vals))
+    const yy = 12 + (1 - (points[i][1] - ticks[0]) / (ticks[ticks.length - 1] - ticks[0])) * (220 - 12 - 26)
+    cur.setAttribute('x1', xx); cur.setAttribute('x2', xx); cur.setAttribute('opacity', .4)
+    dot.setAttribute('cx', xx); dot.setAttribute('cy', yy); dot.setAttribute('opacity', 1)
+    showTip(e, `<b>${fmtDate(points[i][0])}</b><br>Solde : ${money(points[i][1])}`)
+  })
+  hit.addEventListener('mouseleave', () => { cur.setAttribute('opacity', 0); dot.setAttribute('opacity', 0); hideTip() })
+}
+
+function barChart(flow, width) {
+  const W = Math.max(320, width), H = 220, L = 62, Rm = 12, T = 12, B = 26
+  const max = Math.max(1, ...flow.flatMap((f) => [f.income_cents, f.expense_cents]))
+  const ticks = niceScale(0, max)
+  const y1 = ticks[ticks.length - 1]
+  const y = (v) => T + (1 - v / y1) * (H - T - B)
+  const gw = (W - L - Rm) / flow.length, bw = Math.min(16, gw * 0.32)
+  let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+  for (const t of ticks) svg += `<line class="grid" x1="${L}" x2="${W - Rm}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 3.5}" text-anchor="end">${axisMoney(t)}</text>`
+  flow.forEach((f, i) => {
+    const cx = L + gw * i + gw / 2
+    const net = f.income_cents - f.expense_cents
+    const tipHtml = esc(`<b>${monthLabel(f.month)}</b><br>Revenus : ${money(f.income_cents)}<br>Dépenses : ${money(f.expense_cents)}<br>Solde : ${signed(net)}`)
+    svg += `<g data-tip="${tipHtml}" style="cursor:default"><rect x="${cx - gw / 2}" y="${T}" width="${gw}" height="${H - T - B}" fill="transparent"/>
+      <rect x="${cx - bw - 1}" y="${y(f.income_cents)}" width="${bw}" height="${Math.max(0, y(0) - y(f.income_cents))}" rx="2" fill="#34d399"/>
+      <rect x="${cx + 1}" y="${y(f.expense_cents)}" width="${bw}" height="${Math.max(0, y(0) - y(f.expense_cents))}" rx="2" fill="#f87171"/></g>
+      <text x="${cx}" y="${H - 9}" text-anchor="middle" ${f.month === state.month ? 'style="fill:#e2e2e8;font-weight:600"' : ''}>${MSHORT[+f.month.slice(5, 7) - 1]}</text>`
+  })
+  return svg + '</svg>'
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+async function renderDash(v) {
+  const token = (renderDash.token = {})
+  v.innerHTML = '<div class="muted">Chargement…</div>'
+  const [s, b, up] = await Promise.all([
+    act('stats.dashboard', { month: state.month, account_id: state.accountId }),
+    act('budgets.status', { month: state.month }),
+    act('recurring.upcoming', { days: 30 }),
+  ])
+  if (!s || token !== renderDash.token || state.tab !== 'dash') return
+  const acc = state.accounts.find((a) => a.id === state.accountId)
+  const balance = acc ? acc.today_cents : state.accounts.filter((a) => !a.archived).reduce((x, a) => x + a.today_cents, 0)
+  const net = s.income_cents - s.expense_cents
+  const totalExp = s.expenses.reduce((x, e) => x + e.cents, 0)
+  const budgets = (b?.items || []).filter((i) => i.budget_cents != null && i.kind === 'expense')
+  const upcoming = (up?.upcoming || []).filter((u) => !state.accountId || u.account_id === state.accountId || u.to_account_id === state.accountId).slice(0, 8)
+  v.innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="l">${acc ? 'Solde — ' + esc(acc.name) : 'Solde total'}</div><div class="v num ${cls(balance)}">${money(balance)}</div><div class="s">au ${fmtDate(todayIso())}</div></div>
+      <div class="kpi"><div class="l">Revenus — ${monthLabel(state.month)}</div><div class="v num pos">${money(s.income_cents)}</div><div class="s">hors virements internes</div></div>
+      <div class="kpi"><div class="l">Dépenses — ${monthLabel(state.month)}</div><div class="v num neg">${money(s.expense_cents)}</div><div class="s">${s.uncategorized ? `<a href="#" id="lnkUncat" style="color:#fcd34d">${s.uncategorized} non catégorisée(s)</a>` : 'toutes catégorisées'}</div></div>
+      <div class="kpi"><div class="l">Épargne du mois</div><div class="v num ${cls(net)}">${signed(net)}</div><div class="s">${s.income_cents ? 'taux : ' + Math.round(net / s.income_cents * 100) + ' %' : '—'}</div></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>Dépenses par catégorie <span class="muted">${monthLabel(state.month)}</span></h3>
+        <div class="donut-wrap"><div id="donut">${donut(s.expenses, totalExp)}</div>
+          <div class="legend">${s.expenses.slice(0, 10).map((e, i) => `<div class="it" data-i="${i}" data-cat="${e.category_id ?? 'none'}">
+            <span class="sw" style="background:${e.color}"></span><span class="n">${esc(e.name)}</span><span class="num">${money(e.cents)}</span>
+            <span class="p">${(e.cents / totalExp * 100).toFixed(0)} %</span></div>`).join('')}
+            ${s.expenses.length > 10 ? `<div class="muted small" style="padding:3px 6px">+ ${s.expenses.length - 10} autre(s)</div>` : ''}</div></div></div>
+      <div class="panel"><h3>Budgets du mois <span class="spacer"></span><button class="ghost small" id="goBudgets">Gérer ›</button></h3>
+        ${budgets.length ? `<div class="bars">${budgets.sort((a, b) => b.spent_cents / (b.budget_cents || 1) - a.spent_cents / (a.budget_cents || 1)).slice(0, 7).map((i) => budgetBar(i, b.elapsed)).join('')}</div>`
+          : '<div class="empty-chart">Aucun budget défini. Fixez un plafond mensuel par catégorie dans l\'onglet Budgets.</div>'}</div>
+      <div class="panel wide"><h3>Évolution du solde <span class="muted">${acc ? esc(acc.name) : 'tous les comptes actifs'} · 12 mois</span></h3><div id="lineBox"></div></div>
+      <div class="panel wide"><h3>Revenus et dépenses <span class="muted">12 mois</span>
+        <span class="spacer"></span><span class="small"><span style="color:#34d399">■</span> Revenus &nbsp; <span style="color:#f87171">■</span> Dépenses</span></h3><div id="barBox"></div></div>
+      <div class="panel wide"><h3>À venir <span class="muted">opérations récurrentes des 30 prochains jours</span></h3>
+        ${upcoming.length ? `<table class="tx">${upcoming.map((u) => `<tr><td class="num" style="width:90px">${fmtDate(u.date)}</td><td>${esc(u.label)}</td>
+          <td class="muted">${u.to_account_id ? esc(accName(u.account_id)) + ' → ' + esc(accName(u.to_account_id)) : esc(accName(u.account_id))}</td>
+          <td class="r num ${u.to_account_id ? '' : cls(u.amount_cents)}">${u.to_account_id ? money(u.amount_cents) : signed(u.amount_cents)}</td></tr>`).join('')}</table>`
+          : '<div class="muted">Rien de prévu.</div>'}</div>
+    </div>`
+  const draw = () => {
+    const lb = $('#lineBox', v), bb = $('#barBox', v)
+    if (!lb) return
+    lb.innerHTML = lineChart(s.balance, lb.clientWidth); bindLine(lb, s.balance)
+    bb.innerHTML = barChart(s.flow, bb.clientWidth); bindTips(bb)
+  }
+  draw()
+  renderDash.draw = draw
+  bindTips(v.querySelector('#donut'))
+  $$('.legend .it', v).forEach((el) => {
+    const path = () => $(`#donut path[data-i="${el.dataset.i}"]`, v)
+    el.onmouseenter = () => path()?.setAttribute('stroke', '#fff')
+    el.onmouseleave = () => path()?.setAttribute('stroke', '#18181b')
+    el.onclick = () => { Object.assign(state.tx.filters, { category_id: el.dataset.cat, kind: 'expense', scope: 'month', search: '' }); state.tab = 'tx'; render() }
+  })
+  $('#goBudgets', v).onclick = () => { state.tab = 'budgets'; render() }
+  const lnk = $('#lnkUncat', v)
+  if (lnk) lnk.onclick = (e) => { e.preventDefault(); Object.assign(state.tx.filters, { category_id: 'none', kind: '', scope: 'month', search: '' }); state.tab = 'tx'; render() }
+}
+let resizeT
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (state.tab === 'dash') renderDash.draw?.() }, 150) })
+
+function budgetBar(i, elapsed) {
+  const pct = i.budget_cents ? i.spent_cents / i.budget_cents : (i.spent_cents > 0 ? 2 : 0)
+  const st = pct > 1 ? 'over' : pct > Math.max(0.85, elapsed + 0.1) ? 'warn' : ''
+  const rest = i.budget_cents - i.spent_cents
+  return `<div class="brow"><div class="n"><span class="sw" style="background:${i.color}"></span><span>${esc(i.name)}</span></div>
+    <div class="track" title="Le trait vertical indique la part du mois écoulée"><div class="fill ${st}" style="width:${Math.min(100, Math.max(0, pct * 100))}%"></div>
+      ${elapsed > 0 && elapsed < 1 ? `<div class="pace" style="left:${elapsed * 100}%"></div>` : ''}</div>
+    <div class="v num">${money0(i.spent_cents)} / ${money0(i.budget_cents)}
+      <div class="small ${rest < 0 ? 'neg' : 'muted'}">${rest < 0 ? 'dépassé de ' + money(-rest) : 'reste ' + money(rest)}</div></div></div>`
+}
+
+// ── Transactions ──────────────────────────────────────────────────────────────
+
+function txQuery(extra = {}) {
+  const f = state.tx.filters
+  return { account_id: state.accountId, month: f.scope === 'month' ? state.month : '', search: f.search,
+           category_id: f.category_id, kind: f.kind, ...extra }
+}
+
+async function renderTx(v) {
+  const f = state.tx.filters
+  v.innerHTML = `
+    <div class="filters">
+      <input type="search" id="fSearch" placeholder="Rechercher un libellé, une note…" value="${esc(f.search)}">
+      <select id="fCat"><option value="">Toutes catégories</option><option value="none" ${f.category_id === 'none' ? 'selected' : ''}>Sans catégorie</option>
+        <option value="transfer" ${f.category_id === 'transfer' ? 'selected' : ''}>Virements internes</option>${catOptions(+f.category_id || null, { none: false })}</select>
+      <select id="fKind"><option value="">Dépenses et revenus</option><option value="expense" ${f.kind === 'expense' ? 'selected' : ''}>Dépenses</option><option value="income" ${f.kind === 'income' ? 'selected' : ''}>Revenus</option></select>
+      <div class="seg" id="fScope"><button data-s="month" class="${f.scope === 'month' ? 'on' : ''}">${monthLabel(state.month)}</button><button data-s="all" class="${f.scope === 'all' ? 'on' : ''}">Toutes les dates</button></div>
+      ${f.search || f.category_id || f.kind ? '<button class="ghost" id="fReset">✕ Réinitialiser</button>' : ''}
+    </div>
+    <div id="bulk" class="bulk hidden"></div>
+    <table class="tx"><thead><tr><th style="width:26px"><input type="checkbox" id="selAll"></th><th style="width:92px">Date</th><th>Libellé</th>
+      ${state.accountId ? '' : '<th>Compte</th>'}<th>Catégorie</th><th class="r">Montant</th>${state.accountId ? '<th class="r">Solde</th>' : ''}</tr></thead>
+      <tbody id="txBody"></tbody></table>
+    <div id="txMore"></div>
+    <div class="totals" id="txTotals"></div>`
+  let searchT
+  $('#fSearch', v).oninput = (e) => { clearTimeout(searchT); searchT = setTimeout(() => { f.search = e.target.value; loadTx(true) }, 250) }
+  $('#fCat', v).onchange = (e) => { f.category_id = e.target.value; loadTx(true) }
+  $('#fKind', v).onchange = (e) => { f.kind = e.target.value; loadTx(true) }
+  $('#fScope', v).onclick = (e) => { const b = e.target.closest('[data-s]'); if (!b) return; f.scope = b.dataset.s; renderTx(v) }
+  const reset = $('#fReset', v); if (reset) reset.onclick = () => { Object.assign(f, { search: '', category_id: '', kind: '' }); renderTx(v) }
+  $('#selAll', v).onchange = (e) => { state.tx.sel = new Set(e.target.checked ? state.tx.rows.map((r) => r.id) : []); drawTxRows() }
+  await loadTx(true)
+}
+
+async function loadTx(reset) {
+  if (reset) { state.tx.offset = 0; state.tx.rows = []; state.tx.sel.clear() }
+  const r = await act('tx.list', txQuery({ limit: 200, offset: state.tx.offset }))
+  if (!r || state.tab !== 'tx') return
+  state.tx.rows = reset ? r.transactions : state.tx.rows.concat(r.transactions)
+  state.tx.total = r.total
+  state.tx.offset = state.tx.rows.length
+  drawTxRows()
+  const tot = $('#txTotals')
+  if (tot) tot.innerHTML = `<span><b>${r.total}</b> opération(s)</span><span>Revenus <b class="pos num">${money(r.income_cents)}</b></span>
+    <span>Dépenses <b class="neg num">${money(r.expense_cents)}</b></span><span>Solde <b class="num ${cls(r.income_cents + r.expense_cents)}">${signed(r.income_cents + r.expense_cents)}</b></span>`
+}
+
+function drawTxRows() {
+  const body = $('#txBody'); if (!body) return
+  const rows = state.tx.rows
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="7" class="muted" style="padding:24px;text-align:center">Aucune opération${state.tx.filters.scope === 'month' ? ' en ' + monthLabel(state.month) : ''}.</td></tr>`
+  } else {
+    const today = todayIso()
+    body.innerHTML = rows.map((t) => `<tr class="click ${state.tx.sel.has(t.id) ? 'sel' : ''}" data-id="${t.id}">
+      <td><input type="checkbox" data-sel="${t.id}" ${state.tx.sel.has(t.id) ? 'checked' : ''}></td>
+      <td class="num">${fmtDate(t.date)}${t.date > today ? ' <span class="badge" title="Opération future">à venir</span>' : ''}</td>
+      <td class="lbl"><div class="t">${esc(t.label)}${t.recurring_id ? ' <span class="badge" title="Générée par une opération récurrente">↻</span>' : ''}</div>${t.notes ? `<div class="no">${esc(t.notes)}</div>` : ''}</td>
+      ${state.accountId ? '' : `<td class="muted">${esc(accName(t.account_id))}</td>`}
+      <td>${catChip(t.category_id, t.peer_id ? t.peer_account_id : null)}</td>
+      <td class="r num ${cls(t.amount_cents)}">${signed(t.amount_cents)}</td>
+      ${state.accountId ? `<td class="r num muted">${t.running_cents != null ? money(t.running_cents) : ''}</td>` : ''}</tr>`).join('')
+  }
+  $('#txMore').innerHTML = rows.length < state.tx.total ? `<div style="text-align:center;padding:10px"><button id="btnMore">Afficher plus (${state.tx.total - rows.length} restantes)</button></div>` : ''
+  const more = $('#btnMore'); if (more) more.onclick = () => loadTx(false)
+  drawBulk()
+}
+
+$('#view').addEventListener('click', (e) => {
+  if (state.tab !== 'tx') return
+  const cb = e.target.closest('[data-sel]')
+  if (cb) {
+    const id = +cb.dataset.sel
+    cb.checked ? state.tx.sel.add(id) : state.tx.sel.delete(id)
+    cb.closest('tr').classList.toggle('sel', cb.checked)
+    drawBulk(); return
+  }
+  const tr = e.target.closest('tr[data-id]')
+  if (tr && !e.target.closest('input')) openTxDialog(state.tx.rows.find((r) => r.id === +tr.dataset.id))
+})
+
+function drawBulk() {
+  const b = $('#bulk'); if (!b) return
+  const n = state.tx.sel.size
+  b.classList.toggle('hidden', !n)
+  if (!n) return
+  b.innerHTML = `<b>${n}</b> sélectionnée(s) <span class="sep"></span> Catégorie : <select id="bulkCat"><option value="-">Choisir…</option>${catOptions(null)}</select>
+    <span class="spacer"></span><button class="danger" id="bulkDel">🗑 Supprimer</button><button class="ghost" id="bulkNone">Désélectionner</button>`
+  $('#bulkCat').onchange = async (e) => {
+    if (e.target.value === '-') return
+    const r = await act('tx.set_category', { ids: [...state.tx.sel], category_id: e.target.value || null })
+    if (r) { toast(`${r.updated} opération(s) mise(s) à jour${r.updated < n ? ' (les virements n\'ont pas de catégorie)' : ''}`); loadTx(true) }
+  }
+  $('#bulkDel').onclick = async () => {
+    if (!confirm(`Supprimer ${n} opération(s) ? Les virements sont supprimés sur les deux comptes.`)) return
+    const r = await act('tx.delete', { ids: [...state.tx.sel] })
+    if (r) { toast(`${r.deleted} opération(s) supprimée(s)`); setAccounts(r.accounts); loadTx(true) }
+  }
+  $('#bulkNone').onclick = () => { state.tx.sel.clear(); drawTxRows() }
+}
+
+// ── Dialogs ───────────────────────────────────────────────────────────────────
+
+function dialog(html, cls = '') {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${cls}">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') ov.remove() })
+  return ov
+}
+const swatches = (sel) => COLORS.map((c) => `<div class="sw ${c === sel ? 'on' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')
+function bindSwatches(root, onPick) {
+  root.addEventListener('click', (e) => {
+    const s = e.target.closest('.sw'); if (!s) return
+    $$('.sw', root).forEach((x) => x.classList.toggle('on', x === s)); onPick(s.dataset.c)
+  })
+}
+function bindEnter(ov, fn) {
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') { e.preventDefault(); fn() } })
+}
+
+function openAccountDialog(a) {
+  let color = a?.color || COLORS[state.accounts.length % COLORS.length]
+  const ov = dialog(`
+    <h3>${a ? 'Modifier le compte' : 'Nouveau compte'}</h3>
+    <div class="content">
+      <div class="field full"><label>Nom</label><input id="aName" maxlength="80" value="${esc(a?.name)}" placeholder="Ex. Compte joint, Livret A…"></div>
+      <div class="field"><label>Type</label><select id="aType">${Object.entries(ACC_TYPES).map(([k, l]) => `<option value="${k}" ${a?.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label>Solde initial (€)</label><input id="aInit" inputmode="decimal" value="${a ? (a.initial_cents < 0 ? '-' : '') + centsToInput(a.initial_cents) : ''}" placeholder="0,00"></div>
+      <div class="field full"><label>Couleur</label><div class="swatches" id="aColors">${swatches(color)}</div></div>
+      ${a ? `<div class="field row full"><input type="checkbox" id="aArch" ${a.archived ? 'checked' : ''}><label for="aArch">Archivé (exclu du total et des graphiques)</label></div>
+        <div class="field full small muted">Solde actuel : ${money(a.today_cents)} · ${a.tx_count} opération(s)</div>` : ''}
+    </div>
+    <div class="foot">${a ? '<button class="danger" id="aDel">Supprimer</button>' : ''}<span class="spacer"></span>
+      <button id="aCancel">Annuler</button><button class="primary" id="aSave">${a ? 'Enregistrer' : 'Créer'}</button></div>`, 'small')
+  const q = (s) => $(s, ov)
+  bindSwatches(q('#aColors'), (c) => (color = c))
+  q('#aCancel').onclick = () => ov.remove()
+  const save = async () => {
+    const init = parseCents(q('#aInit').value || '0')
+    if (Number.isNaN(init)) { toast('Solde initial invalide', true); return }
+    const r = await act('account.save', { id: a?.id, account: { name: q('#aName').value, type: q('#aType').value, initial_cents: init, color, archived: !!q('#aArch')?.checked } }, a ? 'Compte enregistré' : 'Compte créé')
+    if (!r) return
+    ov.remove()
+    if (!a) state.accountId = r.id
+    setAccounts(r.accounts); render()
+  }
+  q('#aSave').onclick = save
+  bindEnter(ov, save)
+  if (a) q('#aDel').onclick = async () => {
+    if (!confirm(`Supprimer le compte « ${a.name} » et ses ${a.tx_count} opération(s) ? Cette action est définitive.`)) return
+    const r = await act('account.delete', { id: a.id }, 'Compte supprimé')
+    if (r) { ov.remove(); setAccounts(r.accounts); render() }
+  }
+  setTimeout(() => q('#aName').focus(), 0)
+}
+
+function openTxDialog(t) {
+  if (t?.peer_id) return openTransferEdit(t)
+  let sign = t ? Math.sign(t.amount_cents) : -1
+  const accId = t?.account_id ?? state.accountId ?? state.accounts.find((a) => !a.archived)?.id
+  const ov = dialog(`
+    <h3>${t ? 'Modifier l\'opération' : 'Nouvelle opération'}</h3>
+    <div class="content">
+      <div class="field full"><div class="seg" id="tSign"><button data-s="-1" class="exp">− Dépense</button><button data-s="1" class="inc">＋ Revenu</button></div></div>
+      <div class="field"><label>Montant (€)</label><input id="tAmount" inputmode="decimal" value="${t ? centsToInput(t.amount_cents) : ''}" placeholder="0,00"></div>
+      <div class="field"><label>Date</label><input type="date" id="tDate" value="${t?.date || todayIso()}"></div>
+      <div class="field full"><label>Libellé</label><input id="tLabel" maxlength="200" value="${esc(t?.label)}" placeholder="Ex. Courses Carrefour" list="lblList"><datalist id="lblList"></datalist></div>
+      <div class="field"><label>Compte</label><select id="tAcc">${accOptions(accId)}</select></div>
+      <div class="field"><label>Catégorie</label><select id="tCat">${catOptions(t?.category_id ?? null, { none: t ? 'Sans catégorie' : 'Automatique (règles) / aucune' })}</select></div>
+      <div class="field full"><label>Notes</label><textarea id="tNotes" maxlength="5000">${esc(t?.notes)}</textarea></div>
+    </div>
+    <div class="foot">${t ? '<button class="danger" id="tDel">Supprimer</button><button id="tDup" title="Créer une copie">Dupliquer</button>' : ''}<span class="spacer"></span>
+      <button id="tCancel">Annuler</button>${t ? '' : '<button id="tSaveNext" title="Enregistrer et saisir une autre opération">Enregistrer + nouvelle</button>'}
+      <button class="primary" id="tSave">${t ? 'Enregistrer' : 'Ajouter'}</button></div>`)
+  const q = (s) => $(s, ov)
+  const syncSign = () => $$('#tSign button', ov).forEach((b) => b.classList.toggle('on', +b.dataset.s === sign))
+  syncSign()
+  q('#tSign').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) { sign = +b.dataset.s; syncSign() } }
+  q('#tLabel').addEventListener('input', () => {
+    const v = q('#tLabel').value.toLowerCase()
+    if (v.length < 2) return
+    const seen = [...new Set(state.tx.rows.map((r) => r.label).filter((l) => l.toLowerCase().includes(v)))].slice(0, 8)
+    q('#lblList').innerHTML = seen.map((l) => `<option value="${esc(l)}">`).join('')
+  })
+  q('#tCancel').onclick = () => ov.remove()
+  const save = async (again) => {
+    const cents = parseCents(q('#tAmount').value)
+    if (!cents || Number.isNaN(cents)) { toast('Montant invalide', true); q('#tAmount').focus(); return }
+    const cat = q('#tCat').value
+    const r = await act('tx.save', { id: t?.id, tx: { account_id: +q('#tAcc').value, date: q('#tDate').value, label: q('#tLabel').value,
+      amount_cents: sign * Math.abs(cents), category_id: cat ? +cat : null, notes: q('#tNotes').value } }, t ? 'Opération enregistrée' : 'Opération ajoutée')
+    if (!r) return
+    setAccounts(r.accounts)
+    if (again) { q('#tAmount').value = ''; q('#tLabel').value = ''; q('#tNotes').value = ''; q('#tCat').value = ''; q('#tAmount').focus() }
+    else ov.remove()
+    render()
+  }
+  q('#tSave').onclick = () => save(false)
+  const nx = q('#tSaveNext'); if (nx) nx.onclick = () => save(true)
+  bindEnter(ov, () => save(false))
+  if (t) {
+    q('#tDel').onclick = async () => {
+      if (!confirm('Supprimer cette opération ?')) return
+      const r = await act('tx.delete', { id: t.id }, 'Opération supprimée')
+      if (r) { ov.remove(); setAccounts(r.accounts); render() }
+    }
+    q('#tDup').onclick = () => { ov.remove(); openTxDialog(); setTimeout(() => {
+      const o = $('.overlay'); $('#tAmount', o).value = centsToInput(t.amount_cents); $('#tLabel', o).value = t.label
+      $('#tCat', o).value = t.category_id ?? ''; $('#tNotes', o).value = t.notes; $('#tAcc', o).value = t.account_id
+      if (t.amount_cents > 0) $('#tSign [data-s="1"]', o).click()
+    }, 0) }
+  }
+  setTimeout(() => q('#tAmount').focus(), 0)
+}
+
+function openTransferDialog() {
+  const from = state.accountId ?? state.accounts.find((a) => !a.archived)?.id
+  const to = state.accounts.find((a) => a.id !== from && !a.archived)?.id
+  if (!to) { toast('Créez au moins deux comptes pour faire un virement', true); return }
+  const ov = dialog(`
+    <h3>Virement entre comptes</h3>
+    <div class="content">
+      <div class="field"><label>Depuis</label><select id="vFrom">${accOptions(from)}</select></div>
+      <div class="field"><label>Vers</label><select id="vTo">${accOptions(to)}</select></div>
+      <div class="field"><label>Montant (€)</label><input id="vAmount" inputmode="decimal" placeholder="0,00"></div>
+      <div class="field"><label>Date</label><input type="date" id="vDate" value="${todayIso()}"></div>
+      <div class="field full"><label>Libellé</label><input id="vLabel" maxlength="200" value="Virement"></div>
+      <div class="field full"><label>Notes</label><textarea id="vNotes" maxlength="5000"></textarea></div>
+      <div class="field full small muted">Un virement crée deux opérations liées (débit et crédit) ; il n'est compté ni en revenu ni en dépense.</div>
+    </div>
+    <div class="foot"><span class="spacer"></span><button id="vCancel">Annuler</button><button class="primary" id="vSave">Virer</button></div>`, 'small')
+  const q = (s) => $(s, ov)
+  q('#vCancel').onclick = () => ov.remove()
+  const save = async () => {
+    const cents = parseCents(q('#vAmount').value)
+    if (!cents || Number.isNaN(cents) || cents < 0) { toast('Montant invalide', true); return }
+    const r = await act('transfer.save', { transfer: { from_account_id: +q('#vFrom').value, to_account_id: +q('#vTo').value, date: q('#vDate').value,
+      amount_cents: cents, label: q('#vLabel').value, notes: q('#vNotes').value } }, 'Virement enregistré')
+    if (r) { ov.remove(); setAccounts(r.accounts); render() }
+  }
+  q('#vSave').onclick = save
+  bindEnter(ov, save)
+  setTimeout(() => q('#vAmount').focus(), 0)
+}
+
+function openTransferEdit(t) {
+  const ov = dialog(`
+    <h3>Virement ${t.amount_cents < 0 ? 'vers' : 'depuis'} ${esc(accName(t.peer_account_id))}</h3>
+    <div class="content">
+      <div class="field"><label>Montant (€)</label><input id="vAmount" inputmode="decimal" value="${centsToInput(t.amount_cents)}"></div>
+      <div class="field"><label>Date</label><input type="date" id="vDate" value="${t.date}"></div>
+      <div class="field full"><label>Libellé</label><input id="vLabel" maxlength="200" value="${esc(t.label)}"></div>
+      <div class="field full"><label>Notes</label><textarea id="vNotes" maxlength="5000">${esc(t.notes)}</textarea></div>
+      <div class="field full small muted">${esc(accName(t.amount_cents < 0 ? t.account_id : t.peer_account_id))} → ${esc(accName(t.amount_cents < 0 ? t.peer_account_id : t.account_id))}. Les deux opérations sont mises à jour.</div>
+    </div>
+    <div class="foot"><button class="danger" id="vDel">Supprimer</button><span class="spacer"></span><button id="vCancel">Annuler</button><button class="primary" id="vSave">Enregistrer</button></div>`, 'small')
+  const q = (s) => $(s, ov)
+  q('#vCancel').onclick = () => ov.remove()
+  const save = async () => {
+    const cents = parseCents(q('#vAmount').value)
+    if (!cents || Number.isNaN(cents)) { toast('Montant invalide', true); return }
+    const r = await act('tx.save', { id: t.id, tx: { account_id: t.account_id, date: q('#vDate').value, label: q('#vLabel').value,
+      amount_cents: Math.sign(t.amount_cents) * Math.abs(cents), notes: q('#vNotes').value } }, 'Virement enregistré')
+    if (r) { ov.remove(); setAccounts(r.accounts); render() }
+  }
+  q('#vSave').onclick = save
+  bindEnter(ov, save)
+  q('#vDel').onclick = async () => {
+    if (!confirm('Supprimer ce virement (sur les deux comptes) ?')) return
+    const r = await act('tx.delete', { id: t.id }, 'Virement supprimé')
+    if (r) { ov.remove(); setAccounts(r.accounts); render() }
+  }
+}
+
+// ── Budgets ───────────────────────────────────────────────────────────────────
+
+async function renderBudgets(v) {
+  const r = await act('budgets.status', { month: state.month })
+  if (!r || state.tab !== 'budgets') return
+  const items = r.items.filter((i) => i.kind === 'expense')
+  const byId = new Map(items.map((i) => [i.category_id, i]))
+  const tops = items.filter((i) => !i.parent_id)
+  const withBudget = items.filter((i) => i.budget_cents != null && !(i.parent_id && byId.get(i.parent_id)?.budget_cents != null))
+  const totalB = withBudget.reduce((s, i) => s + i.budget_cents, 0)
+  const totalS = withBudget.reduce((s, i) => s + i.spent_cents, 0)
+  const over = items.filter((i) => i.budget_cents != null && i.spent_cents > i.budget_cents)
+  v.innerHTML = `
+    <div class="section-h"><h2>Budgets — ${monthLabel(state.month)}</h2><span class="spacer"></span>
+      <label class="small muted"><input type="checkbox" id="onlyMonth"> Modifier uniquement pour ce mois</label></div>
+    <p class="hint">Saisissez un plafond mensuel par catégorie (il s'applique à tous les mois). Cochez « uniquement pour ce mois » pour ajuster un mois précis (bordure orange).
+      Le montant d'une catégorie principale inclut ses sous-catégories. Le trait vertical indique la part du mois écoulée. Videz le champ pour retirer un budget.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Budgété</div><div class="v num">${money(totalB)}</div></div>
+      <div class="kpi"><div class="l">Dépensé (catégories budgétées)</div><div class="v num">${money(totalS)}</div>
+        <div class="s">${totalB ? Math.round(totalS / totalB * 100) + ' % du budget · ' + Math.round(r.elapsed * 100) + ' % du mois écoulé' : '—'}</div></div>
+      <div class="kpi"><div class="l">Reste</div><div class="v num ${cls(totalB - totalS)}">${money(totalB - totalS)}</div></div>
+      <div class="kpi"><div class="l">Dépassements</div><div class="v ${over.length ? 'neg' : 'pos'}">${over.length}</div><div class="s">${over.map((o) => esc(o.name)).slice(0, 3).join(', ') || 'aucun'}</div></div>
+    </div>
+    <div class="panel" style="padding:4px 4px">
+      <div class="budget-row head"><div>Catégorie</div><div style="text-align:right">Budget mensuel</div><div>Progression</div><div style="text-align:right">Dépensé / reste</div></div>
+      ${tops.map((tcat) => budgetRow(tcat, r.elapsed) + items.filter((i) => i.parent_id === tcat.category_id).map((s) => budgetRow(s, r.elapsed, true)).join('')).join('')}
+    </div>`
+  $$('input[data-bud]', v).forEach((inp) => {
+    inp.addEventListener('change', async () => {
+      const raw = inp.value.trim()
+      const cents = raw === '' ? null : parseCents(raw)
+      if (cents !== null && (Number.isNaN(cents) || cents < 0)) { toast('Montant invalide', true); return }
+      const only = $('#onlyMonth', v).checked
+      const res = await act('budget.set', { category_id: +inp.dataset.bud, amount_cents: cents, month: only ? state.month : '', view_month: state.month })
+      if (res) { toast(cents === null ? 'Budget retiré' : 'Budget enregistré'); renderBudgets(v) }
+    })
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur() })
+  })
+}
+function budgetRow(i, elapsed, sub) {
+  const has = i.budget_cents != null
+  const pct = has && i.budget_cents ? i.spent_cents / i.budget_cents : 0
+  const st = pct > 1 ? 'over' : pct > Math.max(0.85, elapsed + 0.1) ? 'warn' : ''
+  const rest = has ? i.budget_cents - i.spent_cents : null
+  return `<div class="budget-row ${sub ? 'sub' : ''}">
+    <div class="n"><span class="sw" style="width:10px;height:10px;border-radius:3px;background:${i.color};flex-shrink:0"></span><span style="${sub ? '' : 'font-weight:600'}">${esc(i.name)}</span></div>
+    <div><input data-bud="${i.category_id}" class="${i.override ? 'ovr' : ''}" inputmode="decimal" placeholder="—" value="${has ? centsToInput(i.budget_cents) : ''}"
+      title="${i.override ? 'Montant spécifique à ce mois (par défaut : ' + (i.default_cents != null ? money(i.default_cents) : 'aucun') + ')' : 'Budget mensuel'}"></div>
+    <div>${has ? `<div class="track"><div class="fill ${st}" style="width:${Math.min(100, Math.max(0, pct * 100))}%"></div>${elapsed > 0 && elapsed < 1 ? `<div class="pace" style="left:${elapsed * 100}%"></div>` : ''}</div>` : '<span class="muted small">pas de budget</span>'}</div>
+    <div class="v num">${money(i.spent_cents)}${has ? `<div class="small ${rest < 0 ? 'neg' : 'muted'}">${rest < 0 ? 'dépassé de ' + money(-rest) : 'reste ' + money(rest)} · ${Math.round(pct * 100)} %</div>` : ''}</div>
+  </div>`
+}
+
+// ── Recurring ─────────────────────────────────────────────────────────────────
+
+async function renderRecurring(v) {
+  const r = await act('recurring.list')
+  if (!r || state.tab !== 'recurring') return
+  const freqText = (x) => x.interval === 1 ? `chaque ${FREQ[x.freq][0]}` : `tous les ${x.interval} ${FREQ[x.freq][1]}`
+  v.innerHTML = `
+    <div class="section-h"><h2>Opérations récurrentes</h2><span class="spacer"></span><button class="primary" id="recAdd">＋ Nouvelle</button></div>
+    <p class="hint">Loyer, salaire, abonnements, épargne automatique… Les échéances arrivées sont ajoutées automatiquement aux opérations à l'ouverture du module (rattrapage des échéances manquées compris).</p>
+    <div class="list">${r.recurring.map((x) => `
+      <div class="li ${x.active ? '' : 'off'} click" data-rec="${x.id}" style="cursor:pointer">
+        <span style="font-size:16px">${x.to_account_id ? '⇄' : '↻'}</span>
+        <div class="n"><b>${esc(x.label)}</b><div class="small muted">${freqText(x)} · ${x.to_account_id ? esc(accName(x.account_id)) + ' → ' + esc(accName(x.to_account_id)) : esc(accName(x.account_id)) + (x.category_id ? ' · ' + esc(catLabel(x.category_id)) : '')}${x.end_date ? ' · jusqu\'au ' + fmtDate(x.end_date) : ''}</div></div>
+        <div class="small muted" style="text-align:right">${x.active ? 'prochaine : <b style="color:var(--text)">' + fmtDate(x.next_date) + '</b>' : 'terminée / suspendue'}</div>
+        <div class="num ${x.to_account_id ? '' : cls(x.amount_cents)}" style="min-width:100px;text-align:right;font-weight:600">${x.to_account_id ? money(x.amount_cents) : signed(x.amount_cents)}</div>
+      </div>`).join('') || '<div class="muted">Aucune opération récurrente.</div>'}</div>`
+  $('#recAdd', v).onclick = () => openRecurringDialog()
+  $$('[data-rec]', v).forEach((el) => (el.onclick = () => openRecurringDialog(r.recurring.find((x) => x.id === +el.dataset.rec))))
+}
+
+function openRecurringDialog(x) {
+  let sign = x ? Math.sign(x.amount_cents) : -1
+  let mode = x?.to_account_id ? 'transfer' : 'op'
+  const acc = x?.account_id ?? state.accountId ?? state.accounts.find((a) => !a.archived)?.id
+  const ov = dialog(`
+    <h3>${x ? 'Modifier' : 'Nouvelle'} opération récurrente</h3>
+    <div class="content">
+      <div class="field full"><div class="seg" id="rMode"><button data-m="op">Opération</button><button data-m="transfer">Virement</button></div></div>
+      <div class="field full" id="rSignWrap"><div class="seg" id="rSign"><button data-s="-1" class="exp">− Dépense</button><button data-s="1" class="inc">＋ Revenu</button></div></div>
+      <div class="field full"><label>Libellé</label><input id="rLabel" maxlength="200" value="${esc(x?.label)}" placeholder="Ex. Loyer"></div>
+      <div class="field"><label>Montant (€)</label><input id="rAmount" inputmode="decimal" value="${x ? centsToInput(x.amount_cents) : ''}" placeholder="0,00"></div>
+      <div class="field"><label id="rAccLbl">Compte</label><select id="rAcc">${accOptions(acc)}</select></div>
+      <div class="field" id="rToWrap"><label>Vers le compte</label><select id="rTo">${accOptions(x?.to_account_id ?? state.accounts.find((a) => a.id !== acc && !a.archived)?.id)}</select></div>
+      <div class="field" id="rCatWrap"><label>Catégorie</label><select id="rCat">${catOptions(x?.category_id ?? null)}</select></div>
+      <div class="field"><label>Fréquence</label><div style="display:flex;gap:6px;align-items:center"><span class="small muted">tous les</span>
+        <input type="number" id="rInt" min="1" max="60" value="${x?.interval || 1}" style="width:60px">
+        <select id="rFreq" style="flex:1">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}" ${(x?.freq || 'monthly') === k ? 'selected' : ''}>${l[1]}</option>`).join('')}</select></div></div>
+      <div class="field"><label>Prochaine échéance</label><input type="date" id="rNext" value="${x?.next_date || todayIso()}"></div>
+      <div class="field"><label>Fin (facultatif)</label><input type="date" id="rEnd" value="${x?.end_date || ''}"></div>
+      <div class="field row"><input type="checkbox" id="rActive" ${!x || x.active ? 'checked' : ''}><label for="rActive">Active</label></div>
+      <div class="field full"><label>Notes</label><textarea id="rNotes" maxlength="5000">${esc(x?.notes)}</textarea></div>
+      <div class="field full small muted">Mensuel le 31 → le dernier jour des mois plus courts. Si la prochaine échéance est passée, les opérations manquantes sont créées immédiatement.</div>
+    </div>
+    <div class="foot">${x ? '<button class="danger" id="rDel">Supprimer</button>' : ''}<span class="spacer"></span><button id="rCancel">Annuler</button><button class="primary" id="rSave">Enregistrer</button></div>`)
+  const q = (s) => $(s, ov)
+  const sync = () => {
+    $$('#rMode button', ov).forEach((b) => b.classList.toggle('on', b.dataset.m === mode))
+    $$('#rSign button', ov).forEach((b) => b.classList.toggle('on', +b.dataset.s === sign))
+    q('#rSignWrap').classList.toggle('hidden', mode === 'transfer'); q('#rCatWrap').classList.toggle('hidden', mode === 'transfer')
+    q('#rToWrap').classList.toggle('hidden', mode !== 'transfer'); q('#rAccLbl').textContent = mode === 'transfer' ? 'Depuis le compte' : 'Compte'
+  }
+  sync()
+  q('#rMode').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b) { mode = b.dataset.m; sync() } }
+  q('#rSign').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) { sign = +b.dataset.s; sync() } }
+  q('#rCancel').onclick = () => ov.remove()
+  const save = async () => {
+    const cents = parseCents(q('#rAmount').value)
+    if (!cents || Number.isNaN(cents)) { toast('Montant invalide', true); return }
+    const cat = q('#rCat').value
+    const r = await act('recurring.save', { id: x?.id, recurring: {
+      account_id: +q('#rAcc').value, to_account_id: mode === 'transfer' ? +q('#rTo').value : null, label: q('#rLabel').value,
+      amount_cents: mode === 'transfer' ? Math.abs(cents) : sign * Math.abs(cents), category_id: mode === 'op' && cat ? +cat : null,
+      freq: q('#rFreq').value, interval: +q('#rInt').value || 1, next_date: q('#rNext').value, end_date: q('#rEnd').value || null,
+      active: q('#rActive').checked, notes: q('#rNotes').value } })
+    if (!r) return
+    toast(r.generated ? `Enregistrée · ${r.generated} opération(s) créée(s)` : 'Opération récurrente enregistrée')
+    ov.remove(); setAccounts(r.accounts); render()
+  }
+  q('#rSave').onclick = save
+  bindEnter(ov, save)
+  if (x) q('#rDel').onclick = async () => {
+    if (!confirm(`Supprimer « ${x.label} » ? Les opérations déjà créées sont conservées.`)) return
+    if (await act('recurring.delete', { id: x.id }, 'Supprimée')) { ov.remove(); render() }
+  }
+  setTimeout(() => q('#rLabel').focus(), 0)
+}
+
+// ── Categories ────────────────────────────────────────────────────────────────
+
+function renderCategories(v) {
+  const section = (kind) => state.categories.filter((c) => !c.parent_id && c.kind === kind).map((c) => `
+    <div class="li"><span class="sw" style="background:${c.color}"></span><div class="n"><b>${esc(c.name)}</b></div>
+      <span class="small muted">${c.tx_count} op.</span>
+      <button class="ghost small" data-addsub="${c.id}" title="Ajouter une sous-catégorie">＋ sous-catégorie</button><button class="ghost" data-cat="${c.id}">✎</button></div>
+    ${state.categories.filter((s) => s.parent_id === c.id).map((s) => `
+      <div class="li sub"><span class="sw" style="background:${s.color}"></span><div class="n">${esc(s.name)}</div>
+        <span class="small muted">${s.tx_count} op.</span><button class="ghost" data-cat="${s.id}">✎</button></div>`).join('')}`).join('')
+  v.innerHTML = `
+    <div class="section-h"><h2>Catégories</h2><span class="spacer"></span><button class="primary" id="catAdd">＋ Catégorie</button></div>
+    <p class="hint">Deux niveaux : catégorie principale et sous-catégories. Les tableaux de bord regroupent les dépenses par catégorie principale. Supprimer une catégorie laisse ses opérations « sans catégorie ».</p>
+    <div class="grid2"><div><h3 style="margin-bottom:8px;font-size:13px">Dépenses</h3><div class="list">${section('expense')}</div></div>
+      <div><h3 style="margin-bottom:8px;font-size:13px">Revenus</h3><div class="list">${section('income')}</div></div></div>`
+  $('#catAdd', v).onclick = () => openCategoryDialog()
+  $$('[data-cat]', v).forEach((b) => (b.onclick = () => openCategoryDialog(state.catById.get(+b.dataset.cat))))
+  $$('[data-addsub]', v).forEach((b) => (b.onclick = () => openCategoryDialog(null, +b.dataset.addsub)))
+}
+
+function openCategoryDialog(c, parentId = null) {
+  const parent = c ? c.parent_id : parentId
+  let color = c?.color || (parent ? state.catById.get(parent)?.color : COLORS[state.categories.length % COLORS.length])
+  const hasKids = c && state.categories.some((x) => x.parent_id === c.id)
+  const ov = dialog(`
+    <h3>${c ? 'Modifier la catégorie' : parent ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie'}</h3>
+    <div class="content">
+      <div class="field full"><label>Nom</label><input id="cName" maxlength="60" value="${esc(c?.name)}"></div>
+      <div class="field"><label>Catégorie parente</label><select id="cParent" ${hasKids ? 'disabled' : ''}><option value="">— Aucune (principale) —</option>
+        ${state.categories.filter((x) => !x.parent_id && x.id !== c?.id).map((x) => `<option value="${x.id}" ${x.id === parent ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
+      <div class="field" id="cKindWrap"><label>Type</label><select id="cKind"><option value="expense">Dépense</option><option value="income" ${c?.kind === 'income' ? 'selected' : ''}>Revenu</option></select></div>
+      <div class="field full"><label>Couleur</label><div class="swatches" id="cColors">${swatches(color)}</div></div>
+      ${c ? `<div class="field full small muted">${c.tx_count} opération(s) dans cette catégorie.</div>` : ''}
+    </div>
+    <div class="foot">${c ? '<button class="danger" id="cDel">Supprimer</button>' : ''}<span class="spacer"></span><button id="cCancel">Annuler</button><button class="primary" id="cSave">Enregistrer</button></div>`, 'small')
+  const q = (s) => $(s, ov)
+  bindSwatches(q('#cColors'), (x) => (color = x))
+  const syncKind = () => q('#cKindWrap').classList.toggle('hidden', !!q('#cParent').value)
+  syncKind(); q('#cParent').onchange = syncKind
+  q('#cCancel').onclick = () => ov.remove()
+  const save = async () => {
+    const r = await act('category.save', { id: c?.id, category: { name: q('#cName').value, color, kind: q('#cKind').value, parent_id: q('#cParent').value ? +q('#cParent').value : null } }, 'Catégorie enregistrée')
+    if (r) { ov.remove(); setCategories(r.categories); render() }
+  }
+  q('#cSave').onclick = save
+  bindEnter(ov, save)
+  if (c) q('#cDel').onclick = async () => {
+    if (!confirm(`Supprimer « ${c.name} »${hasKids ? ' et ses sous-catégories' : ''} ? Les opérations concernées deviendront « sans catégorie », et les règles et budgets associés seront supprimés.`)) return
+    const r = await act('category.delete', { id: c.id }, 'Catégorie supprimée')
+    if (r) { ov.remove(); setCategories(r.categories); render() }
+  }
+  setTimeout(() => q('#cName').focus(), 0)
+}
+
+// ── Rules ─────────────────────────────────────────────────────────────────────
+
+async function renderRules(v) {
+  const r = await act('rules.list')
+  if (!r || state.tab !== 'rules') return
+  v.innerHTML = `
+    <div class="section-h"><h2>Règles d'auto-catégorisation</h2><span class="spacer"></span>
+      <button id="ruApply">Appliquer aux opérations non catégorisées</button></div>
+    <p class="hint">Si le libellé d'une opération contient le mot-clé (sans tenir compte des majuscules ni des accents), la catégorie est attribuée automatiquement
+      lors de la saisie et de l'import. La première règle qui correspond l'emporte : utilisez ↑ ↓ pour fixer la priorité.</p>
+    <div class="li" style="margin-bottom:10px;border-style:dashed"><input id="ruKw" maxlength="100" placeholder="Mot-clé (ex. boulangerie)" style="flex:1">
+      <select id="ruCat" style="flex:1">${catOptions(null, { none: false })}</select><button class="primary" id="ruAdd">＋ Ajouter</button></div>
+    <div class="list" id="ruList">${r.rules.map((x, i) => `
+      <div class="li" data-rule="${x.id}"><code style="background:var(--surface2);padding:2px 8px;border-radius:5px">${esc(x.keyword)}</code>
+        <span class="muted">→</span><div class="n">${catChip(x.category_id)} <span class="small muted">${state.catById.get(x.category_id)?.parent_id ? esc(state.catById.get(state.catById.get(x.category_id).parent_id)?.name) : ''}</span></div>
+        <button class="ghost icon" data-up="${i}" ${i ? '' : 'disabled'}>↑</button><button class="ghost icon" data-down="${i}" ${i < r.rules.length - 1 ? '' : 'disabled'}>↓</button>
+        <button class="ghost icon danger" data-del="${x.id}" title="Supprimer">✕</button></div>`).join('') || '<div class="muted">Aucune règle.</div>'}</div>`
+  const add = async () => {
+    const res = await act('rule.save', { rule: { keyword: $('#ruKw', v).value, category_id: +$('#ruCat', v).value } }, 'Règle ajoutée')
+    if (res) renderRules(v)
+  }
+  $('#ruAdd', v).onclick = add
+  $('#ruKw', v).onkeydown = (e) => { if (e.key === 'Enter') add() }
+  $('#ruApply', v).onclick = async () => { const res = await act('rules.apply', {}); if (res) toast(`${res.updated} opération(s) catégorisée(s)`) }
+  $('#ruList', v).onclick = async (e) => {
+    const ids = r.rules.map((x) => x.id)
+    const up = e.target.closest('[data-up]'), down = e.target.closest('[data-down]'), del = e.target.closest('[data-del]')
+    if (del) { if (await act('rule.delete', { id: +del.dataset.del })) renderRules(v); return }
+    const i = up ? +up.dataset.up : down ? +down.dataset.down : -1
+    if (i < 0) return
+    const j = up ? i - 1 : i + 1;
+    [ids[i], ids[j]] = [ids[j], ids[i]]
+    if (await act('rule.reorder', { order: ids })) renderRules(v)
+  }
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+
+function download(name, content, type) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type }))
+  a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
+function openExportDialog() {
+  const ov = dialog(`
+    <h3>Exporter les opérations (CSV)</h3>
+    <div class="content">
+      <div class="field full"><label>Compte</label><select id="eAcc"><option value="">Tous les comptes</option>${accOptions(state.accountId)}</select></div>
+      <div class="field"><label>Du</label><input type="date" id="eFrom" value="${state.month}-01"></div>
+      <div class="field"><label>Au</label><input type="date" id="eTo" value="${todayIso() > state.month ? todayIso() : state.month + '-28'}"></div>
+      <div class="field full small muted">Format compatible Excel : séparateur « ; », décimales avec virgule, encodage UTF-8.</div>
+    </div>
+    <div class="foot"><button class="ghost" id="eAll">Toute la période</button><span class="spacer"></span><button id="eCancel">Annuler</button><button class="primary" id="eGo">Exporter</button></div>`, 'small')
+  const q = (s) => $(s, ov)
+  q('#eCancel').onclick = () => ov.remove()
+  q('#eAll').onclick = () => { q('#eFrom').value = ''; q('#eTo').value = '' }
+  q('#eGo').onclick = async () => {
+    const r = await act('tx.export_csv', { account_id: +q('#eAcc').value || null, date_from: q('#eFrom').value, date_to: q('#eTo').value }, null, 60000)
+    if (!r) return
+    const acc = state.accounts.find((a) => a.id === +q('#eAcc').value)
+    download(`operations-${(acc?.name || 'tous-comptes').replace(/[\\/:*?"<>|]+/g, '_')}-${todayIso()}.csv`, r.csv, 'text/csv;charset=utf-8')
+    toast(`${r.count} opération(s) exportée(s)`); ov.remove()
+  }
+}
+
+// ── Import wizard ─────────────────────────────────────────────────────────────
+
+$('#fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; e.target.value = ''
+  if (file) openImport(file)
+})
+document.addEventListener('dragover', (e) => { if (state.accounts.length) e.preventDefault() })
+document.addEventListener('drop', (e) => {
+  if (!state.accounts.length || $('.overlay')) return
+  e.preventDefault()
+  const file = e.dataTransfer.files[0]; if (file) openImport(file)
+})
+
+function decode(buf, enc) {
+  if (enc === 'auto') {
+    try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(buf), enc: 'utf-8' } }
+    catch { return { text: new TextDecoder('windows-1252').decode(buf), enc: 'windows-1252' } }
+  }
+  return { text: new TextDecoder(enc).decode(buf), enc }
+}
+
+async function openImport(file) {
+  if (file.size > 8 * 1024 * 1024) { toast('Fichier trop volumineux (8 Mo max.)', true); return }
+  const buf = await file.arrayBuffer()
+  const ext = (file.name.split('.').pop() || '').toLowerCase()
+  let fmt = ext === 'ofx' || ext === 'qfx' ? 'ofx' : ext === 'qif' ? 'qif' : 'csv'
+  let { text, enc } = decode(buf, 'auto')
+  if (fmt === 'csv' && /<OFX>/i.test(text.slice(0, 4000))) fmt = 'ofx'
+  if (fmt === 'csv' && /^!Type:/im.test(text.slice(0, 200))) fmt = 'qif'
+  const imp = { file, buf, fmt, enc, text, account: state.accountId ?? state.accounts.find((a) => !a.archived)?.id, mapping: null, preview: null, rows: null }
+  const ov = dialog(`<h3>Importer « ${esc(file.name)} » <span class="steps" id="iSteps"></span></h3>
+    <div class="content block" id="iBody"></div>
+    <div class="foot" id="iFoot"></div>`, 'large')
+  imp.ov = ov
+  if (fmt === 'csv') await stepMapping(imp)
+  else stepOptions(imp)
+}
+
+function steps(imp, n) {
+  const names = imp.fmt === 'csv' ? ['Colonnes', 'Vérification'] : ['Options', 'Vérification']
+  $('#iSteps', imp.ov).innerHTML = names.map((s, i) => i + 1 === n ? `<b>${i + 1}. ${s}</b>` : `${i + 1}. ${s}`).join(' › ')
+}
+
+const accountPicker = (imp) => `<div class="field"><label>Compte de destination</label><select id="iAcc">${accOptions(imp.account)}</select></div>`
+
+function stepOptions(imp) {
+  steps(imp, 1)
+  const q = (s) => $(s, imp.ov)
+  q('#iBody').innerHTML = `<div class="mapgrid">${accountPicker(imp)}
+    <div class="field"><label>Format</label><select id="iFmt"><option value="ofx" ${imp.fmt === 'ofx' ? 'selected' : ''}>OFX / QFX</option><option value="qif" ${imp.fmt === 'qif' ? 'selected' : ''}>QIF</option></select></div>
+    <div class="field" id="qOpt1"><label>Format des dates (QIF)</label><select id="iDf"><option>JJ/MM/AAAA</option><option>MM/JJ/AAAA</option><option>AAAA-MM-JJ</option></select></div>
+    <div class="field" id="qOpt2"><label>Séparateur décimal (QIF)</label><select id="iDec"><option value=".">Point (1234.56)</option><option value=",">Virgule (1234,56)</option></select></div></div>
+    <p class="hint" style="margin-top:12px">Les doublons (même date, montant et libellé, ou même identifiant OFX) sont détectés et décochés automatiquement à l'étape suivante.</p>`
+  const sync = () => { q('#qOpt1').classList.toggle('hidden', q('#iFmt').value !== 'qif'); q('#qOpt2').classList.toggle('hidden', q('#iFmt').value !== 'qif') }
+  sync(); q('#iFmt').onchange = sync
+  q('#iFoot').innerHTML = '<span class="spacer"></span><button id="iCancel">Annuler</button><button class="primary" id="iNext">Analyser ›</button>'
+  q('#iCancel').onclick = () => imp.ov.remove()
+  q('#iNext').onclick = async () => {
+    imp.account = +q('#iAcc').value; imp.fmt = q('#iFmt').value
+    imp.mapping = { date_format: q('#iDf').value, decimal: q('#iDec').value }
+    await analyze(imp)
+  }
+}
+
+const MAP_FIELDS = [['date', 'Date *'], ['label', 'Libellé *'], ['label2', 'Libellé (complément)'], ['amount', 'Montant (signé)'], ['debit', 'Débit'], ['credit', 'Crédit'], ['notes', 'Notes'], ['category', 'Catégorie']]
+
+async function stepMapping(imp, delimiter) {
+  steps(imp, 1)
+  const q = (s) => $(s, imp.ov)
+  const pv = await act('import.preview', { text: imp.text, delimiter }, null, 60000)
+  if (!pv) { imp.ov.remove(); return }
+  imp.preview = pv
+  const m = imp.mapping = imp.mapping && delimiter ? imp.mapping : { ...pv.guess, skip_rows: 0, invert: false }
+  m.delimiter = pv.delimiter
+  const colOpts = (sel) => `<option value="">—</option>` + Array.from({ length: pv.columns }, (_, i) => {
+    const head = m.has_header ? pv.rows[m.skip_rows || 0]?.[i] : ''
+    return `<option value="${i}" ${sel === i ? 'selected' : ''}>Col. ${i + 1}${head ? ' — ' + esc(head.slice(0, 24)) : ''}</option>`
+  }).join('')
+  q('#iBody').innerHTML = `
+    <div class="mapgrid">
+      ${accountPicker(imp)}
+      <div class="field"><label>Encodage</label><select id="iEnc"><option value="utf-8" ${imp.enc === 'utf-8' ? 'selected' : ''}>UTF-8</option><option value="windows-1252" ${imp.enc === 'windows-1252' ? 'selected' : ''}>Windows-1252 (ANSI)</option><option value="iso-8859-15" ${imp.enc === 'iso-8859-15' ? 'selected' : ''}>ISO-8859-15</option></select></div>
+      <div class="field"><label>Séparateur</label><select id="iDelim">${[[';', 'Point-virgule ;'], [',', 'Virgule ,'], ['\t', 'Tabulation'], ['|', 'Barre |']].map(([d, l]) => `<option value="${d === '\t' ? 'tab' : d}" ${pv.delimiter === d ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label>Lignes à ignorer au début</label><input type="number" id="iSkip" min="0" max="50" value="${m.skip_rows || 0}"></div>
+      <div class="field row" style="align-self:end"><input type="checkbox" id="iHead" ${m.has_header ? 'checked' : ''}><label for="iHead">1re ligne = en-têtes</label></div>
+      <div class="field"><label>Format des dates</label><select id="iDf">${['JJ/MM/AAAA', 'AAAA-MM-JJ', 'MM/JJ/AAAA', 'AAAAMMJJ'].map((f) => `<option ${m.date_format === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
+      <div class="field"><label>Séparateur décimal</label><select id="iDec"><option value="," ${m.decimal === ',' ? 'selected' : ''}>Virgule (1 234,56)</option><option value="." ${m.decimal === '.' ? 'selected' : ''}>Point (1,234.56)</option></select></div>
+      <div class="field row" style="align-self:end"><input type="checkbox" id="iInv" ${m.invert ? 'checked' : ''}><label for="iInv">Inverser le signe du montant</label></div>
+    </div>
+    <h4 style="margin:14px 0 6px;font-size:12px;color:var(--muted);font-weight:500">Correspondance des colonnes (Montant signé <i>ou</i> Débit/Crédit)</h4>
+    <div class="mapgrid">${MAP_FIELDS.map(([k, l]) => `<div class="field"><label>${l}</label><select data-map="${k}">${colOpts(m[k])}</select></div>`).join('')}</div>
+    <div class="maptable" id="iTable"></div>
+    <div class="small muted" style="margin-top:6px">${pv.row_count} ligne(s) détectée(s) · aperçu des 30 premières.</div>`
+  const drawTable = () => {
+    const names = {}
+    for (const [k, l] of MAP_FIELDS) if (m[k] !== null && m[k] !== undefined && m[k] !== '') names[m[k]] = l.replace(' *', '')
+    const skip = m.skip_rows || 0
+    q('#iTable').innerHTML = `<table><thead><tr>${Array.from({ length: pv.columns }, (_, i) => `<th class="${names[i] ? 'm' : ''}">${i + 1}${names[i] ? ' · ' + names[i] : ''}</th>`).join('')}</tr></thead>
+      <tbody>${pv.rows.map((r, ri) => `<tr class="${ri < skip || (m.has_header && ri === skip) ? 'skip' : ''}">${Array.from({ length: pv.columns }, (_, i) => `<td>${esc(r[i] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+  }
+  drawTable()
+  $$('[data-map]', imp.ov).forEach((s) => (s.onchange = () => {
+    m[s.dataset.map] = s.value === '' ? null : +s.value
+    if (s.dataset.map === 'amount' && s.value !== '') { m.debit = m.credit = null; $$('[data-map="debit"],[data-map="credit"]', imp.ov).forEach((x) => (x.value = '')) }
+    if ((s.dataset.map === 'debit' || s.dataset.map === 'credit') && s.value !== '') { m.amount = null; $('[data-map="amount"]', imp.ov).value = '' }
+    drawTable()
+  }))
+  q('#iHead').onchange = (e) => { m.has_header = e.target.checked; stepMapping(imp, pv.delimiter) }
+  q('#iSkip').onchange = (e) => { m.skip_rows = Math.max(0, Math.min(50, +e.target.value || 0)); stepMapping(imp, pv.delimiter) }
+  q('#iDf').onchange = (e) => (m.date_format = e.target.value)
+  q('#iDec').onchange = (e) => (m.decimal = e.target.value)
+  q('#iInv').onchange = (e) => (m.invert = e.target.checked)
+  q('#iAcc').onchange = (e) => (imp.account = +e.target.value)
+  q('#iDelim').onchange = (e) => { imp.mapping = null; stepMapping(imp, e.target.value === 'tab' ? '\t' : e.target.value) }
+  q('#iEnc').onchange = (e) => { const d = decode(imp.buf, e.target.value); imp.text = d.text; imp.enc = d.enc; stepMapping(imp, pv.delimiter) }
+  q('#iFoot').innerHTML = '<span class="spacer"></span><button id="iCancel">Annuler</button><button class="primary" id="iNext">Analyser ›</button>'
+  q('#iCancel').onclick = () => imp.ov.remove()
+  q('#iNext').onclick = () => { imp.account = +q('#iAcc').value; analyze(imp) }
+}
+
+async function analyze(imp) {
+  const q = (s) => $(s, imp.ov)
+  q('#iNext').disabled = true
+  const r = await act('import.parse', { text: imp.text, format: imp.fmt, account_id: imp.account, mapping: imp.mapping }, null, 120000)
+  if (!r) { q('#iNext').disabled = false; return }
+  imp.rows = r.rows.map((x) => ({ ...x, take: !x.duplicate }))
+  stepReview(imp, r)
+}
+
+function stepReview(imp, res) {
+  steps(imp, 2)
+  const q = (s) => $(s, imp.ov)
+  const rows = imp.rows
+  const dupSure = rows.filter((r) => r.duplicate === 'sure').length, dupMaybe = rows.filter((r) => r.duplicate === 'maybe').length
+  q('#iBody').innerHTML = `
+    <div class="filters"><b id="iCount"></b><span class="muted">sur ${rows.length} lue(s) vers <b style="color:var(--text)">${esc(accName(imp.account))}</b></span>
+      ${dupSure ? `<span class="badge bad">${dupSure} doublon(s)</span>` : ''}${dupMaybe ? `<span class="badge warn">${dupMaybe} doublon(s) possible(s)</span>` : ''}
+      <span class="spacer"></span><button class="ghost" id="iAll">Tout cocher</button><button class="ghost" id="iNone">Tout décocher</button></div>
+    ${res.error_count ? `<div class="err-list">${res.error_count} ligne(s) ignorée(s) :<br>${res.errors.map(esc).join('<br>')}</div>` : ''}
+    <div class="maptable" style="max-height:min(52vh,460px)"><table><thead><tr><th></th><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Catégorie</th><th></th></tr></thead>
+      <tbody>${rows.map((r, i) => `<tr class="${r.take ? '' : 'skip'}" data-i="${i}"><td><input type="checkbox" data-take="${i}" ${r.take ? 'checked' : ''}></td>
+        <td>${fmtDate(r.date)}</td><td title="${esc(r.notes)}">${esc(r.label)}</td><td class="num ${cls(r.amount_cents)}" style="text-align:right">${signed(r.amount_cents)}</td>
+        <td><select data-cat="${i}" style="padding:2px 4px;font-size:12px;max-width:200px">${catOptions(r.category_id)}</select></td>
+        <td>${r.duplicate === 'sure' ? '<span class="badge bad" title="Une opération identique (date, montant, libellé) existe déjà">doublon</span>' : r.duplicate === 'maybe' ? '<span class="badge warn" title="Même date et même montant, libellé différent">doublon ?</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`
+  const count = () => { const n = rows.filter((r) => r.take).length; q('#iCount').textContent = `${n} opération(s) à importer`; q('#iGo').disabled = !n; q('#iGo').textContent = `Importer ${n} opération(s)` }
+  q('#iFoot').innerHTML = `<button id="iBack">‹ Retour</button><span class="spacer"></span><button id="iCancel">Annuler</button><button class="primary" id="iGo">Importer</button>`
+  count()
+  q('#iBody').addEventListener('change', (e) => {
+    const t = e.target
+    if (t.dataset.take !== undefined) { rows[+t.dataset.take].take = t.checked; t.closest('tr').classList.toggle('skip', !t.checked); count() }
+    if (t.dataset.cat !== undefined) rows[+t.dataset.cat].category_id = t.value ? +t.value : null
+  })
+  const setAll = (v) => { rows.forEach((r) => (r.take = v)); $$('[data-take]', imp.ov).forEach((c) => { c.checked = v; c.closest('tr').classList.toggle('skip', !v) }); count() }
+  q('#iAll').onclick = () => setAll(true)
+  q('#iNone').onclick = () => setAll(false)
+  q('#iBack').onclick = () => (imp.fmt === 'csv' ? stepMapping(imp, imp.mapping.delimiter) : stepOptions(imp))
+  q('#iCancel').onclick = () => imp.ov.remove()
+  q('#iGo').onclick = async () => {
+    q('#iGo').disabled = true
+    const take = rows.filter((r) => r.take).map(({ date, label, amount_cents, category_id, notes, ref }) => ({ date, label, amount_cents, category_id, notes, ref }))
+    const r = await act('import.commit', { account_id: imp.account, rows: take }, null, 120000)
+    if (!r) { q('#iGo').disabled = false; return }
+    toast(`${r.imported} opération(s) importée(s)`)
+    imp.ov.remove()
+    state.accountId = imp.account; setAccounts(r.accounts)
+    state.tab = 'tx'; state.tx.filters.scope = 'all'; render()
+  }
+}
+
+boot()
+</script>
+</body>
+</html>

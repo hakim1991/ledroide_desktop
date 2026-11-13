@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Serveur d'API simulé</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.go { background: #15803d; border-color: #16a34a; color: #fff; font-weight: 600; }
+  button.go:hover:not(:disabled) { background: #16a34a; }
+  button.stop { background: #7f1d1d; border-color: #b91c1c; color: #fff; font-weight: 600; }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 4px 7px; min-width: 28px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input.bad, textarea.bad { border-color: var(--err); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; color: #a1a1aa; cursor: pointer; }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; }
+  #app { flex: 1; min-height: 0; display: flex; }
+  aside { width: 230px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  #srvList { flex: 1; overflow: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+  .srv { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  .srv:hover { background: var(--surface2); }
+  .srv.on { background: rgba(99,102,241,.16); }
+  .srv .d { width: 9px; height: 9px; border-radius: 50%; background: #52525b; flex-shrink: 0; }
+  .srv .d.run { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .srv .n { flex: 1; min-width: 0; }
+  .srv .n div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .srv .n small { color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+  .srv .hits { font-size: 11px; color: var(--muted); }
+  aside .foot { padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
+  aside .foot button { flex: 1; }
+
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .shead { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .shead h2 { font-size: 15px; font-weight: 600; }
+  .url { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--border); }
+  .url a { color: #93c5fd; text-decoration: none; cursor: pointer; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .url button { border: none; padding: 2px 6px; background: transparent; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: #a1a1aa; }
+  .badge.warn { color: #fde68a; border-color: rgba(245,158,11,.5); }
+  .badge.ok { color: #86efac; border-color: rgba(34,197,94,.45); }
+  .tabs { display: flex; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--border); }
+  .tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); padding: 8px 12px; }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tabs .cnt { font-size: 11px; background: var(--surface2); border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+
+  .split { flex: 1; min-height: 0; display: flex; }
+  .rlist { width: 330px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .rlist .tb { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
+  .rlist .tb input { flex: 1; min-width: 0; }
+  #routes { flex: 1; overflow: auto; }
+  .route { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .route:hover { background: #1a1a1e; }
+  .route.on { background: rgba(99,102,241,.14); }
+  .route.off { opacity: .45; }
+  .route .p { flex: 1; min-width: 0; }
+  .route .p div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .route .p small { color: var(--muted); }
+  .route .hit { font-size: 11px; color: var(--muted); }
+  .m { display: inline-block; min-width: 54px; text-align: center; font-size: 10.5px; font-weight: 700; padding: 2px 4px; border-radius: 4px; font-family: ui-monospace, Consolas, monospace; }
+  .m.GET { background: rgba(34,197,94,.16); color: #86efac; }
+  .m.POST { background: rgba(245,158,11,.16); color: #fcd34d; }
+  .m.PUT { background: rgba(59,130,246,.18); color: #93c5fd; }
+  .m.PATCH { background: rgba(168,85,247,.18); color: #d8b4fe; }
+  .m.DELETE { background: rgba(239,68,68,.18); color: #fca5a5; }
+  .m.ANY, .m.HEAD, .m.OPTIONS { background: rgba(113,113,122,.2); color: #d4d4d8; }
+  .st { font-family: ui-monospace, Consolas, monospace; font-weight: 600; }
+  .st.s2 { color: #86efac; } .st.s3 { color: #93c5fd; } .st.s4 { color: #fcd34d; } .st.s5 { color: #fca5a5; }
+
+  .editor { flex: 1; min-width: 0; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .field.grow { flex: 1; }
+  .rtabs { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .rtabs button.on { border-color: var(--accent); background: rgba(99,102,241,.16); }
+  .hdrs { display: flex; flex-direction: column; gap: 4px; }
+  .hdr { display: flex; gap: 6px; }
+  .hdr input:first-child { width: 200px; }
+  .hdr input:nth-child(2) { flex: 1; }
+  textarea.body { min-height: 220px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.5; tab-size: 2; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+  .hint code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: #c4b5fd; cursor: pointer; }
+  .savebar { display: flex; gap: 8px; align-items: center; position: sticky; bottom: -14px; background: var(--bg); padding: 10px 0; border-top: 1px solid var(--line); }
+  .dirty { color: var(--warn); font-size: 12px; }
+  .center { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; text-align: center; max-width: 460px; }
+  .card h2 { font-size: 17px; margin-bottom: 6px; }
+  .card p { color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+  .card .actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+  .logwrap { flex: 1; min-height: 0; display: flex; }
+  .loglist { width: 46%; min-width: 320px; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .loglist .tb { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); align-items: center; }
+  .loglist .tb input { flex: 1; min-width: 0; }
+  #logRows { flex: 1; overflow: auto; }
+  .lr { display: grid; grid-template-columns: 62px 58px 1fr 42px 54px; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12px; }
+  .lr:hover { background: #1a1a1e; }
+  .lr.on { background: rgba(99,102,241,.14); }
+  .lr .t { color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+  .lr .pth { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; }
+  .lr .pth small { display: block; color: var(--muted); font-family: system-ui, sans-serif; font-size: 11px; }
+  .lr .dur { color: var(--muted); text-align: right; font-size: 11px; }
+  .lr.new { animation: flash 1s; }
+  @keyframes flash { from { background: rgba(99,102,241,.35); } }
+  .logdetail { flex: 1; min-width: 0; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .logdetail > * { flex-shrink: 0; }
+  .logdetail h4 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 500; margin-top: 4px; }
+  .kv { display: grid; grid-template-columns: minmax(120px, 220px) 1fr; gap: 2px 12px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .kv div:nth-child(odd) { color: #93c5fd; overflow: hidden; text-overflow: ellipsis; }
+  .kv div:nth-child(even) { word-break: break-all; user-select: text; }
+  pre.code { background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+             white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow: auto; user-select: text; line-height: 1.5; }
+  .empty { padding: 30px 16px; color: var(--muted); text-align: center; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(560px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.wide { width: min(760px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); margin-top: 14px; }
+  .warnbox { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.4); color: #fde68a; border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+               z-index: 50; min-width: 250px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">🎭 Serveur d'API simulé</span>
+  <span class="spacer"></span>
+  <button id="btnImport" title="Importer une configuration ou un document OpenAPI">⬆ Importer…</button>
+  <button id="btnExportAll" title="Exporter tous les serveurs">⬇ Exporter tout</button>
+  <input type="file" id="importFile" accept=".json,.yaml,.yml,application/json" class="hidden" />
+</header>
+
+<div id="app">
+  <aside>
+    <div id="srvList"></div>
+    <div class="foot"><button class="primary" id="btnNewSrv">＋ Serveur</button></div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'mock-server'
+const call = (action, payload = {}, timeout = 30000) => window.ledroide.call(MODULE_ID, action, payload, { timeout })
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'ANY']
+const REASONS = { 200: 'OK', 201: 'Created', 202: 'Accepted', 204: 'No Content', 301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
+  400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed', 409: 'Conflict', 422: 'Unprocessable Entity',
+  429: 'Too Many Requests', 500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout' }
+const TPL_HELP = ['{{params.id}}', '{{query.page}}', '{{headers.authorization}}', '{{body.name}}', '{{body}}', '{{method}}', '{{path}}', '{{now}}', '{{now.date}}', '{{timestamp}}', '{{uuid}}', '{{randomInt(1,100)}}']
+
+const state = { servers: [], sel: null, draft: null, dirty: false, route: null, resp: 0, tab: 'routes', logs: new Map(), logSel: null, logPaused: false, routeHits: new Map() }
+const cur = () => state.servers.find((s) => s.id === state.sel)
+
+let toastTimer = null
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+async function act(action, payload, okMsg, timeout) {
+  try { const r = await call(action, payload, timeout); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+function dialog(html, cls = '') {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${cls}">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') ov.remove() })
+  return ov
+}
+function download(name, content, type = 'application/json') {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type })); a.download = name.replace(/[\\/:*?"<>|]+/g, '_')
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+async function copy(s, msg = 'Copié') { try { await navigator.clipboard.writeText(s); toast(msg) } catch { toast('Copie impossible', true) } }
+const urlOf = (s) => `http://${s.host === '0.0.0.0' ? '127.0.0.1' : s.host}:${s.port}`
+const stCls = (s) => 's' + String(s)[0]
+const clone = (o) => JSON.parse(JSON.stringify(o))
+
+// ── Serveurs ─────────────────────────────────────────────────────────────────
+
+async function loadServers() {
+  const r = await act('servers.list'); if (!r) return
+  state.servers = r.servers
+  if (!cur()) state.sel = state.servers[0]?.id ?? null
+  renderList()
+  if (state.sel && (!state.draft || state.draft.id !== state.sel)) selectServer(state.sel, true)
+  else renderMain()
+}
+function renderList() {
+  $('#srvList').innerHTML = state.servers.length ? state.servers.map((s) => `<div class="srv ${s.id === state.sel ? 'on' : ''}" data-id="${s.id}">
+    <span class="d ${s.running ? 'run' : ''}"></span>
+    <div class="n"><div>${esc(s.name)}</div><small>${esc(s.host)}:${s.port}</small></div>
+    ${s.running ? `<span class="hits" title="Requêtes reçues">${s.hits}</span>` : ''}</div>`).join('')
+    : '<div class="empty">Aucun serveur.</div>'
+}
+$('#srvList').addEventListener('click', (e) => { const el = e.target.closest('.srv'); if (el) selectServer(el.dataset.id) })
+
+function confirmDiscard() { return !state.dirty || confirm('Des modifications ne sont pas enregistrées. Les abandonner ?') }
+async function selectServer(id, force = false) {
+  if (!force && id === state.sel && state.draft) return
+  if (!force && !confirmDiscard()) return
+  state.sel = id
+  const s = cur()
+  state.draft = s ? clone(s) : null
+  state.dirty = false
+  state.route = state.draft?.routes[0]?.id ?? null
+  state.resp = 0; state.logSel = null
+  renderList()
+  if (s?.running && !state.logs.has(id)) {
+    const r = await act('log.list', { id }); state.logs.set(id, r ? r.entries.reverse() : [])
+    recountHits(id)
+  }
+  renderMain()
+}
+
+function newServerDialog() {
+  const used = new Set(state.servers.map((s) => s.port)); let port = 3000; while (used.has(port)) port++
+  serverDialog({ name: 'Mon API', host: '127.0.0.1', port, cors: true, proxy: '', routes: [
+    { method: 'GET', path: '/api/users', mode: 'first', delay: 0, delay_max: 0, enabled: true, description: 'Liste des utilisateurs',
+      responses: [{ status: 200, type: 'json', headers: [], label: '', body: '[\n  { "id": 1, "nom": "Alice" },\n  { "id": 2, "nom": "Bob" }\n]' }] },
+    { method: 'GET', path: '/api/users/:id', mode: 'first', delay: 0, delay_max: 0, enabled: true, description: 'Un utilisateur',
+      responses: [{ status: 200, type: 'json', headers: [], label: '', body: '{\n  "id": "{{params.id}}",\n  "nom": "Utilisateur {{params.id}}",\n  "maj": "{{now}}"\n}' }] },
+  ] }, true)
+}
+function serverDialog(s, isNew) {
+  const ov = dialog(`<h3>${isNew ? 'Nouveau serveur' : 'Paramètres du serveur'}</h3><div class="content">
+    <div class="field"><label>Nom</label><input id="dName" maxlength="100" value="${esc(s.name)}" /></div>
+    <div class="row">
+      <div class="field grow"><label>Adresse d'écoute</label>
+        <select id="dHost"><option value="127.0.0.1">127.0.0.1 — cet ordinateur uniquement</option><option value="0.0.0.0">0.0.0.0 — accessible depuis le réseau</option></select></div>
+      <div class="field"><label>Port</label><input id="dPort" type="number" min="1" max="65535" value="${s.port}" style="width:110px" /></div>
+    </div>
+    <div class="warnbox hidden" id="dWarn">⚠️ Avec 0.0.0.0, le serveur simulé est joignable par les autres machines du réseau (et peut être bloqué par le pare-feu). N'exposez pas de données sensibles.</div>
+    <label class="chk"><input type="checkbox" id="dCors" ${s.cors ? 'checked' : ''} /> CORS automatique (en-têtes Access-Control-* et réponse aux pré-vérifications OPTIONS)</label>
+    <div class="field"><label>Proxy pour les routes non définies (optionnel)</label><input id="dProxy" class="mono" placeholder="https://api.exemple.fr" value="${esc(s.proxy)}" />
+      <span class="hint">Les requêtes sans route correspondante sont relayées vers cette URL (chemin et paramètres conservés).</span></div>
+  </div><div class="foot"><span class="spacer"></span><button id="dCancel">Annuler</button><button class="primary" id="dOk">${isNew ? 'Créer' : 'Appliquer'}</button></div>`)
+  $('#dHost', ov).value = s.host
+  const warn = () => $('#dWarn', ov).classList.toggle('hidden', $('#dHost', ov).value !== '0.0.0.0')
+  $('#dHost', ov).onchange = warn; warn()
+  $('#dCancel', ov).onclick = () => ov.remove()
+  $('#dOk', ov).onclick = async () => {
+    const data = { ...s, name: $('#dName', ov).value.trim(), host: $('#dHost', ov).value, port: Number($('#dPort', ov).value), cors: $('#dCors', ov).checked, proxy: $('#dProxy', ov).value.trim() }
+    if (isNew) {
+      const r = await act('server.save', { server: data }, 'Serveur créé'); if (!r) return
+      ov.remove(); state.servers.push(r); state.dirty = false; renderList(); selectServer(r.id, true)
+    } else {
+      Object.assign(state.draft, { name: data.name, host: data.host, port: data.port, cors: data.cors, proxy: data.proxy })
+      ov.remove(); await saveServer()
+    }
+  }
+  setTimeout(() => $('#dName', ov).select(), 0)
+}
+$('#btnNewSrv').addEventListener('click', () => confirmDiscard() && newServerDialog())
+
+function payloadServer(d) {
+  return { name: d.name, host: d.host, port: d.port, cors: d.cors, proxy: d.proxy,
+    routes: d.routes.map((r) => ({ id: r.id, enabled: r.enabled, method: r.method, path: r.path, description: r.description || '', mode: r.mode, delay: Number(r.delay) || 0, delay_max: Number(r.delay_max) || 0,
+      responses: r.responses.map((x) => ({ status: Number(x.status), type: x.type, label: x.label || '', body: x.body, headers: x.headers.filter((h) => h.k.trim()) })) })) }
+}
+async function saveServer() {
+  const d = state.draft; if (!d) return
+  const r = await act('server.save', { id: d.id, server: payloadServer(d) }); if (!r) return false
+  const i = state.servers.findIndex((s) => s.id === r.id); state.servers[i] = r
+  const selIdx = d.routes.findIndex((x) => x.id === state.route)
+  state.draft = clone(r); state.dirty = false
+  if (selIdx >= 0) state.route = r.routes[selIdx]?.id ?? null
+  toast(r.running ? 'Enregistré — appliqué immédiatement' : 'Enregistré')
+  renderList(); renderMain()
+  return true
+}
+function markDirty() {
+  state.dirty = true
+  const d = $('#dirty'); if (d) d.classList.remove('hidden')
+  const b = $('#btnSave'); if (b) b.disabled = false
+}
+
+async function toggleRun() {
+  const s = cur(); if (!s) return
+  if (state.dirty && !(await saveServer())) return
+  const r = await act(s.running ? 'server.stop' : 'server.start', { id: s.id }, s.running ? 'Serveur arrêté' : `En écoute sur ${urlOf(s)}`)
+  if (!r) return
+  Object.assign(s, r); state.draft.running = r.running
+  if (r.running && !state.logs.has(s.id)) state.logs.set(s.id, [])
+  renderList(); renderMain()
+}
+
+// ── Vue principale ───────────────────────────────────────────────────────────
+
+function renderMain() {
+  const s = cur(), d = state.draft
+  if (!s || !d) {
+    $('#main').innerHTML = `<div class="center"><div class="card"><h2>Aucun serveur simulé</h2>
+      <p>Créez un serveur HTTP local qui répond comme une vraie API : routes, paramètres, gabarits, délais, erreurs… ou importez un document OpenAPI.</p>
+      <div class="actions"><button class="primary" id="eNew">＋ Nouveau serveur</button><button id="eImport">⬆ Importer (JSON / OpenAPI)…</button></div></div></div>`
+    $('#eNew').onclick = newServerDialog; $('#eImport').onclick = importDialog
+    return
+  }
+  const logs = state.logs.get(s.id) || []
+  $('#main').innerHTML = `
+    <div class="shead">
+      <h2>${esc(d.name)}</h2>
+      ${s.running ? `<span class="url"><a id="openUrl" title="Ouvrir dans le navigateur">${esc(urlOf(s))}</a><button id="copyUrl" title="Copier l'URL">📋</button></span>` : `<span class="badge">${esc(d.host)}:${d.port}</span>`}
+      ${d.host === '0.0.0.0' ? '<span class="badge warn" title="Accessible depuis le réseau">⚠ réseau</span>' : ''}
+      ${d.cors ? '<span class="badge ok">CORS</span>' : ''}
+      ${d.proxy ? `<span class="badge" title="Proxy">↪ ${esc(d.proxy)}</span>` : ''}
+      <span class="spacer"></span>
+      <button class="${s.running ? 'stop' : 'go'}" id="btnRun">${s.running ? '⏹ Arrêter' : '▶ Démarrer'}</button>
+      <button class="icon" id="btnSettings" title="Paramètres">⚙</button>
+      <div class="menu"><button class="icon" id="btnMore" title="Plus d'actions">⋯</button>
+        <div class="menu-list hidden" id="moreList">
+          <button data-a="dup">⧉ Dupliquer le serveur</button>
+          <button data-a="export">⬇ Exporter ce serveur (JSON)</button>
+          <hr><button data-a="delete" class="danger">🗑 Supprimer le serveur</button>
+        </div></div>
+    </div>
+    <div class="tabs">
+      <button data-tab="routes" class="${state.tab === 'routes' ? 'on' : ''}">Routes<span class="cnt">${d.routes.length}</span></button>
+      <button data-tab="log" class="${state.tab === 'log' ? 'on' : ''}">Journal des requêtes<span class="cnt" id="logCnt">${logs.length}</span></button>
+    </div>
+    <div id="tabBody" class="split"></div>`
+  $('#btnRun').onclick = toggleRun
+  $('#btnSettings').onclick = () => serverDialog(d, false)
+  if (s.running) { $('#openUrl').onclick = () => window.open(urlOf(s), '_blank'); $('#copyUrl').onclick = () => copy(urlOf(s), 'URL copiée') }
+  $('#btnMore').onclick = (e) => { e.stopPropagation(); $('#moreList').classList.toggle('hidden') }
+  $('#moreList').onclick = async (e) => {
+    const b = e.target.closest('[data-a]'); if (!b) return
+    $('#moreList').classList.add('hidden')
+    if (b.dataset.a === 'dup') { const r = await act('server.duplicate', { id: s.id }, 'Serveur dupliqué'); if (r) { state.servers.push(r); selectServer(r.id, true) } }
+    if (b.dataset.a === 'export') { const r = await act('config.export', { ids: [s.id] }); if (r) download(`${d.name}.mock.json`, JSON.stringify(r, null, 2)) }
+    if (b.dataset.a === 'delete') {
+      if (!confirm(`Supprimer le serveur « ${d.name} » et ses ${d.routes.length} route(s) ?`)) return
+      if (await act('server.delete', { id: s.id }, 'Serveur supprimé')) { state.servers = state.servers.filter((x) => x.id !== s.id); state.logs.delete(s.id); state.sel = null; state.draft = null; state.dirty = false; loadServers() }
+    }
+  }
+  $$('.tabs button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; renderMain() }))
+  if (state.tab === 'routes') renderRoutesTab(); else renderLogTab()
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) $$('.menu-list').forEach((m) => m.classList.add('hidden')) })
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
+let routeFilter = ''
+function renderRoutesTab() {
+  $('#tabBody').innerHTML = `
+    <div class="rlist">
+      <div class="tb"><input type="search" id="rSearch" placeholder="Filtrer les routes…" value="${esc(routeFilter)}" /><button class="primary" id="btnAddRoute" title="Nouvelle route">＋</button></div>
+      <div id="routes"></div>
+    </div>
+    <div class="editor" id="editor"></div>`
+  $('#rSearch').oninput = () => { routeFilter = $('#rSearch').value; renderRouteList() }
+  $('#btnAddRoute').onclick = addRoute
+  renderRouteList(); renderEditor()
+}
+function renderRouteList() {
+  const d = state.draft
+  const q = routeFilter.toLowerCase()
+  const hits = state.routeHits.get(d.id) || new Map()
+  const list = d.routes.filter((r) => !q || `${r.method} ${r.path} ${r.description}`.toLowerCase().includes(q))
+  $('#routes').innerHTML = list.length ? list.map((r) => `<div class="route ${r.id === state.route ? 'on' : ''} ${r.enabled ? '' : 'off'}" data-id="${esc(r.id)}">
+    <span class="m ${esc(r.method)}">${esc(r.method)}</span>
+    <div class="p"><div class="mono">${esc(r.path)}</div>${r.description ? `<small>${esc(r.description)}</small>` : ''}</div>
+    ${hits.get(r.id) ? `<span class="hit" title="Appels">${hits.get(r.id)}×</span>` : ''}
+    <span class="st ${stCls(r.responses[0]?.status || 200)}">${r.responses.length > 1 ? (r.mode === 'random' ? '🎲' : '⇉') : r.responses[0]?.status}</span></div>`).join('')
+    : `<div class="empty">${d.routes.length ? 'Aucune route ne correspond.' : 'Aucune route : cliquez sur ＋.'}</div>`
+  $('#routes').onclick = (e) => { const el = e.target.closest('.route'); if (el) { state.route = el.dataset.id; state.resp = 0; renderRouteList(); renderEditor() } }
+}
+function addRoute(preset) {
+  const r = Object.assign({ id: 'new-' + Math.random().toString(36).slice(2, 8), enabled: true, method: 'GET', path: '/api/nouvelle', description: '', mode: 'first', delay: 0, delay_max: 0,
+    responses: [{ status: 200, type: 'json', headers: [], label: '', body: '{\n  "ok": true\n}' }] }, preset && preset.method ? preset : {})
+  state.draft.routes.push(r); state.route = r.id; state.resp = 0
+  if (state.tab !== 'routes') { state.tab = 'routes'; renderMain() } else { renderRouteList(); renderEditor() }
+  markDirty()
+  setTimeout(() => $('#ePath')?.select(), 0)
+}
+
+function renderEditor() {
+  const d = state.draft
+  const r = d.routes.find((x) => x.id === state.route)
+  const ed = $('#editor')
+  if (!r) { ed.innerHTML = `<div class="empty">Sélectionnez une route ou créez-en une.</div>${saveBar()}`; bindSave(); return }
+  if (state.resp >= r.responses.length) state.resp = 0
+  const x = r.responses[state.resp]
+  ed.innerHTML = `
+    <div class="row">
+      <div class="field"><label>Méthode</label><select id="eMethod">${METHODS.map((m) => `<option ${m === r.method ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+      <div class="field grow"><label>Chemin — paramètres <code class="mono">:id</code>, joker <code class="mono">*</code></label><input id="ePath" class="mono" value="${esc(r.path)}" /></div>
+      <label class="chk" style="padding-bottom:6px"><input type="checkbox" id="eEnabled" ${r.enabled ? 'checked' : ''} /> Active</label>
+    </div>
+    <div class="row">
+      <div class="field grow"><label>Description</label><input id="eDesc" maxlength="300" value="${esc(r.description)}" /></div>
+      <div class="field"><label>Délai (ms)</label><input id="eDelay" type="number" min="0" max="60000" step="50" value="${r.delay}" style="width:100px" /></div>
+      <div class="field"><label>à (aléatoire, ms)</label><input id="eDelayMax" type="number" min="0" max="60000" step="50" value="${r.delay_max}" style="width:100px" /></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Réponses</label><div class="rtabs" id="rtabs">
+        ${r.responses.map((y, i) => `<button data-i="${i}" class="${i === state.resp ? 'on' : ''}"><span class="st ${stCls(y.status)}">${y.status}</span> ${esc(y.label || 'Réponse ' + (i + 1))}</button>`).join('')}
+        <button class="icon" id="addResp" title="Ajouter une réponse">＋</button>
+      </div></div>
+      <span class="spacer"></span>
+      <div class="field"><label>Si plusieurs réponses</label><div class="seg" id="eMode">
+        <button data-m="first" class="${r.mode === 'first' ? 'on' : ''}" title="Toujours la première">Première</button>
+        <button data-m="sequential" class="${r.mode === 'sequential' ? 'on' : ''}" title="Chacune à tour de rôle">Séquentielle</button>
+        <button data-m="random" class="${r.mode === 'random' ? 'on' : ''}" title="Au hasard">Aléatoire</button></div></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Statut</label><input id="xStatus" type="number" min="100" max="599" value="${x.status}" style="width:90px" list="statusList" /></div>
+      <datalist id="statusList">${Object.entries(REASONS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</datalist>
+      <span class="muted" id="xReason" style="padding-bottom:7px">${REASONS[x.status] || ''}</span>
+      <div class="field"><label>Type de corps</label><select id="xType">${['json', 'text', 'html', 'xml'].map((t) => `<option value="${t}" ${t === x.type ? 'selected' : ''}>${{ json: 'JSON', text: 'Texte', html: 'HTML', xml: 'XML' }[t]}</option>`).join('')}</select></div>
+      <div class="field grow"><label>Libellé</label><input id="xLabel" maxlength="100" value="${esc(x.label)}" placeholder="ex. Succès, Erreur 500…" /></div>
+      ${r.responses.length > 1 ? '<button class="danger" id="delResp" title="Supprimer cette réponse">🗑 Réponse</button>' : ''}
+    </div>
+    <div class="field"><label>En-têtes de réponse</label><div class="hdrs" id="hdrs">
+      ${x.headers.map((h, i) => `<div class="hdr" data-i="${i}"><input class="mono hk" placeholder="Nom" value="${esc(h.k)}" /><input class="mono hv" placeholder="Valeur (gabarits acceptés)" value="${esc(h.v)}" /><button class="icon" data-rm="${i}">✕</button></div>`).join('')}
+      <div><button id="addHdr">＋ En-tête</button></div></div></div>
+    <div class="field"><label style="display:flex;gap:8px;align-items:center">Corps <span class="spacer"></span>
+      ${x.type === 'json' ? '<button class="icon" id="fmtJson" title="Indenter le JSON">{ }</button>' : ''}<button id="preview" title="Aperçu avec des valeurs d’exemple">👁 Aperçu</button></label>
+      <textarea class="body" id="xBody" spellcheck="false">${esc(x.body)}</textarea>
+      <div class="hint">Gabarits : ${TPL_HELP.map((t) => `<code>${esc(t)}</code>`).join(' ')}</div></div>
+    <div class="row"><button class="danger" id="delRoute">🗑 Supprimer la route</button><button id="dupRoute">⧉ Dupliquer</button><button id="upRoute" title="Monter (priorité)">↑</button><button id="downRoute" title="Descendre">↓</button>
+      <span class="hint">Les routes sont testées dans l'ordre : la première qui correspond répond.</span></div>
+    ${saveBar()}`
+  const bindVal = (sel, fn, ev = 'input') => $(sel).addEventListener(ev, () => { fn($(sel)); markDirty() })
+  bindVal('#eMethod', (el) => { r.method = el.value; renderRouteList() }, 'change')
+  bindVal('#ePath', (el) => { r.path = el.value; el.classList.toggle('bad', !el.value.startsWith('/') || /[\s?#]/.test(el.value)); renderRouteList() })
+  bindVal('#eEnabled', (el) => { r.enabled = el.checked; renderRouteList() }, 'change')
+  bindVal('#eDesc', (el) => { r.description = el.value })
+  bindVal('#eDelay', (el) => { r.delay = Number(el.value) || 0 })
+  bindVal('#eDelayMax', (el) => { r.delay_max = Number(el.value) || 0 })
+  bindVal('#xStatus', (el) => { x.status = Number(el.value) || 200; $('#xReason').textContent = REASONS[x.status] || ''; renderRouteList() })
+  bindVal('#xType', () => { x.type = $('#xType').value; renderEditor() }, 'change')
+  bindVal('#xLabel', (el) => { x.label = el.value })
+  bindVal('#xBody', (el) => { x.body = el.value; el.classList.remove('bad') })
+  $('#xBody').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') { e.preventDefault(); const el = e.target; const p = el.selectionStart; el.setRangeText('  ', p, el.selectionEnd, 'end'); x.body = el.value; markDirty() }
+  })
+  $('#eMode').onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b) return; r.mode = b.dataset.m; markDirty(); renderEditor(); renderRouteList() }
+  $('#rtabs').onclick = (e) => { const b = e.target.closest('[data-i]'); if (b) { state.resp = Number(b.dataset.i); renderEditor() } }
+  $('#addResp').onclick = () => { r.responses.push({ status: 500, type: 'json', headers: [], label: 'Erreur', body: '{\n  "error": "Erreur simulée"\n}' }); state.resp = r.responses.length - 1; if (r.mode === 'first') r.mode = 'sequential'; markDirty(); renderEditor(); renderRouteList() }
+  if ($('#delResp')) $('#delResp').onclick = () => { r.responses.splice(state.resp, 1); state.resp = 0; markDirty(); renderEditor(); renderRouteList() }
+  $('#hdrs').addEventListener('input', (e) => {
+    const row = e.target.closest('.hdr'); if (!row) return
+    const h = x.headers[Number(row.dataset.i)]; h.k = $('.hk', row).value; h.v = $('.hv', row).value; markDirty()
+  })
+  $('#hdrs').addEventListener('click', (e) => { const b = e.target.closest('[data-rm]'); if (b) { x.headers.splice(Number(b.dataset.rm), 1); markDirty(); renderEditor() } })
+  $('#addHdr').onclick = () => { x.headers.push({ k: '', v: '' }); markDirty(); renderEditor(); $$('#hdrs .hk').pop()?.focus() }
+  $('.hint', $('#editor')).addEventListener('click', (e) => {
+    const c = e.target.closest('code'); if (!c || !c.closest('.hint') || !TPL_HELP.includes(c.textContent)) return
+    const el = $('#xBody'); el.setRangeText(c.textContent, el.selectionStart, el.selectionEnd, 'end'); el.focus(); x.body = el.value; markDirty()
+  })
+  if ($('#fmtJson')) $('#fmtJson').onclick = () => {
+    try { x.body = JSON.stringify(JSON.parse(x.body), null, 2); $('#xBody').value = x.body; markDirty() }
+    catch (e) { $('#xBody').classList.add('bad'); toast('JSON invalide (les gabarits doivent être entre guillemets pour l’indentation) : ' + e.message, true) }
+  }
+  $('#preview').onclick = previewDialog.bind(null, r, x)
+  $('#delRoute').onclick = () => { if (!confirm(`Supprimer la route ${r.method} ${r.path} ?`)) return; const i = d.routes.indexOf(r); d.routes.splice(i, 1); state.route = d.routes[Math.min(i, d.routes.length - 1)]?.id ?? null; markDirty(); renderMain() }
+  $('#dupRoute').onclick = () => { const c = clone(r); c.id = 'new-' + Math.random().toString(36).slice(2, 8); d.routes.splice(d.routes.indexOf(r) + 1, 0, c); state.route = c.id; markDirty(); renderMain() }
+  $('#upRoute').onclick = () => moveRoute(r, -1)
+  $('#downRoute').onclick = () => moveRoute(r, 1)
+  bindSave()
+}
+function moveRoute(r, dir) {
+  const a = state.draft.routes; const i = a.indexOf(r); const j = i + dir
+  if (j < 0 || j >= a.length) return
+  ;[a[i], a[j]] = [a[j], a[i]]; markDirty(); renderRouteList(); renderEditor()
+}
+const saveBar = () => `<div class="savebar"><button class="primary" id="btnSave" ${state.dirty ? '' : 'disabled'}>💾 Enregistrer (Ctrl+S)</button>
+  <button id="btnRevert" ${state.dirty ? '' : 'disabled'}>Annuler les modifications</button><span class="dirty ${state.dirty ? '' : 'hidden'}" id="dirty">● modifications non enregistrées</span></div>`
+function bindSave() {
+  $('#btnSave').onclick = saveServer
+  $('#btnRevert').onclick = () => { state.draft = clone(cur()); state.dirty = false; if (!state.draft.routes.some((r) => r.id === state.route)) state.route = state.draft.routes[0]?.id ?? null; renderMain() }
+}
+document.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); if (state.dirty) saveServer() } })
+
+async function previewDialog(r, x) {
+  const sample = r.path.replace(/:(\w+)/g, (m, n) => n === 'id' ? '42' : 'exemple').replace(/\{(\w+)\}/g, 'exemple').replace(/\*/g, 'a/b')
+  const ov = dialog(`<h3>Aperçu de la réponse</h3><div class="content">
+    <div class="field"><label>URL d'exemple (pour {{params.*}} et {{query.*}})</label><input id="pSample" class="mono" value="${esc(sample)}" /></div>
+    <pre class="code" id="pOut"></pre><div class="hint" id="pMsg"></div></div>
+    <div class="foot"><span class="spacer"></span><button class="primary" id="pClose">Fermer</button></div>`, 'wide')
+  const go = async () => {
+    const res = await act('template.preview', { body: x.body, path: r.path, sample: $('#pSample', ov).value, type: x.type }); if (!res) return
+    let out = res.body
+    if (res.valid) { try { out = JSON.stringify(JSON.parse(out), null, 2) } catch {} }
+    $('#pOut', ov).textContent = out || '(corps vide)'
+    $('#pMsg', ov).innerHTML = res.valid === false ? `<span style="color:#fca5a5">⚠ JSON invalide après rendu : ${esc(res.message)}</span>` : res.valid ? '<span style="color:#86efac">✔ JSON valide</span>' : ''
+  }
+  $('#pSample', ov).addEventListener('input', go)
+  $('#pClose', ov).onclick = () => ov.remove()
+  go()
+}
+
+// ── Journal ──────────────────────────────────────────────────────────────────
+
+let logFilter = ''
+function renderLogTab() {
+  const s = cur()
+  $('#tabBody').innerHTML = `<div class="logwrap">
+    <div class="loglist">
+      <div class="tb"><input type="search" id="lSearch" placeholder="Filtrer (méthode, chemin, statut)…" value="${esc(logFilter)}" />
+        <button class="icon ${state.logPaused ? 'primary' : ''}" id="lPause" title="${state.logPaused ? 'Reprendre' : 'Mettre en pause'} l'affichage">${state.logPaused ? '▶' : '⏸'}</button>
+        <button class="icon" id="lClear" title="Vider le journal">🧽</button></div>
+      <div id="logRows"></div>
+    </div>
+    <div class="logdetail" id="logDetail"></div></div>`
+  $('#lSearch').oninput = () => { logFilter = $('#lSearch').value; renderLogRows() }
+  $('#lPause').onclick = () => { state.logPaused = !state.logPaused; renderLogTab() }
+  $('#lClear').onclick = async () => { await act('log.clear', { id: s.id }); state.logs.set(s.id, []); state.routeHits.delete(s.id); state.logSel = null; renderLogTab(); $('#logCnt').textContent = 0 }
+  renderLogRows(); renderLogDetail()
+}
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString('fr-FR')
+function logRowHtml(e, fresh) {
+  return `<div class="lr ${e.id === state.logSel ? 'on' : ''} ${fresh ? 'new' : ''}" data-id="${e.id}">
+    <span class="t">${fmtTime(e.ts)}</span><span class="m ${esc(e.method)}">${esc(e.method)}</span>
+    <span class="pth" title="${esc(e.target)}">${esc(e.target)}<small>${esc(e.label)}</small></span>
+    <span class="st ${stCls(e.status)}">${e.status}</span><span class="dur">${e.duration} ms</span></div>`
+}
+function logMatches(e) {
+  const q = logFilter.toLowerCase()
+  return !q || `${e.method} ${e.target} ${e.status} ${e.label}`.toLowerCase().includes(q)
+}
+function renderLogRows() {
+  const s = cur(); const box = $('#logRows'); if (!box) return
+  const logs = (state.logs.get(s.id) || []).filter(logMatches)
+  box.innerHTML = logs.length ? logs.map((e) => logRowHtml(e)).join('')
+    : `<div class="empty">${s.running ? `En attente de requêtes sur <span class="mono">${esc(urlOf(s))}</span>…<br><br>Exemple : <span class="mono">curl ${esc(urlOf(s))}${esc(state.draft.routes.find((r) => r.method === 'GET' && !r.path.includes(':') && !r.path.includes('*'))?.path || '/')}</span>` : 'Démarrez le serveur pour journaliser les requêtes reçues.'}</div>`
+  box.onclick = (e) => { const el = e.target.closest('.lr'); if (el) { state.logSel = el.dataset.id; $$('.lr', box).forEach((x) => x.classList.toggle('on', x === el)); renderLogDetail() } }
+}
+function prettyBody(text, headers) {
+  const ct = (headers.find(([k]) => k.toLowerCase() === 'content-type') || [])[1] || ''
+  if (text && (ct.includes('json') || /^\s*[[{]/.test(text))) { try { return JSON.stringify(JSON.parse(text), null, 2) } catch {} }
+  return text
+}
+function renderLogDetail() {
+  const s = cur(); const box = $('#logDetail'); if (!box) return
+  const e = (state.logs.get(s.id) || []).find((x) => x.id === state.logSel)
+  if (!e) { box.innerHTML = '<div class="empty">Sélectionnez une requête pour voir son détail.</div>'; return }
+  const q = Object.entries(e.query || {})
+  box.innerHTML = `
+    <div class="row"><span class="m ${esc(e.method)}">${esc(e.method)}</span><span class="mono" style="word-break:break-all">${esc(e.target)}</span>
+      <span class="spacer"></span><span class="st ${stCls(e.status)}">${e.status}</span><span class="muted">${e.duration} ms</span></div>
+    <div class="row"><span class="muted">${new Date(e.ts).toLocaleString('fr-FR')} · ${esc(e.client)} · ${esc(e.label)}${e.proxied ? ' (proxy)' : ''}</span></div>
+    <div class="row"><button class="primary" id="dReplay" ${s.running ? '' : 'disabled'}>↻ Rejouer</button><button id="dCurl">📋 Copier en cURL</button>
+      ${e.route_id ? '<button id="dRoute">➜ Voir la route</button>' : `<button id="dCreate" title="Créer une route qui renvoie cette réponse">＋ Créer une route</button>`}</div>
+    ${q.length ? `<h4>Paramètres de requête</h4><div class="kv">${q.map(([k, v]) => `<div>${esc(k)}</div><div>${esc(Array.isArray(v) ? v.join(', ') : v)}</div>`).join('')}</div>` : ''}
+    <h4>En-têtes de la requête</h4><div class="kv">${e.headers.map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div>
+    ${e.body_size ? `<h4>Corps de la requête (${e.body_size} octets${e.body_truncated ? ', tronqué' : ''})</h4><pre class="code">${esc(prettyBody(e.body, e.headers))}</pre>` : ''}
+    <h4>En-têtes de la réponse</h4><div class="kv">${e.resp_headers.map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div>
+    <h4>Corps de la réponse (${e.resp_size} octets)</h4><pre class="code">${esc(prettyBody(e.resp_body, e.resp_headers)) || '<span class="muted">(vide)</span>'}</pre>`
+  $('#dReplay').onclick = async () => { const r = await act('log.replay', { id: s.id, entry_id: e.id }, null, 75000); if (r) toast(`Rejouée : statut ${r.status}`) }
+  $('#dCurl').onclick = () => {
+    const skip = new Set(['host', 'content-length', 'connection', 'accept-encoding'])
+    const parts = [`curl -X ${e.method} '${urlOf(s)}${e.target.replace(/'/g, "'\\''")}'`]
+    for (const [k, v] of e.headers) if (!skip.has(k.toLowerCase())) parts.push(`-H '${(k + ': ' + v).replace(/'/g, "'\\''")}'`)
+    if (e.body_size && !e.body_truncated) parts.push(`--data-raw '${e.body.replace(/'/g, "'\\''")}'`)
+    copy(parts.join(' \\\n  '), 'Commande cURL copiée')
+  }
+  if ($('#dRoute')) $('#dRoute').onclick = () => { state.route = e.route_id; state.resp = 0; state.tab = 'routes'; renderMain() }
+  if ($('#dCreate')) $('#dCreate').onclick = () => {
+    const ct = (e.resp_headers.find(([k]) => k.toLowerCase() === 'content-type') || [])[1] || ''
+    addRoute({ id: 'new-' + Math.random().toString(36).slice(2, 8), enabled: true, method: e.method, path: e.path, description: 'Créée depuis le journal', mode: 'first', delay: 0, delay_max: 0,
+      responses: [{ status: e.proxied ? e.status : 200, type: ct.includes('json') || !e.proxied ? 'json' : ct.includes('html') ? 'html' : 'text', headers: [], label: '', body: e.proxied ? prettyBody(e.resp_body, e.resp_headers) : '{\n  "ok": true\n}' }] })
+  }
+}
+function recountHits(sid) {
+  const m = new Map()
+  for (const e of state.logs.get(sid) || []) if (e.route_id) m.set(e.route_id, (m.get(e.route_id) || 0) + 1)
+  state.routeHits.set(sid, m)
+}
+
+window.ledroide.on(MODULE_ID, 'mock:request', ({ server_id, entry }) => {
+  if (!state.logs.has(server_id)) state.logs.set(server_id, [])
+  const list = state.logs.get(server_id)
+  list.unshift(entry); if (list.length > 500) list.pop()
+  if (entry.route_id) { const m = state.routeHits.get(server_id) || new Map(); m.set(entry.route_id, (m.get(entry.route_id) || 0) + 1); state.routeHits.set(server_id, m) }
+  const s = state.servers.find((x) => x.id === server_id); if (s) s.hits++
+  renderList()
+  if (server_id !== state.sel) return
+  const cnt = $('#logCnt'); if (cnt) cnt.textContent = list.length
+  if (state.tab === 'log' && !state.logPaused && logMatches(entry)) {
+    const box = $('#logRows'); if (!box) return
+    if (!box.querySelector('.lr')) renderLogRows()
+    else { box.insertAdjacentHTML('afterbegin', logRowHtml(entry, true)); while (box.childElementCount > 500) box.lastElementChild.remove() }
+  } else if (state.tab === 'routes' && !state.dirty) renderRouteList()
+})
+window.ledroide.on(MODULE_ID, 'mock:status', ({ server_id, running }) => {
+  const s = state.servers.find((x) => x.id === server_id); if (!s || s.running === running) return
+  s.running = running; renderList(); if (server_id === state.sel) renderMain()
+})
+
+// ── Import / export ──────────────────────────────────────────────────────────
+
+function importDialog() {
+  const ov = dialog(`<h3>Importer</h3><div class="content">
+    <p class="hint">Formats acceptés : export de ce module (JSON), un serveur seul, ou un document <b>OpenAPI 3 / Swagger 2</b> (JSON ou YAML) — une route par opération, corps générés depuis les exemples ou les schémas.</p>
+    <div class="row"><button id="iFile">📂 Choisir un fichier…</button><span class="muted" id="iName"></span></div>
+    <textarea id="iText" class="body mono" style="min-height:220px" placeholder="…ou collez le contenu ici"></textarea></div>
+    <div class="foot"><span class="spacer"></span><button id="iCancel">Annuler</button><button class="primary" id="iOk">Importer</button></div>`, 'wide')
+  $('#iFile', ov).onclick = () => { const f = $('#importFile'); f.value = ''; f.onchange = async () => { const file = f.files[0]; if (!file) return; if (file.size > 5e6) return toast('Fichier trop volumineux (5 Mo max)', true); $('#iText', ov).value = await file.text(); $('#iName', ov).textContent = file.name }; f.click() }
+  $('#iCancel', ov).onclick = () => ov.remove()
+  $('#iOk', ov).onclick = async () => {
+    const text = $('#iText', ov).value; if (!text.trim()) return toast('Rien à importer', true)
+    const r = await act('config.import', { text }, null, 60000); if (!r) return
+    ov.remove()
+    toast(r.kind === 'openapi' ? `OpenAPI importé : ${r.servers[0].routes.length} route(s)` : `${r.servers.length} serveur(s) importé(s)`)
+    state.servers.push(...r.servers); renderList(); if (r.servers[0] && confirmDiscard()) selectServer(r.servers[0].id, true)
+  }
+}
+$('#btnImport').addEventListener('click', importDialog)
+$('#btnExportAll').addEventListener('click', async () => {
+  const r = await act('config.export'); if (!r) return
+  if (!r.servers.length) return toast('Aucun serveur à exporter', true)
+  download(`serveurs-simules-${new Date().toISOString().slice(0, 10)}.mock.json`, JSON.stringify(r, null, 2))
+})
+
+loadServers()
+</script>
+</body>
+</html>

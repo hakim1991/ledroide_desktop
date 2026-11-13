@@ -1,0 +1,35 @@
+{
+  "id": "uptime-monitor",
+  "name": "Supervision de services",
+  "version": "1.0.0",
+  "description": "Surveille sites et services en continu : sondes HTTP(S) (statut, mot-clé, délai), TCP, ping, DNS et expiration de certificat TLS. Disponibilité 24 h / 7 j / 30 j, temps de réponse, incidents, alertes (et notifications Windows), pause, import/export.",
+  "category": "Réseau",
+  "tags": [
+    "supervision",
+    "uptime",
+    "http",
+    "ping",
+    "tls",
+    "monitoring",
+    "alertes"
+  ],
+  "icon": "📡",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network",
+    "process"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

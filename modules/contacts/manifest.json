@@ -1,0 +1,31 @@
+{
+  "id": "contacts",
+  "name": "Contacts",
+  "version": "1.0.0",
+  "description": "Carnet d'adresses et mini CRM : fiches complètes (e-mails et téléphones multiples, adresse, anniversaire, photo, tags), historique des échanges, relances datées (à faire, en retard), recherche, import/export vCard 3.0/4.0 et CSV, détection et fusion des doublons.",
+  "category": "Productivité",
+  "tags": [
+    "contacts",
+    "crm",
+    "carnet d'adresses",
+    "vcard",
+    "relances"
+  ],
+  "icon": "📇",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

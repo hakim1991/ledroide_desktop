@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Habitudes</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .small { font-size: 11.5px; }
+
+  header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; flex-wrap: wrap; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 8px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: rgba(99,102,241,.22); color: var(--text); }
+  .datenav { display: inline-flex; align-items: center; gap: 2px; }
+  .datenav .lbl { min-width: 170px; text-align: center; font-weight: 600; }
+  .datenav .lbl.past { color: #fcd34d; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border);
+               border-radius: 8px; padding: 4px; z-index: 50; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+  #banner { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: rgba(99,102,241,.16); border-bottom: 1px solid rgba(99,102,241,.45); flex-shrink: 0; }
+  #banner .bt { flex: 1; }
+
+  #main { flex: 1; min-height: 0; display: flex; }
+  #left { flex: 1; min-width: 320px; overflow-y: auto; padding: 14px; }
+  #right { width: clamp(420px, 40%, 580px); flex-shrink: 0; border-left: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 16px; }
+  @media (max-width: 980px) { #main { flex-direction: column; overflow-y: auto; } #left, #right { overflow: visible; width: auto; } #right { border-left: none; border-top: 1px solid var(--border); } }
+
+  .progress-day { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .progress-day .bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .progress-day .bar div { height: 100%; background: linear-gradient(90deg, #6366f1, #22c55e); border-radius: 3px; transition: width .3s; }
+  .cards { display: flex; flex-direction: column; gap: 8px; }
+  .hcard { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+           padding: 10px 12px; cursor: pointer; border-left: 4px solid var(--border); transition: border-color .15s, background .15s; }
+  .hcard:hover { background: #1b1b1f; }
+  .hcard.sel { border-color: color-mix(in srgb, var(--c) 60%, var(--border)); border-left-color: var(--c); }
+  .hcard.done { border-left-color: var(--c); }
+  .hcard.off { opacity: .55; }
+  .hcard .ico { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 21px;
+                background: color-mix(in srgb, var(--c) 20%, transparent); flex-shrink: 0; }
+  .hcard .body { flex: 1; min-width: 0; }
+  .hcard .n { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hcard .sub { color: var(--muted); font-size: 11.5px; margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .hcard .streak { color: #fdba74; font-weight: 600; }
+  .strip { display: flex; gap: 3px; margin-top: 6px; }
+  .strip i { width: 15px; height: 15px; border-radius: 4px; background: var(--surface2); border: 1px solid var(--border); font-style: normal;
+             font-size: 8.5px; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+  .strip i.on { background: var(--c); border-color: var(--c); color: #fff; }
+  .strip i.part { background: color-mix(in srgb, var(--c) 40%, var(--surface2)); }
+  .strip i.ns { opacity: .35; }
+  .strip i.cur { outline: 1.5px solid #e4e4e7; outline-offset: 1px; }
+  .chk { width: 42px; height: 42px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--c) 70%, #3f3f46); background: transparent;
+         font-size: 20px; color: transparent; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .chk:hover:not(:disabled) { background: color-mix(in srgb, var(--c) 18%, transparent); border-color: var(--c); }
+  .chk.on { background: var(--c); border-color: var(--c); color: #fff; }
+  .chk.on:hover:not(:disabled) { background: var(--c); filter: brightness(1.1); }
+  .qty { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .qty button { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: 16px; }
+  .ring { position: relative; width: 46px; height: 46px; cursor: pointer; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .v { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 600; line-height: 1.05; }
+  .ring .v small { font-size: 9px; color: var(--muted); font-weight: 400; }
+  .notebox { margin-top: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+  .notebox h4 { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 6px; display: flex; gap: 6px; }
+  .notebox textarea { width: 100%; min-height: 70px; resize: vertical; background: var(--bg); }
+  .kbd { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; padding: 0 4px; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); }
+
+  .dhead { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .dhead .ico { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: color-mix(in srgb, var(--c) 20%, transparent); }
+  .dhead h2 { font-size: 17px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; }
+  .tile .l { font-size: 11px; color: var(--muted); }
+  .tile .v { font-size: 19px; font-weight: 650; margin-top: 2px; }
+  .tile .v small { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .goal { margin-bottom: 14px; }
+  .goal .track { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; margin-top: 5px; }
+  .goal .track div { height: 100%; background: var(--c); border-radius: 4px; }
+  .sect { font-size: 12px; color: var(--muted); font-weight: 500; margin: 14px 0 8px; display: flex; align-items: center; gap: 6px; }
+  .heat { overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; scrollbar-color: #3f3f46 transparent; }
+  .heat::-webkit-scrollbar { height: 6px; } .heat::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+  .heat svg text { fill: #71717a; font-size: 9.5px; font-family: inherit; }
+  .heat rect.d { cursor: pointer; }
+  .heat rect.d:hover { stroke: #e4e4e7; stroke-width: 1; }
+  .legend { display: flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--muted); justify-content: flex-end; margin-top: 4px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .months { display: flex; align-items: flex-end; gap: 4px; height: 80px; margin-top: 6px; }
+  .months div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9.5px; color: var(--muted); height: 100%; justify-content: flex-end; }
+  .months b { width: 100%; background: var(--c); border-radius: 3px 3px 0 0; min-height: 1px; opacity: .85; }
+  .desc { color: #a1a1aa; line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap; }
+
+  .ov { max-width: 1100px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .panel h3 { font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  table.hs { width: 100%; border-collapse: collapse; }
+  table.hs td, table.hs th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  table.hs th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+  table.hs td.r, table.hs th.r { text-align: right; }
+  .rate { display: inline-block; width: 80px; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+  .rate div { height: 100%; background: var(--c); }
+  .note-item { padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .note-item b { font-size: 11.5px; color: var(--muted); font-weight: 500; display: block; margin-bottom: 2px; }
+  .note-item div { white-space: pre-wrap; line-height: 1.45; }
+
+  #empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; text-align: center; max-width: 440px; }
+  .card h2 { font-size: 17px; margin-bottom: 6px; }
+  .card p { color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+  .card .actions { display: flex; gap: 8px; justify-content: center; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(560px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.small { width: min(360px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .field.row { flex-direction: row; align-items: center; gap: 8px; }
+  .field textarea { min-height: 54px; resize: vertical; }
+  .swatches, .emojis { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sw { width: 22px; height: 22px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; }
+  .sw.on { border-color: #fff; }
+  .emojis span { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 17px; cursor: pointer; border: 1px solid transparent; }
+  .emojis span:hover { background: var(--surface2); }
+  .emojis span.on { border-color: var(--accent); background: rgba(99,102,241,.15); }
+  .wd { display: flex; gap: 4px; }
+  .wd button { width: 34px; padding: 5px 0; }
+  .wd button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  #tip { position: fixed; z-index: 80; background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
+         font-size: 12px; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.5); line-height: 1.45; max-width: 280px; white-space: pre-wrap; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+  @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+  .pop { animation: pop .3s ease; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">✅ Habitudes</span>
+  <div class="seg" id="tabs">
+    <button data-tab="today">Suivi</button><button data-tab="overview">Vue d'ensemble</button><button data-tab="archived">Archivées <span id="archN"></span></button>
+  </div>
+  <span class="spacer"></span>
+  <div class="datenav" id="dateNav">
+    <button class="icon ghost" id="dPrev" title="Jour précédent (←)">‹</button>
+    <span class="lbl" id="dLbl"></span>
+    <button class="icon ghost" id="dNext" title="Jour suivant (→)">›</button>
+    <button class="ghost" id="dToday">Aujourd'hui</button>
+  </div>
+  <button class="primary" id="btnAdd">＋ Habitude</button>
+  <div class="menu">
+    <button class="icon" id="btnMenu" title="Plus d'actions">⋯</button>
+    <div class="menu-list hidden" id="menuList">
+      <button data-act="export">⬇️ Exporter (JSON)</button>
+      <button data-act="import">⬆️ Importer (JSON)…</button>
+      <hr>
+      <button data-act="notif">🔔 Autoriser les notifications système</button>
+      <button data-act="demo">🧪 Ajouter des habitudes d'exemple</button>
+    </div>
+  </div>
+</header>
+<div id="banner" class="hidden"></div>
+
+<div id="main">
+  <div id="left"></div>
+  <div id="right"></div>
+</div>
+<div id="empty" class="hidden">
+  <div class="card">
+    <h2>Construisez de bonnes habitudes</h2>
+    <p>Créez une habitude quotidienne, à faire quelques fois par semaine ou certains jours, puis cochez-la chaque jour pour faire grandir votre série.</p>
+    <div class="actions"><button class="primary" id="emptyAdd">＋ Créer une habitude</button><button id="emptyDemo">🧪 Exemples</button></div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".json,application/json" class="hidden" />
+<div id="tip" class="hidden"></div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'habit-tracker'
+const call = (action, payload = {}, timeout = 20000) => window.ledroide.call(MODULE_ID, action, { today: todayIso(), ...payload }, { timeout })
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const COLORS = ['#6366f1', '#38bdf8', '#22c55e', '#10b981', '#eab308', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#14b8a6', '#64748b']
+const EMOJIS = ['✅', '💧', '🏃', '🧘', '📚', '🥗', '😴', '🦷', '💊', '🚭', '✍️', '🎸', '🧹', '💪', '🚶', '🌱', '📵', '🍎', '🙏', '💰', '🧠', '☀️', '🚴', '🗣️']
+const WD = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+const WD_LONG = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
+const MSHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+const DAY = 86400000
+
+const pad = (n) => String(n).padStart(2, '0')
+const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const todayIso = () => isoOf(new Date())
+const parse = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return isoOf(d) }
+const wdIdx = (s) => (parse(s).getDay() + 6) % 7
+const fmtLong = (s) => parse(s).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+const fmtShort = (s) => parse(s).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+const pct = (r) => r == null ? '—' : Math.round(r * 100) + ' %'
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+
+const state = { habits: [], archived: [], archivedCount: 0, tab: 'today', date: todayIso(), sel: Number(localGet('hab-sel')) || null,
+                note: '', detailYear: new Date().getFullYear(), detail: null, overviewYear: new Date().getFullYear() }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+async function act(action, payload, okMsg) {
+  try { const r = await call(action, payload); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+
+const target = (h) => (h.kind === 'qty' ? h.target : 1)
+function scheduleText(h) {
+  if (h.schedule === 'daily') return 'Chaque jour'
+  if (h.schedule === 'weekly') return `${h.per_week} fois par semaine`
+  if (h.days.length === 5 && h.days.every((d) => d < 5)) return 'En semaine'
+  if (h.days.length === 2 && h.days.includes(5) && h.days.includes(6)) return 'Le week-end'
+  return h.days.map((d) => WD_LONG[d].slice(0, 3) + '.').join(' ')
+}
+const scheduledOn = (h, iso) => h.schedule !== 'days' || h.days.includes(wdIdx(iso))
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+
+async function load() {
+  const r = await act('habits.list', { date: state.date })
+  if (!r) return
+  state.habits = r.habits
+  state.archivedCount = r.archived_count
+  if (state.date === todayIso()) state.note = r.note
+  else state.note = (await act('note.get', { date: state.date }))?.note ?? ''
+  if (!state.habits.some((h) => h.id === state.sel)) state.sel = state.habits[0]?.id ?? null
+  render()
+  syncBanner()
+  checkReminders()
+}
+
+function render() {
+  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.tab))
+  $('#archN').textContent = state.archivedCount ? `(${state.archivedCount})` : ''
+  const empty = !state.habits.length && !state.archivedCount
+  $('#empty').classList.toggle('hidden', !empty); $('#main').classList.toggle('hidden', empty)
+  $('#dateNav').classList.toggle('hidden', state.tab !== 'today' || empty)
+  const isToday = state.date === todayIso()
+  $('#dLbl').textContent = isToday ? 'Aujourd\'hui · ' + fmtShort(state.date) : fmtLong(state.date)
+  $('#dLbl').classList.toggle('past', !isToday)
+  $('#dNext').disabled = isToday
+  $('#dToday').classList.toggle('hidden', isToday)
+  if (empty) return
+  $('#right').classList.toggle('hidden', state.tab !== 'today')
+  if (state.tab === 'today') { renderToday(); renderDetail() }
+  else if (state.tab === 'overview') renderOverview()
+  else renderArchived()
+}
+
+// ── Today ─────────────────────────────────────────────────────────────────────
+
+function valueOn(h, iso) { return iso === todayIso() ? h.today_value : (h.recent[iso] || 0) }
+
+function renderToday() {
+  const left = $('#left')
+  const iso = state.date
+  const due = state.habits.filter((h) => h.schedule === 'weekly' ? true : scheduledOn(h, iso))
+  const doneN = due.filter((h) => valueOn(h, iso) >= target(h)).length
+  left.innerHTML = `
+    <div class="progress-day"><b>${doneN} / ${due.length}</b><span class="muted">${iso === todayIso() ? 'aujourd\'hui' : 'ce jour-là'}</span>
+      <div class="bar"><div style="width:${due.length ? doneN / due.length * 100 : 0}%"></div></div>
+      <span class="muted small">Touches <span class="kbd">1</span>–<span class="kbd">9</span> pour cocher</span></div>
+    <div class="cards">${state.habits.map((h, i) => card(h, i, iso)).join('') || '<div class="muted">Toutes vos habitudes sont archivées.</div>'}</div>
+    <div class="notebox"><h4>📝 ${iso === todayIso() ? 'Note du jour' : 'Note — ' + fmtShort(iso)} <span class="spacer"></span><span class="small" id="noteState"></span></h4>
+      <textarea id="note" maxlength="10000" placeholder="Comment s'est passée la journée ? Humeur, difficultés, victoires…">${esc(state.note)}</textarea></div>`
+  let noteT
+  $('#note').addEventListener('input', (e) => {
+    clearTimeout(noteT); $('#noteState').textContent = '…'
+    const d = iso, v = e.target.value
+    noteT = setTimeout(async () => { if (await act('note.set', { date: d, note: v })) { state.note = v; const s = $('#noteState'); if (s) s.textContent = 'enregistrée' } }, 600)
+  })
+}
+
+function card(h, i, iso) {
+  const v = valueOn(h, iso), t = target(h), done = v >= t
+  const sched = h.schedule === 'weekly' || scheduledOn(h, iso)
+  const st = h.stats
+  let strip = ''
+  for (let k = 6; k >= 0; k--) {
+    const d = addDays(iso, -k)
+    const val = d === todayIso() ? h.today_value : (h.recent[d] || 0)
+    const cl = val >= t ? 'on' : val > 0 ? 'part' : ''
+    strip += `<i class="${cl} ${scheduledOn(h, d) ? '' : 'ns'} ${k === 0 ? 'cur' : ''}" data-strip="${h.id}" data-d="${d}" title="${fmtShort(d)}${h.kind === 'qty' ? ' : ' + val + ' / ' + t : ''}">${WD[wdIdx(d)]}</i>`
+  }
+  const week = h.schedule === 'weekly' ? ` · cette semaine ${st.week_count || 0}/${h.per_week}` : ''
+  const control = h.kind === 'qty' ? (() => {
+    const r = 19, C = 2 * Math.PI * r, f = Math.min(1, v / t)
+    return `<div class="qty"><button data-dec="${h.id}" title="−1">−</button>
+      <div class="ring" data-ring="${h.id}" title="Saisir une valeur"><svg width="46" height="46"><circle cx="23" cy="23" r="${r}" fill="none" stroke="#27272a" stroke-width="4"/>
+        <circle cx="23" cy="23" r="${r}" fill="none" stroke="${h.color}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - f)}"/></svg>
+        <div class="v">${v}<small>/${t}</small></div></div>
+      <button data-inc="${h.id}" title="+1">＋</button></div>`
+  })() : `<button class="chk ${done ? 'on' : ''}" data-toggle="${h.id}" title="${done ? 'Décocher' : 'Cocher'} (${i + 1})">✓</button>`
+  return `<div class="hcard ${done ? 'done' : ''} ${h.id === state.sel ? 'sel' : ''} ${sched ? '' : 'off'}" style="--c:${h.color}" data-card="${h.id}">
+    <div class="ico">${esc(h.icon)}</div>
+    <div class="body"><div class="n">${esc(h.name)}</div>
+      <div class="sub"><span>${scheduleText(h)}${h.kind === 'qty' ? ' · ' + t + ' ' + esc(h.unit) : ''}${week}</span>
+        ${st.streak ? `<span class="streak">🔥 ${st.streak} ${st.streak_unit === 'semaines' ? 'sem.' : 'j'}</span>` : ''}
+        ${h.reminder ? `<span>⏰ ${h.reminder}</span>` : ''}${sched ? '' : '<span>· pas prévu ce jour</span>'}</div>
+      <div class="strip">${strip}</div></div>
+    ${control}</div>`
+}
+
+$('#left').addEventListener('click', async (e) => {
+  const tg = e.target.closest('[data-toggle]'), inc = e.target.closest('[data-inc]'), dec = e.target.closest('[data-dec]')
+  const ring = e.target.closest('[data-ring]'), strip = e.target.closest('[data-strip]')
+  if (tg) return setEntry(+tg.dataset.toggle, state.date, { toggle: true }, tg)
+  if (inc) return setEntry(+inc.dataset.inc, state.date, { delta: 1 }, inc)
+  if (dec) return setEntry(+dec.dataset.dec, state.date, { delta: -1 })
+  if (ring) return askValue(state.habits.find((h) => h.id === +ring.dataset.ring), state.date)
+  if (strip) {
+    const h = state.habits.find((x) => x.id === +strip.dataset.strip)
+    return h.kind === 'qty' ? askValue(h, strip.dataset.d) : setEntry(h.id, strip.dataset.d, { toggle: true })
+  }
+  const c = e.target.closest('[data-card]')
+  if (c && +c.dataset.card !== state.sel) { state.sel = +c.dataset.card; localSet('hab-sel', state.sel); state.detail = null; renderToday(); renderDetail() }
+})
+
+async function setEntry(hid, date, opts, el) {
+  const r = await act('entry.set', { habit_id: hid, date, ...opts })
+  if (!r) return
+  const idx = state.habits.findIndex((h) => h.id === hid)
+  if (idx >= 0) state.habits[idx] = r.habit
+  const h = r.habit
+  if (r.value >= target(h) && (opts.toggle || (opts.delta > 0 && r.value - opts.delta < target(h)))) {
+    const s = h.stats.streak
+    if (h.goal_streak && s === h.goal_streak) toast(`🏆 Objectif atteint : ${s} ${h.stats.streak_unit} d'affilée !`)
+    else if (s && [7, 14, 21, 30, 50, 100, 200, 365].includes(s)) toast(`🔥 Série de ${s} ${h.stats.streak_unit} !`)
+  }
+  if (hid === state.sel) state.detail = null
+  renderToday(); renderDetail(); syncBanner()
+  if (el) $(`[data-card="${hid}"] .chk, [data-card="${hid}"] .ring`)?.classList.add('pop')
+}
+
+function askValue(h, date) {
+  const cur = valueOn(h, date)
+  const ov = dialog(`<h3>${esc(h.icon)} ${esc(h.name)} — ${fmtShort(date)}</h3>
+    <div class="content"><div class="field full"><label>Quantité (${esc(h.unit) || 'unités'}, objectif ${h.target})</label>
+      <input type="number" id="qv" min="0" max="100000" value="${cur}"></div></div>
+    <div class="foot"><button class="ghost" id="qz">Remettre à zéro</button><span class="spacer"></span><button id="qc">Annuler</button><button class="primary" id="qs">Enregistrer</button></div>`, 'small')
+  const save = async (v) => { ov.remove(); await setEntry(h.id, date, { value: Math.max(0, v | 0) }) }
+  $('#qs', ov).onclick = () => save(+$('#qv', ov).value)
+  $('#qz', ov).onclick = () => save(0)
+  $('#qc', ov).onclick = () => ov.remove()
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(+$('#qv', ov).value) })
+  setTimeout(() => $('#qv', ov).select(), 0)
+}
+
+// ── Detail ────────────────────────────────────────────────────────────────────
+
+async function renderDetail() {
+  const right = $('#right')
+  const h = state.habits.find((x) => x.id === state.sel)
+  if (!h) { right.innerHTML = '<div class="muted">Sélectionnez une habitude.</div>'; return }
+  if (!state.detail || state.detail.habit.id !== h.id || state.detail.year !== state.detailYear) {
+    const token = (renderDetail.token = {})
+    const d = await act('habit.detail', { id: h.id, year: state.detailYear })
+    if (!d || token !== renderDetail.token) return
+    state.detail = d
+  }
+  const d = state.detail, st = d.habit.stats, unit = st.streak_unit
+  const months = Array.from({ length: 12 }, (_, i) => d.monthly_done[`${d.year}-${pad(i + 1)}`] || 0)
+  const maxM = Math.max(1, ...months)
+  right.innerHTML = `
+    <div class="dhead" style="--c:${h.color}"><div class="ico">${esc(h.icon)}</div><div style="flex:1;min-width:0"><h2>${esc(h.name)}</h2>
+      <div class="small muted">${scheduleText(h)}${h.kind === 'qty' ? ' · objectif ' + h.target + ' ' + esc(h.unit) + ' par jour' : ''} · depuis le ${parse(h.start_date).toLocaleDateString('fr-FR')}</div></div>
+      <button id="dEdit">✎ Modifier</button></div>
+    ${h.description ? `<div class="desc">${esc(h.description)}</div>` : ''}
+    <div class="tiles">
+      <div class="tile"><div class="l">Série actuelle</div><div class="v">${st.streak} <small>${unit}</small></div></div>
+      <div class="tile"><div class="l">Record</div><div class="v">${st.best_streak} <small>${unit}</small></div></div>
+      <div class="tile"><div class="l">${h.kind === 'qty' ? 'Total' : 'Jours réussis'}</div><div class="v">${h.kind === 'qty' ? st.total_value.toLocaleString('fr-FR') + ' <small>' + esc(h.unit) + '</small>' : st.total_done}</div></div>
+      <div class="tile"><div class="l">Réussite ${h.schedule === 'weekly' ? '4 sem.' : '30 j'}</div><div class="v">${pct(st.rate_30)}</div></div>
+      <div class="tile"><div class="l">Réussite globale</div><div class="v">${pct(st.rate_all)}</div></div>
+      <div class="tile"><div class="l">${h.schedule === 'weekly' ? 'Cette semaine' : 'Aujourd\'hui'}</div><div class="v">${h.schedule === 'weekly' ? (st.week_count || 0) + ' <small>/ ' + h.per_week + '</small>' : h.today_value >= target(h) ? '✓' : h.kind === 'qty' ? h.today_value + ' <small>/ ' + h.target + '</small>' : '—'}</div></div>
+    </div>
+    ${h.goal_streak ? `<div class="goal" style="--c:${h.color}"><div class="small"><b>Objectif :</b> ${h.goal_streak} ${unit} d'affilée <span class="muted">— ${st.streak} / ${h.goal_streak}${st.goal_progress >= 1 ? ' 🏆' : ''}</span></div>
+      <div class="track"><div style="width:${st.goal_progress * 100}%"></div></div></div>` : ''}
+    <div class="sect">Calendrier <span class="spacer"></span>
+      <button class="icon ghost" id="yPrev" ${d.years[0] >= d.year ? 'disabled' : ''}>‹</button><b style="color:var(--text)">${d.year}</b>
+      <button class="icon ghost" id="yNext" ${d.year >= new Date().getFullYear() ? 'disabled' : ''}>›</button></div>
+    <div class="heat" id="heat">${heatmap(d.year, (iso) => {
+      const v = d.entries[iso] || 0
+      return { level: v >= target(h) ? 4 : v > 0 ? 1 + Math.floor(v / target(h) * 3) : 0, title: `${fmtShort(iso)}${h.kind === 'qty' ? ' : ' + v + ' / ' + h.target + ' ' + h.unit : v ? ' : fait ✓' : ''}`, dim: !scheduledOn(h, iso) }
+    }, h.color, h.start_date, right.clientWidth - 34)}</div>
+    <div class="legend">Moins <i style="background:#1f1f23"></i>${[1, 2, 3, 4].map((l) => `<i style="background:${shade(h.color, l)}"></i>`).join('')} Plus</div>
+    <div class="sect">Jours réussis par mois</div>
+    <div class="months" style="--c:${h.color}">${months.map((m, i) => `<div title="${MSHORT[i]} : ${m}"><span>${m || ''}</span><b style="height:${m / maxM * 56}px"></b>${MSHORT[i].slice(0, 3)}</div>`).join('')}</div>
+    <div style="display:flex;gap:6px;margin-top:18px"><button id="dArch">🗄 Archiver</button><span class="spacer"></span><button class="danger" id="dDel">🗑 Supprimer</button></div>`
+  $('#dEdit').onclick = () => openHabitDialog(h)
+  $('#yPrev').onclick = () => { state.detailYear--; renderDetail() }
+  $('#yNext').onclick = () => { state.detailYear++; renderDetail() }
+  $('#dArch').onclick = async () => { if (await act('habit.archive', { id: h.id, archived: true }, 'Habitude archivée')) { state.detail = null; load() } }
+  $('#dDel').onclick = async () => {
+    if (!confirm(`Supprimer « ${h.name} » et tout son historique ? (Pour la mettre de côté, préférez l'archivage.)`)) return
+    if (await act('habit.delete', { id: h.id }, 'Habitude supprimée')) { state.detail = null; load() }
+  }
+  const hb = $('#heat'); hb.scrollLeft = hb.scrollWidth
+  bindHeat(hb, (iso) => {
+    if (iso > todayIso()) return
+    if (h.kind === 'qty') askValue(h, iso)
+    else setEntry(h.id, iso, { toggle: true })
+  })
+}
+
+function shade(color, level) {
+  const a = [0, 0.3, 0.5, 0.72, 1][level]
+  return `color-mix(in srgb, ${color} ${Math.round(a * 100)}%, #1f1f23)`
+}
+
+function heatmap(year, cellFn, color, startIso, width = 0) {
+  const G = 2, L = 22, T = 16
+  const first = new Date(year, 0, 1)
+  const offset = (first.getDay() + 6) % 7
+  const days = (new Date(year + 1, 0, 1) - first) / DAY
+  const weeks = Math.ceil((days + offset) / 7)
+  const S = width ? Math.max(6, Math.min(14, Math.floor((width - L) / weeks) - G)) : 12
+  const W = L + weeks * (S + G), H = T + 7 * (S + G)
+  const today = todayIso()
+  let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+  ;[0, 2, 4, 6].forEach((r) => (svg += `<text x="0" y="${T + r * (S + G) + 9.5}">${WD[r]}</text>`))
+  let lastMonth = -1
+  for (let i = 0; i < days; i++) {
+    const d = new Date(year, 0, 1 + i)
+    const iso = isoOf(d)
+    const col = Math.floor((i + offset) / 7), row = (i + offset) % 7
+    const x = L + col * (S + G), y = T + row * (S + G)
+    if (d.getMonth() !== lastMonth) { lastMonth = d.getMonth(); svg += `<text x="${x}" y="10">${MSHORT[lastMonth]}</text>` }
+    const future = iso > today
+    const c = future ? { level: 0, title: fmtShort(iso) } : cellFn(iso)
+    const before = startIso && iso < startIso
+    const fill = c.level ? (typeof color === 'function' ? color(c.level) : shade(color, c.level)) : '#1f1f23'
+    svg += `<rect class="${future ? '' : 'd'}" data-d="${iso}" data-t="${esc(c.title)}" x="${x}" y="${y}" width="${S}" height="${S}" rx="2.5" fill="${fill}"
+      opacity="${future || before ? 0.35 : c.dim && !c.level ? 0.5 : 1}" ${iso === today ? 'stroke="#e4e4e7" stroke-width="1.2"' : ''}/>`
+    if (c.mark) svg += `<circle cx="${x + S - 2.5}" cy="${y + 2.5}" r="2" fill="#fcd34d" pointer-events="none"/>`
+  }
+  return svg + '</svg>'
+}
+const tip = $('#tip')
+function bindHeat(root, onClick) {
+  root.addEventListener('mousemove', (e) => {
+    const r = e.target.closest('rect[data-t]')
+    if (!r) { tip.classList.add('hidden'); return }
+    tip.textContent = r.dataset.t; tip.classList.remove('hidden')
+    const b = tip.getBoundingClientRect()
+    tip.style.left = Math.min(innerWidth - b.width - 6, e.clientX + 12) + 'px'; tip.style.top = Math.min(innerHeight - b.height - 6, e.clientY + 14) + 'px'
+  })
+  root.addEventListener('mouseleave', () => tip.classList.add('hidden'))
+  root.addEventListener('click', (e) => { const r = e.target.closest('rect.d'); if (r && onClick) onClick(r.dataset.d) })
+}
+
+// ── Overview / archived ───────────────────────────────────────────────────────
+
+async function renderOverview() {
+  const left = $('#left')
+  const r = await act('overview', { year: state.overviewYear })
+  if (!r || state.tab !== 'overview') return
+  const notes = await act('notes.list', { limit: 30 })
+  const vals = Object.entries(r.days)
+  const perfect = vals.filter(([, [d, n]]) => d === n && n).length
+  const avg = vals.length ? vals.reduce((s, [, [d, n]]) => s + d / n, 0) / vals.length : 0
+  left.innerHTML = `<div class="ov">
+    <div class="panel"><h3>Toutes les habitudes — ${r.year} <span class="spacer"></span>
+      <button class="icon ghost" id="oPrev">‹</button><button class="icon ghost" id="oNext" ${r.year >= new Date().getFullYear() ? 'disabled' : ''}>›</button></h3>
+      <div class="small muted" style="margin-bottom:8px">Part des habitudes prévues réalisées chaque jour · ${perfect} journée(s) parfaite(s) · moyenne ${Math.round(avg * 100)} % · <span style="color:#fcd34d">●</span> = note du jour</div>
+      <div class="heat" id="oHeat">${heatmap(r.year, (iso) => {
+        const v = r.days[iso], note = r.notes[iso]
+        const f = v ? v[0] / v[1] : 0
+        return { level: !v || !v[0] ? 0 : f >= 1 ? 4 : f >= 0.66 ? 3 : f >= 0.33 ? 2 : 1, mark: !!note,
+                 title: `${fmtShort(iso)}${v ? ` : ${v[0]} / ${v[1]}` : ''}${note ? '\n📝 ' + note.slice(0, 160) : ''}` }
+      }, '#22c55e', null, Math.min(left.clientWidth - 28, 1100) - 32)}</div>
+      <div class="legend">0 %<i style="background:#1f1f23"></i>${[1, 2, 3, 4].map((l) => `<i style="background:${shade('#22c55e', l)}"></i>`).join('')} 100 %</div></div>
+    <div class="panel"><h3>Bilan par habitude</h3>
+      <table class="hs"><thead><tr><th>Habitude</th><th class="r">Série</th><th class="r">Record</th><th>Réussite 30 j</th><th>Globale</th></tr></thead><tbody>
+      ${r.habits.map((h) => `<tr style="--c:${h.color}"><td>${esc(h.icon)} ${esc(h.name)}</td><td class="r">${h.stats.streak} ${h.stats.streak_unit === 'semaines' ? 'sem.' : 'j'}</td>
+        <td class="r">${h.stats.best_streak}</td><td><span class="rate"><div style="width:${(h.stats.rate_30 || 0) * 100}%"></div></span>${pct(h.stats.rate_30)}</td>
+        <td><span class="rate"><div style="width:${(h.stats.rate_all || 0) * 100}%"></div></span>${pct(h.stats.rate_all)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Aucune habitude active.</td></tr>'}</tbody></table></div>
+    <div class="panel"><h3>Notes récentes</h3>${(notes?.notes || []).map((n) => `<div class="note-item"><b>${fmtLong(n.date)}</b><div>${esc(n.note)}</div></div>`).join('') || '<div class="muted">Aucune note pour le moment.</div>'}</div>
+  </div>`
+  $('#oPrev').onclick = () => { state.overviewYear--; renderOverview() }
+  $('#oNext').onclick = () => { state.overviewYear++; renderOverview() }
+  bindHeat($('#oHeat'), (iso) => { state.date = iso; state.tab = 'today'; load() })
+}
+
+async function renderArchived() {
+  const r = await act('habits.list', { archived: true })
+  if (!r || state.tab !== 'archived') return
+  $('#left').innerHTML = `<div class="ov"><p class="muted" style="margin-bottom:12px">Les habitudes archivées ne sont plus proposées au suivi ni comptées dans la vue d'ensemble ; leur historique est conservé.</p>
+    <div class="cards">${r.habits.map((h) => `<div class="hcard" style="--c:${h.color};cursor:default"><div class="ico">${esc(h.icon)}</div>
+      <div class="body"><div class="n">${esc(h.name)}</div><div class="sub">${scheduleText(h)} · record ${h.stats.best_streak} ${h.stats.streak_unit} · ${h.stats.total_done} jour(s) réussi(s) · réussite ${pct(h.stats.rate_all)}</div></div>
+      <button data-restore="${h.id}">↩ Restaurer</button><button class="danger icon" data-del="${h.id}" title="Supprimer définitivement">🗑</button></div>`).join('') || '<div class="muted">Aucune habitude archivée.</div>'}</div></div>`
+  $$('[data-restore]').forEach((b) => (b.onclick = async () => { if (await act('habit.archive', { id: +b.dataset.restore, archived: false }, 'Habitude restaurée')) { await load(); renderArchived() } }))
+  $$('[data-del]').forEach((b) => (b.onclick = async () => {
+    const h = r.habits.find((x) => x.id === +b.dataset.del)
+    if (!confirm(`Supprimer définitivement « ${h.name} » et son historique ?`)) return
+    if (await act('habit.delete', { id: h.id }, 'Supprimée')) { await load(); renderArchived() }
+  }))
+}
+
+// ── Habit dialog ──────────────────────────────────────────────────────────────
+
+function dialog(html, cls = '') {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${cls}">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') ov.remove() })
+  return ov
+}
+
+function openHabitDialog(h) {
+  const x = h ? { ...h, days: [...h.days] } : { name: '', icon: '✅', color: COLORS[state.habits.length % COLORS.length], kind: 'bool', target: 8, unit: '',
+    schedule: 'daily', per_week: 3, days: [0, 1, 2, 3, 4], goal_streak: 0, reminder: '', description: '', start_date: todayIso() }
+  if (x.kind === 'bool') x.target = h ? 8 : x.target
+  const ov = dialog(`
+    <h3>${h ? 'Modifier l\'habitude' : 'Nouvelle habitude'}</h3>
+    <div class="content">
+      <div class="field full"><label>Nom</label><input id="hName" maxlength="80" value="${esc(x.name)}" placeholder="Ex. Boire de l'eau, Méditer 10 min…"></div>
+      <div class="field full"><label>Icône</label><div class="emojis" id="hIcons">${EMOJIS.map((e) => `<span class="${e === x.icon ? 'on' : ''}">${e}</span>`).join('')}
+        <input id="hIcon" maxlength="8" value="${esc(x.icon)}" style="width:54px;text-align:center" title="Ou tapez un emoji"></div></div>
+      <div class="field full"><label>Couleur</label><div class="swatches" id="hColors">${COLORS.map((c) => `<div class="sw ${c === x.color ? 'on' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')}</div></div>
+      <div class="field"><label>Type</label><div class="seg" id="hKind"><button data-k="bool">Oui / non</button><button data-k="qty">Quantité</button></div></div>
+      <div class="field" id="qtyWrap"><label>Objectif par jour</label><div style="display:flex;gap:6px"><input type="number" id="hTarget" min="1" max="100000" value="${x.target}" style="width:80px">
+        <input id="hUnit" maxlength="20" value="${esc(x.unit)}" placeholder="unité (verres, pages…)" style="flex:1;min-width:0"></div></div>
+      <div class="field full"><label>Fréquence</label><div class="seg" id="hSched"><button data-s="daily">Chaque jour</button><button data-s="weekly">x fois par semaine</button><button data-s="days">Jours précis</button></div></div>
+      <div class="field full" id="perWeekWrap"><label>Nombre de fois par semaine (du lundi au dimanche)</label><input type="number" id="hPerWeek" min="1" max="7" value="${x.per_week}" style="width:80px"></div>
+      <div class="field full" id="daysWrap"><label>Jours</label><div class="wd" id="hDays">${WD.map((d, i) => `<button data-d="${i}" title="${WD_LONG[i]}">${d}</button>`).join('')}</div></div>
+      <div class="field"><label id="goalLbl">Objectif de série (0 = aucun)</label><input type="number" id="hGoal" min="0" max="3650" value="${x.goal_streak}"></div>
+      <div class="field"><label>Rappel (heure)</label><div style="display:flex;gap:6px;align-items:center"><input type="time" id="hRem" value="${x.reminder}" style="flex:1">
+        <button class="ghost icon" id="hRemClr" title="Pas de rappel">✕</button></div></div>
+      <div class="field"><label>Date de début</label><input type="date" id="hStart" value="${x.start_date}" max="${todayIso()}"></div>
+      <div class="field full"><label>Description / motivation</label><textarea id="hDesc" maxlength="2000">${esc(x.description)}</textarea></div>
+      <div class="field full small muted">Rappel : notification dans l'application à l'heure choisie, uniquement si le module Habitudes est ouvert (onglet actif ou en arrière-plan dans LedroideDesktop) et si l'habitude n'est pas encore faite.</div>
+    </div>
+    <div class="foot"><span class="spacer"></span><button id="hCancel">Annuler</button><button class="primary" id="hSave">${h ? 'Enregistrer' : 'Créer'}</button></div>`)
+  const q = (s) => $(s, ov)
+  const sync = () => {
+    $$('#hKind button', ov).forEach((b) => b.classList.toggle('on', b.dataset.k === x.kind))
+    $$('#hSched button', ov).forEach((b) => b.classList.toggle('on', b.dataset.s === x.schedule))
+    $$('#hDays button', ov).forEach((b) => b.classList.toggle('on', x.days.includes(+b.dataset.d)))
+    q('#qtyWrap').style.visibility = x.kind === 'qty' ? 'visible' : 'hidden'
+    q('#perWeekWrap').classList.toggle('hidden', x.schedule !== 'weekly'); q('#daysWrap').classList.toggle('hidden', x.schedule !== 'days')
+    q('#goalLbl').textContent = `Objectif de série en ${x.schedule === 'weekly' ? 'semaines' : 'jours'} (0 = aucun)`
+  }
+  sync()
+  q('#hKind').onclick = (e) => { const b = e.target.closest('[data-k]'); if (b) { x.kind = b.dataset.k; sync() } }
+  q('#hSched').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) { x.schedule = b.dataset.s; sync() } }
+  q('#hDays').onclick = (e) => { const b = e.target.closest('[data-d]'); if (!b) return; const d = +b.dataset.d; x.days = x.days.includes(d) ? x.days.filter((y) => y !== d) : [...x.days, d]; sync() }
+  q('#hIcons').onclick = (e) => { const s = e.target.closest('span'); if (!s) return; x.icon = s.textContent; q('#hIcon').value = x.icon; $$('#hIcons span', ov).forEach((y) => y.classList.toggle('on', y === s)) }
+  q('#hIcon').oninput = () => { x.icon = q('#hIcon').value.trim(); $$('#hIcons span', ov).forEach((y) => y.classList.toggle('on', y.textContent === x.icon)) }
+  q('#hColors').onclick = (e) => { const s = e.target.closest('.sw'); if (!s) return; x.color = s.dataset.c; $$('#hColors .sw', ov).forEach((y) => y.classList.toggle('on', y === s)) }
+  q('#hRemClr').onclick = () => (q('#hRem').value = '')
+  q('#hCancel').onclick = () => ov.remove()
+  const save = async () => {
+    const payload = { name: q('#hName').value, icon: x.icon || '✅', color: x.color, kind: x.kind, target: +q('#hTarget').value || 1, unit: q('#hUnit').value,
+      schedule: x.schedule, per_week: +q('#hPerWeek').value || 1, days: x.days, goal_streak: +q('#hGoal').value || 0, reminder: q('#hRem').value,
+      description: q('#hDesc').value, start_date: q('#hStart').value || null }
+    if (x.schedule === 'days' && !x.days.length) { toast('Choisissez au moins un jour', true); return }
+    const r = await act('habit.save', { id: h?.id, habit: payload }, h ? 'Habitude enregistrée' : 'Habitude créée')
+    if (!r) return
+    ov.remove()
+    state.sel = r.habit.id; localSet('hab-sel', state.sel); state.detail = null
+    if (state.tab !== 'today') state.tab = 'today'
+    load()
+  }
+  q('#hSave').onclick = save
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); save() } })
+  setTimeout(() => q('#hName').focus(), 0)
+}
+
+// ── Reminders ─────────────────────────────────────────────────────────────────
+
+let audioCtx = null
+function beep() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)()
+    const t0 = audioCtx.currentTime + 0.02
+    ;[0, 0.18].forEach((off, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain()
+      o.frequency.value = i ? 1046.5 : 784; o.type = 'sine'
+      g.gain.setValueAtTime(0.0001, t0 + off); g.gain.exponentialRampToValueAtTime(0.18, t0 + off + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.25)
+      o.connect(g).connect(audioCtx.destination); o.start(t0 + off); o.stop(t0 + off + 0.3)
+    })
+  } catch {}
+}
+let bannerIds = []
+function syncBanner() {
+  if (!bannerIds.length) return
+  const still = state.habits.filter((h) => bannerIds.includes(h.id) && h.today_value < target(h))
+  if (!still.length) { $('#banner').classList.add('hidden'); bannerIds = [] }
+}
+function checkReminders() {
+  const now = new Date(), today = todayIso()
+  const hm = `${pad(now.getHours())}:${pad(now.getMinutes())}`
+  const pending = state.habits.filter((h) => h.reminder && h.reminder <= hm && h.stats.due_today && h.today_value < target(h)
+    && localGet(`hab-rem-${today}-${h.id}`) !== '1')
+  if (!pending.length) return
+  pending.forEach((h) => localSet(`hab-rem-${today}-${h.id}`, '1'))
+  bannerIds = pending.map((h) => h.id)
+  const names = pending.map((h) => `${h.icon} ${h.name}`).join(', ')
+  const b = $('#banner')
+  b.innerHTML = `<span style="font-size:18px">⏰</span><span class="bt"><b>Rappel :</b> ${esc(names)}</span>
+    ${pending.length === 1 && pending[0].kind === 'bool' ? `<button class="primary" id="bDo">✓ Cocher</button>` : '<button id="bGo">Voir</button>'}<button class="ghost icon" id="bX">✕</button>`
+  b.classList.remove('hidden')
+  $('#bX').onclick = () => b.classList.add('hidden')
+  const go = $('#bGo'); if (go) go.onclick = () => { b.classList.add('hidden'); state.tab = 'today'; state.date = today; load() }
+  const doIt = $('#bDo'); if (doIt) doIt.onclick = () => { b.classList.add('hidden'); state.date = today; setEntry(pending[0].id, today, { toggle: true }) }
+  beep()
+  try { if ('Notification' in window && Notification.permission === 'granted') new Notification('Rappel — Habitudes', { body: names, tag: 'habits' }) } catch {}
+}
+setInterval(checkReminders, 20000)
+let lastDay = todayIso()
+setInterval(() => { if (todayIso() !== lastDay) { if (state.date === lastDay) state.date = todayIso(); lastDay = todayIso(); state.detail = null; load() } }, 60000)
+
+// ── Shell events ──────────────────────────────────────────────────────────────
+
+$('#tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (!b) return; state.tab = b.dataset.tab; render() }
+const goDate = (iso) => { if (iso > todayIso()) return; state.date = iso; load() }
+$('#dPrev').onclick = () => goDate(addDays(state.date, -1))
+$('#dNext').onclick = () => goDate(addDays(state.date, 1))
+$('#dToday').onclick = () => goDate(todayIso())
+$('#btnAdd').onclick = () => openHabitDialog()
+$('#emptyAdd').onclick = () => openHabitDialog()
+$('#emptyDemo').onclick = () => demo()
+$('#btnMenu').onclick = (e) => { e.stopPropagation(); $('#menuList').classList.toggle('hidden') }
+document.addEventListener('click', () => $('#menuList').classList.add('hidden'))
+$('#menuList').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-act]'); if (!b) return
+  $('#menuList').classList.add('hidden')
+  if (b.dataset.act === 'export') exportJson()
+  if (b.dataset.act === 'import') $('#fileInput').click()
+  if (b.dataset.act === 'demo') demo()
+  if (b.dataset.act === 'notif') {
+    if (!('Notification' in window)) { toast('Notifications système indisponibles : le bandeau dans l\'application sera utilisé', true); return }
+    const p = await Notification.requestPermission().catch(() => 'denied')
+    toast(p === 'granted' ? 'Notifications système activées' : 'Notifications refusées : le bandeau dans l\'application sera utilisé', p !== 'granted')
+  }
+})
+document.addEventListener('keydown', (e) => {
+  if ($('.overlay') || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName) || state.tab !== 'today') return
+  if (e.key === 'ArrowLeft') { e.preventDefault(); goDate(addDays(state.date, -1)) }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); goDate(addDays(state.date, 1)) }
+  else if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.altKey) {
+    const h = state.habits[+e.key - 1]; if (!h) return
+    setEntry(h.id, state.date, h.kind === 'qty' ? { delta: 1 } : { toggle: true }, true)
+  }
+})
+
+async function demo() {
+  const r = await act('demo.seed', {}, 'Habitudes d\'exemple ajoutées')
+  if (r) { state.detail = null; load() }
+}
+
+function download(name, content, type) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type }))
+  a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+async function exportJson() {
+  const data = await act('export')
+  if (data) { download(`habitudes-${todayIso()}.json`, JSON.stringify(data, null, 2), 'application/json'); toast(`${data.habits.length} habitude(s) exportée(s)`) }
+}
+$('#fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; e.target.value = ''
+  if (!file) return
+  let data
+  try { data = JSON.parse(await file.text()) } catch { toast('Fichier JSON invalide', true); return }
+  const r = await act('import', { data })
+  if (r) { toast(`Import : ${r.habits} habitude(s), ${r.entries} pointage(s), ${r.notes} note(s)`); state.detail = null; load() }
+})
+
+load()
+</script>
+</body>
+</html>

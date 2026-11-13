@@ -1,0 +1,31 @@
+{
+  "id": "budget",
+  "name": "Budget personnel",
+  "version": "1.0.0",
+  "description": "Gestion de budget personnel : comptes et soldes, opérations catégorisées, règles d'auto-catégorisation, import de relevés CSV/OFX/QIF avec détection des doublons, virements, opérations récurrentes, budgets mensuels et tableaux de bord.",
+  "category": "Productivité",
+  "tags": [
+    "budget",
+    "finances",
+    "comptes",
+    "dépenses",
+    "import"
+  ],
+  "icon": "💶",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

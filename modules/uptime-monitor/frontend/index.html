@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Supervision de services</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --pause: #71717a; --pend: #38bdf8;
+    --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .note { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  .mono { font-family: var(--mono); font-size: 12px; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 6px; }
+  .sum { display: flex; gap: 10px; font-size: 12.5px; }
+  .sum span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; background: var(--pend); }
+  .dot.up { background: var(--ok); box-shadow: 0 0 0 3px rgba(34,197,94,.15); }
+  .dot.down { background: var(--err); box-shadow: 0 0 0 3px rgba(239,68,68,.2); animation: pulse 1.4s infinite; }
+  .dot.paused { background: var(--pause); }
+  .dot.pending { background: var(--pend); }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(239,68,68,.05); } }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border);
+               border-radius: 8px; padding: 4px; z-index: 50; min-width: 220px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  .bell { position: relative; }
+  .bell .n { position: absolute; top: -5px; right: -5px; background: var(--err); color: #fff; border-radius: 9px; font-size: 10px; padding: 0 5px; min-width: 16px; text-align: center; }
+
+  #main { flex: 1; min-height: 0; display: flex; }
+  #list { width: 360px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border); background: var(--surface); }
+  .mon { padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+  .mon:hover { background: #1c1c21; }
+  .mon.sel { background: rgba(99,102,241,.14); }
+  .mon .r1 { display: flex; align-items: center; gap: 8px; }
+  .mon .name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mon .ms { font-variant-numeric: tabular-nums; color: #a1a1aa; font-size: 12px; }
+  .mon .r2 { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; }
+  .mon .tgt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 11px; }
+  .badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #27272a; color: #a1a1aa; text-transform: uppercase; letter-spacing: .03em; flex-shrink: 0; }
+  .pct { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .pct.good { color: #86efac; } .pct.mid { color: #fcd34d; } .pct.bad { color: #fca5a5; }
+  .beats { display: flex; gap: 2px; height: 16px; align-items: stretch; }
+  .beats i { flex: 1; border-radius: 2px; background: #27272a; min-width: 3px; }
+  .beats i.ok { background: rgba(34,197,94,.75); } .beats i.ko { background: rgba(239,68,68,.85); }
+
+  #detail { flex: 1; min-width: 0; overflow-y: auto; padding: 16px 20px 24px; }
+  .dh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dh h2 { font-size: 18px; }
+  .dh .status { font-weight: 600; font-size: 12.5px; padding: 3px 9px; border-radius: 12px; }
+  .status.up { background: rgba(34,197,94,.15); color: #86efac; } .status.down { background: rgba(239,68,68,.16); color: #fca5a5; }
+  .status.paused { background: #27272a; color: #a1a1aa; } .status.pending { background: rgba(56,189,248,.14); color: #7dd3fc; }
+  .sub { color: var(--muted); margin-top: 4px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .msg { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; }
+  .msg.down { border-color: rgba(239,68,68,.45); color: #fecaca; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin: 14px 0; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .tile .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .l { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .sec { display: flex; align-items: center; gap: 8px; margin: 18px 0 8px; }
+  .sec h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 4px 10px; }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  .chart { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px; position: relative; }
+  .chart svg { display: block; width: 100%; height: 200px; }
+  .chart .tip { position: absolute; pointer-events: none; background: #0b0b0e; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 11.5px; white-space: nowrap; z-index: 5; }
+  table.grid { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  table.grid th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  table.grid td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.grid td.num { font-variant-numeric: tabular-nums; }
+  .ongoing { color: #fca5a5; font-weight: 600; }
+
+  .empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 30px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 26px 30px; text-align: center; max-width: 460px; }
+  .card h2 { font-size: 16px; margin-bottom: 6px; }
+  .card p { color: var(--muted); line-height: 1.55; margin-bottom: 14px; }
+  .card .actions { display: flex; gap: 8px; justify-content: center; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(600px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.wide { width: min(820px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .dialog .content.block { display: block; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .field.row { flex-direction: row; align-items: center; gap: 8px; }
+  .types { display: flex; gap: 6px; flex-wrap: wrap; }
+  .types button.on { border-color: var(--accent); background: rgba(99,102,241,.15); }
+  .testres { font-size: 12px; padding: 6px 10px; border-radius: 6px; background: var(--surface2); }
+  .testres.ok { color: #86efac; } .testres.ko { color: #fca5a5; }
+
+  #alerts { position: fixed; bottom: 16px; right: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 90; width: 320px; pointer-events: none; }
+  .alert { pointer-events: auto; background: #18181b; border: 1px solid var(--border); border-left: 4px solid var(--err); border-radius: 8px; padding: 9px 12px;
+           box-shadow: 0 8px 24px rgba(0,0,0,.5); animation: slide .2s ease-out; cursor: pointer; }
+  .alert.up { border-left-color: var(--ok); }
+  .alert b { display: block; margin-bottom: 2px; }
+  .alert span { color: #a1a1aa; font-size: 12px; }
+  @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">📡 Supervision de services</span>
+  <div class="sum" id="sum"></div>
+  <span class="spacer"></span>
+  <button class="primary" id="btnAdd">＋ Sonde</button>
+  <button id="btnPauseAll" title="Suspendre ou reprendre toutes les sondes">⏸ Tout suspendre</button>
+  <button class="icon bell" id="btnInc" title="Incidents">🔔<span class="n hidden" id="incN"></span></button>
+  <div class="menu">
+    <button class="icon" id="btnMenu" title="Plus d'actions">⋯</button>
+    <div class="menu-list hidden" id="menuList">
+      <button data-act="settings">⚙️ Paramètres…</button>
+      <button data-act="incidents">🔔 Historique des incidents…</button>
+      <hr>
+      <button data-act="export">⬇️ Exporter les sondes (JSON)</button>
+      <button data-act="import">⬆️ Importer des sondes…</button>
+      <button data-act="examples">🧪 Ajouter des sondes d'exemple</button>
+    </div>
+  </div>
+  <input type="file" id="fileImport" accept=".json,application/json" class="hidden" />
+</header>
+
+<div id="main">
+  <div id="list"></div>
+  <div id="detail"></div>
+</div>
+<div class="empty hidden" id="empty">
+  <div class="card">
+    <h2>Aucune sonde</h2>
+    <p>Ajoutez une sonde pour surveiller un site web (HTTP/HTTPS), un port TCP, un hôte (ping), une résolution DNS ou l'expiration d'un certificat TLS. Les vérifications tournent en arrière-plan tant que le module est actif.</p>
+    <div class="actions"><button class="primary" id="btnAdd2">＋ Ajouter une sonde</button><button id="btnEx">🧪 Exemples</button></div>
+  </div>
+</div>
+
+<div id="alerts"></div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'uptime-monitor'
+const call = (action, payload = {}, timeout = 30000) => window.ledroide.call(MODULE_ID, action, payload, { timeout })
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const TYPES = { http: 'HTTP(S)', tcp: 'TCP', ping: 'Ping', dns: 'DNS', tls: 'Certificat TLS' }
+const STATUS = { up: 'En ligne', down: 'Hors service', paused: 'En pause', pending: 'En attente' }
+
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+
+const state = { monitors: [], settings: {}, sel: Number(localGet('um-sel')) || null, range: localGet('um-range') || '24h', detail: null, openInc: 0 }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+async function act(action, payload, okMsg, timeout) {
+  try { const r = await call(action, payload, timeout); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+
+const fmtMs = (ms) => ms == null ? '—' : ms < 10 ? ms.toFixed(1) + ' ms' : Math.round(ms) + ' ms'
+const fmtPct = (p) => p == null ? '—' : (p >= 99.995 ? '100' : p.toFixed(2).replace('.', ',')) + ' %'
+const pctCls = (p) => p == null ? '' : p >= 99 ? 'good' : p >= 95 ? 'mid' : 'bad'
+const fmtTime = (ts) => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'
+function fmtDur(s) {
+  s = Math.max(0, Math.round(s))
+  if (s < 60) return s + ' s'
+  if (s < 3600) return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`
+  if (s < 86400) return `${Math.floor(s / 3600)} h ${String(Math.floor(s % 3600 / 60)).padStart(2, '0')} min`
+  return `${Math.floor(s / 86400)} j ${Math.floor(s % 86400 / 3600)} h`
+}
+function ago(ts) { if (!ts) return 'jamais'; const s = Date.now() / 1000 - ts; return s < 5 ? "à l'instant" : 'il y a ' + fmtDur(s) }
+function targetLabel(m) { return m.type === 'tcp' || (m.type === 'tls' && m.port !== 443) ? `${m.target}:${m.port}` : m.target }
+
+// ── Chargement ──────────────────────────────────────────────────────────────
+async function load() {
+  const r = await act('state')
+  if (!r) return
+  state.monitors = r.monitors; state.settings = r.settings; state.openInc = r.open_incidents
+  if (!state.monitors.some((m) => m.id === state.sel)) state.sel = state.monitors[0]?.id ?? null
+  renderAll()
+  if (state.sel) loadDetail()
+}
+
+function renderAll() {
+  const empty = !state.monitors.length
+  $('#main').classList.toggle('hidden', empty); $('#empty').classList.toggle('hidden', !empty)
+  renderSummary(); renderList()
+  if (!state.sel) $('#detail').innerHTML = ''
+}
+
+function renderSummary() {
+  const c = { up: 0, down: 0, paused: 0, pending: 0 }
+  state.monitors.forEach((m) => c[m.live.status] = (c[m.live.status] || 0) + 1)
+  $('#sum').innerHTML = Object.entries(c).filter(([k, n]) => n || k === 'up').map(([k, n]) => `<span><i class="dot ${k}"></i>${n} ${STATUS[k].toLowerCase()}</span>`).join('')
+  const allPaused = state.monitors.length && state.monitors.every((m) => m.paused)
+  $('#btnPauseAll').textContent = allPaused ? '▶ Tout reprendre' : '⏸ Tout suspendre'
+  $('#btnPauseAll').disabled = !state.monitors.length
+  $('#incN').textContent = state.openInc; $('#incN').classList.toggle('hidden', !state.openInc)
+}
+
+function beats(recent) {
+  const pad = Math.max(0, 40 - recent.length)
+  return '<div class="beats">' + '<i></i>'.repeat(pad) + recent.map((b) => `<i class="${b.ok ? 'ok' : 'ko'}" title="${esc(fmtTime(b.ts))} — ${b.ok ? fmtMs(b.ms) : 'échec'}"></i>`).join('') + '</div>'
+}
+
+function renderList() {
+  $('#list').innerHTML = state.monitors.map((m) => `
+    <div class="mon ${m.id === state.sel ? 'sel' : ''}" data-id="${m.id}">
+      <div class="r1"><i class="dot ${m.live.status}"></i><span class="name">${esc(m.name)}</span><span class="ms">${m.live.status === 'up' ? fmtMs(m.live.last_ms) : ''}</span></div>
+      <div class="r2"><span class="badge">${TYPES[m.type]}</span><span class="tgt">${esc(targetLabel(m))}</span><span class="pct ${pctCls(m.uptime['24h'])}" title="Disponibilité sur 24 h">${fmtPct(m.uptime['24h'])}</span></div>
+      ${beats(m.recent)}
+    </div>`).join('')
+  $$('#list .mon').forEach((el) => el.onclick = () => { state.sel = +el.dataset.id; localSet('um-sel', state.sel); renderList(); loadDetail() })
+}
+
+// ── Détail ──────────────────────────────────────────────────────────────────
+let detailSeq = 0
+async function loadDetail() {
+  if (!state.sel) return
+  const seq = ++detailSeq
+  const r = await act('monitor.detail', { id: state.sel, range: state.range })
+  if (!r || seq !== detailSeq) return
+  state.detail = r
+  renderDetail()
+}
+
+function renderDetail() {
+  const d = state.detail
+  if (!d) return
+  const m = d.monitor, lv = d.live
+  const st = d.stats
+  const next = lv.next_ts && !m.paused ? Math.max(0, lv.next_ts - Date.now() / 1000) : null
+  const certDays = lv.cert_expires ? Math.floor((lv.cert_expires - Date.now() / 1000) / 86400) : null
+  $('#detail').innerHTML = `
+    <div class="dh">
+      <i class="dot ${lv.status}"></i><h2>${esc(m.name)}</h2><span class="status ${lv.status}">${STATUS[lv.status]}${lv.status === 'down' && lv.down_since ? ' depuis ' + fmtDur(Date.now() / 1000 - lv.down_since) : ''}</span>
+      <span class="spacer"></span>
+      <button id="dCheck" ${m.paused ? 'disabled' : ''} title="Lancer une vérification maintenant">↻ Vérifier</button>
+      <button class="icon" id="dPause" title="${m.paused ? 'Reprendre la surveillance' : 'Suspendre la surveillance'}">${m.paused ? '▶' : '⏸'}</button>
+      <button class="icon" id="dEdit" title="Modifier la sonde">✏️</button>
+      <button class="danger icon" id="dDel" title="Supprimer">🗑</button>
+    </div>
+    <div class="sub">
+      <span><span class="badge">${TYPES[m.type]}</span> <span class="mono">${esc(targetLabel(m))}</span></span>
+      <span>Toutes les ${fmtDur(m.interval)}</span>
+      <span>Dernière vérification : ${ago(lv.last_ts)}</span>
+      ${next !== null ? `<span id="dNext" data-next="${lv.next_ts}">Prochaine dans ${fmtDur(next)}</span>` : ''}
+    </div>
+    <div class="msg ${lv.status === 'down' ? 'down' : ''}">${esc(lv.message || '—')}</div>
+    <div class="tiles">
+      <div class="tile"><div class="v pct ${pctCls(d.uptime['24h'])}">${fmtPct(d.uptime['24h'])}</div><div class="l">Disponibilité 24 h</div></div>
+      <div class="tile"><div class="v pct ${pctCls(d.uptime['7d'])}">${fmtPct(d.uptime['7d'])}</div><div class="l">Disponibilité 7 j</div></div>
+      <div class="tile"><div class="v pct ${pctCls(d.uptime['30d'])}">${fmtPct(d.uptime['30d'])}</div><div class="l">Disponibilité 30 j</div></div>
+      <div class="tile"><div class="v">${fmtMs(st.avg)}</div><div class="l">Temps moyen (${d.range})</div></div>
+      <div class="tile"><div class="v">${fmtMs(st.min)} <span class="muted" style="font-size:13px">/ ${fmtMs(st.max)}</span></div><div class="l">Min / max (${d.range})</div></div>
+      ${certDays !== null ? `<div class="tile"><div class="v" style="color:${certDays < (m.warn_days || 14) ? '#fca5a5' : '#86efac'}">${certDays} j</div><div class="l">Avant expiration du certificat</div></div>` : ''}
+    </div>
+    <div class="sec"><h3>Temps de réponse</h3><span class="spacer"></span>
+      <div class="seg" id="rangeSeg">${['1h', '24h', '7d', '30d'].map((x) => `<button data-r="${x}" class="${x === d.range ? 'on' : ''}">${x.replace('d', ' j').replace('h', ' h')}</button>`).join('')}</div></div>
+    <div class="chart" id="chart"></div>
+    <div class="sec"><h3>Incidents</h3><span class="muted">${d.incidents.length ? d.incidents.length : ''}</span></div>
+    ${d.incidents.length ? `<table class="grid"><thead><tr><th>Début</th><th>Fin</th><th>Durée</th><th>Cause</th></tr></thead><tbody>${d.incidents.slice(0, 20).map((i) => `<tr><td>${fmtTime(i.started)}</td><td>${i.ended ? fmtTime(i.ended) : '<span class="ongoing">en cours</span>'}</td><td class="num">${fmtDur(i.duration)}</td><td>${esc(i.cause)}</td></tr>`).join('')}</tbody></table>` : '<div class="note">Aucun incident enregistré. 🎉</div>'}
+    <div class="sec"><h3>Dernières vérifications</h3></div>
+    <table class="grid"><thead><tr><th>Date</th><th>Résultat</th><th>Temps</th><th>Détail</th></tr></thead><tbody>
+      ${d.checks.slice(0, 25).map((c) => `<tr><td>${fmtTime(c.ts)}</td><td>${c.ok ? '<span style="color:#86efac">✓ OK</span>' : '<span style="color:#fca5a5">✗ Échec</span>'}</td><td class="num">${fmtMs(c.ms)}</td><td>${esc(c.message)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Aucune vérification pour le moment.</td></tr>'}
+    </tbody></table>`
+  drawChart(d)
+  $('#dCheck').onclick = async () => { $('#dCheck').disabled = true; $('#dCheck').textContent = '↻ …'; await act('monitor.check_now', { id: m.id }, null, 90000); refreshSoon(0) }
+  $('#dPause').onclick = async () => { if (await act('monitor.pause', { id: m.id, paused: !m.paused }, m.paused ? 'Surveillance reprise' : 'Sonde suspendue')) load() }
+  $('#dEdit').onclick = () => openEditor(m)
+  $('#dDel').onclick = async () => {
+    if (!confirm(`Supprimer la sonde « ${m.name} » et tout son historique ?`)) return
+    if (await act('monitor.delete', { id: m.id }, 'Sonde supprimée')) { state.sel = null; state.detail = null; load() }
+  }
+  $$('#rangeSeg button').forEach((b) => b.onclick = () => { state.range = b.dataset.r; localSet('um-range', state.range); loadDetail() })
+}
+
+function drawChart(d) {
+  const el = $('#chart')
+  const W = Math.max(300, el.clientWidth - 16), H = 200, L = 46, R = 10, T = 12, B = 24
+  const pts = d.series
+  if (!pts.length) { el.innerHTML = '<div class="note" style="padding:70px 0;text-align:center">Pas encore de mesures sur cette période.</div>'; return }
+  const span = d.now - d.since
+  const x = (t) => L + (t - d.since) / span * (W - L - R)
+  const maxV = Math.max(10, ...pts.map((p) => p.max ?? p.avg ?? 0))
+  const nice = (v) => { const p = 10 ** Math.floor(Math.log10(v)); return Math.ceil(v / p) * p }
+  const top = nice(maxV * 1.1)
+  const y = (v) => T + (1 - v / top) * (H - T - B)
+  let grid = ''
+  for (let i = 0; i <= 4; i++) {
+    const v = top * i / 4
+    grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#27272a" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" fill="#71717a" font-size="10.5" text-anchor="end">${Math.round(v)}</text>`
+  }
+  const ticks = 6
+  for (let i = 0; i <= ticks; i++) {
+    const t = d.since + span * i / ticks
+    const dt = new Date(t * 1000)
+    const lbl = span > 2 * 86400 ? dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    grid += `<text x="${x(t)}" y="${H - 6}" fill="#71717a" font-size="10.5" text-anchor="${i === 0 ? 'start' : i === ticks ? 'end' : 'middle'}">${lbl}</text>`
+  }
+  const bw = Math.max(2, (W - L - R) / (span / d.bucket))
+  let downs = ''
+  for (const p of pts) if (p.up < p.n) downs += `<rect x="${x(p.t)}" y="${T}" width="${bw}" height="${H - T - B}" fill="rgba(239,68,68,${p.up === 0 ? .28 : .12})"/>`
+  const ok = pts.filter((p) => p.avg != null)
+  let path = '', area = '', band = ''
+  if (ok.length) {
+    const segs = []; let cur = []
+    ok.forEach((p, i) => { if (i && p.t - ok[i - 1].t > d.bucket * 1.5) { segs.push(cur); cur = [] } cur.push(p) })
+    segs.push(cur)
+    for (const s of segs) {
+      const xs = s.map((p) => x(p.t + d.bucket / 2))
+      path += 'M' + s.map((p, i) => `${xs[i].toFixed(1)},${y(p.avg).toFixed(1)}`).join('L')
+      area += `M${xs[0].toFixed(1)},${y(0)}L` + s.map((p, i) => `${xs[i].toFixed(1)},${y(p.avg).toFixed(1)}`).join('L') + `L${xs[xs.length - 1].toFixed(1)},${y(0)}Z`
+      if (s.length > 1) band += `M` + s.map((p, i) => `${xs[i].toFixed(1)},${y(p.max).toFixed(1)}`).join('L') + 'L' + s.slice().reverse().map((p, i) => `${xs[s.length - 1 - i].toFixed(1)},${y(p.min).toFixed(1)}`).join('L') + 'Z'
+    }
+  }
+  const single = ok.length === 1 ? `<circle cx="${x(ok[0].t + d.bucket / 2)}" cy="${y(ok[0].avg)}" r="3" fill="#818cf8"/>` : ''
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">
+    <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".35"/><stop offset="1" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs>
+    ${grid}${downs}<path d="${band}" fill="rgba(129,140,248,.12)"/><path d="${area}" fill="url(#g)"/><path d="${path}" fill="none" stroke="#818cf8" stroke-width="1.8" stroke-linejoin="round"/>${single}
+    <text x="${L}" y="9" fill="#71717a" font-size="10">ms</text>
+    <line id="cur" y1="${T}" y2="${H - B}" stroke="#a1a1aa" stroke-dasharray="3 3" visibility="hidden"/></svg><div class="tip hidden"></div>`
+  const svg = $('svg', el), tip = $('.tip', el), cur = $('#cur', el)
+  svg.onmousemove = (e) => {
+    const rect = svg.getBoundingClientRect()
+    const px = (e.clientX - rect.left) / rect.width * W
+    const t = d.since + (px - L) / (W - L - R) * span
+    let best = null
+    for (const p of pts) if (!best || Math.abs(p.t + d.bucket / 2 - t) < Math.abs(best.t + d.bucket / 2 - t)) best = p
+    if (!best || px < L) { tip.classList.add('hidden'); cur.setAttribute('visibility', 'hidden'); return }
+    const cx = x(best.t + d.bucket / 2)
+    cur.setAttribute('x1', cx); cur.setAttribute('x2', cx); cur.setAttribute('visibility', 'visible')
+    tip.innerHTML = `<b>${fmtTime(best.t)}</b><br>Moyenne ${fmtMs(best.avg)} · min ${fmtMs(best.min)} · max ${fmtMs(best.max)}<br>${best.up}/${best.n} vérification${best.n > 1 ? 's' : ''} OK`
+    tip.classList.remove('hidden')
+    const left = cx / W * rect.width + 8
+    tip.style.left = Math.min(left, rect.width - tip.offsetWidth - 4) + 'px'; tip.style.top = '10px'
+  }
+  svg.onmouseleave = () => { tip.classList.add('hidden'); cur.setAttribute('visibility', 'hidden') }
+}
+window.addEventListener('resize', () => { if (state.detail) drawChart(state.detail) })
+
+setInterval(() => {
+  const n = $('#dNext')
+  if (n) n.textContent = 'Prochaine dans ' + fmtDur(Math.max(0, +n.dataset.next - Date.now() / 1000))
+}, 1000)
+
+// ── Temps réel ──────────────────────────────────────────────────────────────
+let refreshTimer = null
+function refreshSoon(delay = 600) { clearTimeout(refreshTimer); refreshTimer = setTimeout(load, delay) }
+window.ledroide.on(MODULE_ID, 'monitor:update', (p) => {
+  const m = state.monitors.find((x) => x.id === p.id)
+  if (!m) return refreshSoon()
+  m.live = p.live
+  if (p.check) { m.recent.push({ ok: p.check.ok, ms: p.check.ms, ts: p.check.ts }); if (m.recent.length > 40) m.recent.shift() }
+  renderSummary(); renderList()
+  if (p.id === state.sel) { clearTimeout(refreshTimer); refreshTimer = setTimeout(loadDetail, 400) }
+})
+window.ledroide.on(MODULE_ID, 'alert', (a) => {
+  showAlert(a)
+  refreshSoon(300)
+})
+function showAlert(a) {
+  const el = document.createElement('div')
+  el.className = 'alert ' + a.kind
+  el.innerHTML = `<b>${a.kind === 'down' ? '🔴' : '🟢'} ${esc(a.name)} — ${a.kind === 'down' ? 'hors service' : 'rétabli'}</b><span>${esc(a.message)}</span>`
+  el.onclick = () => { state.sel = a.id; renderList(); loadDetail(); el.remove() }
+  $('#alerts').prepend(el)
+  setTimeout(() => el.remove(), a.kind === 'down' ? 15000 : 7000)
+  while ($('#alerts').children.length > 5) $('#alerts').lastChild.remove()
+}
+
+// ── Dialogs ─────────────────────────────────────────────────────────────────
+function dialog(html, cls = '') {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${cls}">${html}</div>`
+  document.body.appendChild(ov)
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey) }
+  const onKey = (e) => { if (e.key === 'Escape') close() }
+  document.addEventListener('keydown', onKey)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) close() })
+  return { el: ov, close }
+}
+
+const DEFAULTS = { type: 'http', name: '', target: '', interval: 60, timeout: 10, method: 'GET', expected_status: '200-399', keyword: '', keyword_mode: 'present', max_ms: 0, verify_tls: true, follow_redirects: true, dns_type: 'A', dns_expected: '', warn_days: 14, fail_threshold: 1, paused: false, port: null }
+
+function openEditor(mon) {
+  const m = { ...DEFAULTS, ...(mon || {}) }
+  if (mon && (mon.type === 'tcp' || mon.type === 'tls')) m.target = `${mon.target}:${mon.port}`
+  const d = dialog(`<h3>${mon ? 'Modifier la sonde' : 'Nouvelle sonde'}</h3><div class="content" id="edC"></div>
+    <div class="foot"><button id="edTest">⚡ Tester</button><span class="testres hidden" id="edRes"></span><span class="spacer"></span><button id="edCancel">Annuler</button><button class="primary" id="edSave">Enregistrer</button></div>`)
+  const C = $('#edC', d.el)
+  const PH = { http: 'https://exemple.fr/sante', tcp: 'serveur.local:5432', ping: '192.168.1.1 ou routeur.local', dns: 'exemple.fr', tls: 'exemple.fr (ou exemple.fr:8443)' }
+  function render() {
+    const t = m.type
+    C.innerHTML = `
+      <div class="field full"><label>Type de sonde</label><div class="types">${Object.entries(TYPES).map(([k, l]) => `<button data-t="${k}" class="${k === t ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <div class="field"><label>Nom</label><input data-k="name" maxlength="100" value="${esc(m.name)}" placeholder="Mon site" /></div>
+      <div class="field"><label>${t === 'http' ? 'URL' : t === 'tcp' ? 'Hôte:port' : 'Hôte'}</label><input data-k="target" value="${esc(m.target)}" placeholder="${PH[t]}" spellcheck="false" /></div>
+      <div class="field"><label>Intervalle (secondes, min. 10)</label><input data-k="interval" type="number" min="10" max="86400" value="${m.interval}" /></div>
+      <div class="field"><label>Délai d'attente (s)</label><input data-k="timeout" type="number" min="1" max="60" step="1" value="${m.timeout}" /></div>
+      ${t === 'http' ? `
+        <div class="field"><label>Méthode</label><select data-k="method">${['GET', 'HEAD', 'POST', 'PUT', 'OPTIONS'].map((x) => `<option ${x === m.method ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+        <div class="field"><label>Statuts attendus</label><input data-k="expected_status" value="${esc(m.expected_status)}" placeholder="200-399 ou 200,301" /></div>
+        <div class="field"><label>Mot-clé dans la réponse (optionnel)</label><input data-k="keyword" value="${esc(m.keyword)}" placeholder="ex. OK" /></div>
+        <div class="field"><label>Le mot-clé doit être</label><select data-k="keyword_mode"><option value="present" ${m.keyword_mode === 'present' ? 'selected' : ''}>présent</option><option value="absent" ${m.keyword_mode === 'absent' ? 'selected' : ''}>absent</option></select></div>
+        <div class="field"><label>Temps de réponse max. (ms, 0 = aucun)</label><input data-k="max_ms" type="number" min="0" max="60000" value="${m.max_ms}" /></div>
+        <div class="field" style="justify-content:flex-end;gap:6px">
+          <label class="field row"><input type="checkbox" data-k="verify_tls" ${m.verify_tls ? 'checked' : ''}/> Vérifier le certificat HTTPS</label>
+          <label class="field row"><input type="checkbox" data-k="follow_redirects" ${m.follow_redirects ? 'checked' : ''}/> Suivre les redirections</label>
+        </div>` : ''}
+      ${t === 'ping' ? `<div class="field full note">Utilise la commande <code>ping</code> du système (ICMP). Si elle est indisponible, une connexion TCP sur le port indiqué ci-dessous (443 par défaut) la remplace.</div>
+        <div class="field"><label>Port TCP de repli</label><input data-k="port" type="number" min="1" max="65535" value="${m.port ?? ''}" placeholder="443" /></div>` : ''}
+      ${t === 'dns' ? `
+        <div class="field"><label>Type d'enregistrement</label><select data-k="dns_type">${['A', 'AAAA', 'ANY'].map((x) => `<option ${x === m.dns_type ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+        <div class="field"><label>Adresse attendue (optionnel)</label><input data-k="dns_expected" value="${esc(m.dns_expected)}" placeholder="93.184.215.14" /></div>
+        <div class="field full note">Résolution par le résolveur du système (enregistrements A / AAAA).</div>` : ''}
+      ${t === 'tls' ? `<div class="field"><label>Alerter si expiration dans moins de (jours)</label><input data-k="warn_days" type="number" min="0" max="365" value="${m.warn_days}" /></div><div></div>` : ''}
+      ${t === 'http' ? `<div class="field"><label>Alerter après N échecs consécutifs</label><input data-k="fail_threshold" type="number" min="1" max="10" value="${m.fail_threshold}" /></div>` : `<div class="field"><label>Alerter après N échecs consécutifs</label><input data-k="fail_threshold" type="number" min="1" max="10" value="${m.fail_threshold}" /></div>`}
+      <div class="field" style="justify-content:flex-end"><label class="field row"><input type="checkbox" data-k="paused" ${m.paused ? 'checked' : ''}/> ${mon ? 'En pause' : 'Créer en pause'}</label></div>`
+    $$('[data-t]', C).forEach((b) => b.onclick = () => { collect(); m.type = b.dataset.t; render() })
+    $('[data-k=name]', C).focus()
+  }
+  function collect() {
+    $$('[data-k]', C).forEach((i) => {
+      const k = i.dataset.k
+      if (i.type === 'checkbox') m[k] = i.checked
+      else if (i.type === 'number') m[k] = i.value === '' ? (k === 'port' ? null : 0) : Number(i.value)
+      else m[k] = i.value
+    })
+  }
+  function payload() {
+    collect()
+    const p = { ...m }
+    delete p.id; delete p.position; delete p.live; delete p.uptime; delete p.recent
+    if (!p.name.trim()) p.name = p.target.replace(/^https?:\/\//, '').split('/')[0] || 'Sonde'
+    if (p.type === 'ping' && !p.port) p.port = null
+    if (p.type === 'http' || p.type === 'dns') p.port = null
+    return p
+  }
+  render()
+  $('#edCancel', d.el).onclick = d.close
+  $('#edTest', d.el).onclick = async () => {
+    const res = $('#edRes', d.el); res.className = 'testres'; res.textContent = 'Test en cours…'
+    try {
+      const r = await call('monitor.test', { monitor: payload() }, 90000)
+      res.className = 'testres ' + (r.ok ? 'ok' : 'ko'); res.textContent = (r.ok ? '✓ ' : '✗ ') + r.message + (r.ms != null ? ` — ${fmtMs(r.ms)}` : '')
+    } catch (e) { res.className = 'testres ko'; res.textContent = '✗ ' + e.message }
+  }
+  $('#edSave', d.el).onclick = async () => {
+    const r = await act('monitor.save', { id: mon?.id, monitor: payload() }, mon ? 'Sonde modifiée' : 'Sonde ajoutée')
+    if (r) { d.close(); state.sel = r.id; localSet('um-sel', r.id); await load() }
+  }
+  d.el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') $('#edSave', d.el).click() })
+}
+
+async function openIncidents() {
+  const r = await act('incidents.list', { limit: 300 })
+  if (!r) return
+  const d = dialog(`<h3>Historique des incidents</h3><div class="content block">
+    ${r.incidents.length ? `<table class="grid"><thead><tr><th>Sonde</th><th>Début</th><th>Fin</th><th>Durée</th><th>Cause</th></tr></thead><tbody>
+    ${r.incidents.map((i) => `<tr><td><b>${esc(i.name)}</b></td><td>${fmtTime(i.started)}</td><td>${i.ended ? fmtTime(i.ended) : '<span class="ongoing">en cours</span>'}</td><td class="num">${fmtDur(i.duration)}</td><td>${esc(i.cause)}</td></tr>`).join('')}</tbody></table>` : '<div class="note" style="padding:20px 0">Aucun incident. 🎉</div>'}
+    </div><div class="foot"><button class="danger" id="incClear" ${r.incidents.some((i) => i.ended) ? '' : 'disabled'}>Effacer les incidents terminés</button><span class="spacer"></span><button id="incClose">Fermer</button></div>`, 'wide')
+  $('#incClose', d.el).onclick = d.close
+  $('#incClear', d.el).onclick = async () => { if (confirm('Effacer tous les incidents terminés ?') && await act('incidents.clear', {}, 'Incidents effacés')) { d.close(); load() } }
+}
+
+function openSettings() {
+  const s = state.settings
+  const d = dialog(`<h3>Paramètres</h3><div class="content">
+    <div class="field"><label>Conserver l'historique (jours)</label><input id="sRet" type="number" min="1" max="365" value="${s.retention_days}" /></div>
+    <div class="field note" style="justify-content:flex-end">Les vérifications plus anciennes sont purgées automatiquement (toutes les heures).</div>
+    <div class="field full"><label class="field row"><input type="checkbox" id="sWin" ${s.notify_windows ? 'checked' : ''}/> Notifications Windows lors d'une panne</label></div>
+    <div class="field full"><label class="field row"><input type="checkbox" id="sRec" ${s.notify_recovery ? 'checked' : ''}/> …et lors du rétablissement</label></div>
+    <div class="field full note">Les alertes s'affichent toujours dans l'application. Les notifications Windows passent par PowerShell (aucune dépendance) et fonctionnent même quand la fenêtre du module est fermée, tant que le module est actif. Elles peuvent être masquées par le mode « Ne pas déranger » de Windows.</div>
+    </div><div class="foot"><button id="sTest">🔔 Tester la notification</button><span class="spacer"></span><button id="sCancel">Annuler</button><button class="primary" id="sSave">Enregistrer</button></div>`)
+  $('#sCancel', d.el).onclick = d.close
+  $('#sTest', d.el).onclick = () => act('notify.test', {}, 'Notification envoyée', 30000)
+  $('#sSave', d.el).onclick = async () => {
+    const r = await act('settings.save', { settings: { retention_days: +$('#sRet', d.el).value, notify_windows: $('#sWin', d.el).checked, notify_recovery: $('#sRec', d.el).checked } }, 'Paramètres enregistrés')
+    if (r) { state.settings = r.settings; d.close() }
+  }
+}
+
+// ── Actions ─────────────────────────────────────────────────────────────────
+$('#btnAdd').onclick = () => openEditor(null)
+$('#btnAdd2').onclick = () => openEditor(null)
+$('#btnInc').onclick = openIncidents
+$('#btnPauseAll').onclick = async () => {
+  const allPaused = state.monitors.every((m) => m.paused)
+  if (await act('monitor.pause', { all: true, paused: !allPaused }, allPaused ? 'Toutes les sondes reprennent' : 'Toutes les sondes sont suspendues')) load()
+}
+$('#btnMenu').onclick = (e) => { e.stopPropagation(); $('#menuList').classList.toggle('hidden') }
+document.addEventListener('click', () => $('#menuList').classList.add('hidden'))
+$('#menuList').onclick = async (e) => {
+  const b = e.target.closest('button[data-act]'); if (!b) return
+  $('#menuList').classList.add('hidden')
+  const a = b.dataset.act
+  if (a === 'settings') openSettings()
+  if (a === 'incidents') openIncidents()
+  if (a === 'export') exportJson()
+  if (a === 'import') $('#fileImport').click()
+  if (a === 'examples') addExamples()
+}
+$('#btnEx').onclick = addExamples
+
+async function exportJson() {
+  const r = await act('export'); if (!r) return
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], { type: 'application/json' }))
+  a.download = `sondes-supervision-${new Date().toISOString().slice(0, 10)}.json`
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+$('#fileImport').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = ''
+  if (!f) return
+  let data
+  try { data = JSON.parse(await f.text()) } catch { return toast('Fichier JSON illisible', true) }
+  const replace = state.monitors.length && confirm('Remplacer les sondes existantes ?\n\nOK = remplacer (historique supprimé), Annuler = ajouter à la suite.')
+  const r = await act('import', { data, replace: !!replace }, null, 60000)
+  if (r) { toast(`${r.added} sonde(s) importée(s)${r.skipped ? `, ${r.skipped} déjà présente(s)` : ''}`); load() }
+}
+async function addExamples() {
+  const ex = { format: 'ledroide-uptime-monitor', version: 1, monitors: [
+    { name: 'Cloudflare (HTTPS)', type: 'http', target: 'https://www.cloudflare.com/', interval: 60, keyword: 'Cloudflare' },
+    { name: 'DNS Google (ping)', type: 'ping', target: '8.8.8.8', interval: 30 },
+    { name: 'DNS Cloudflare (TCP 53)', type: 'tcp', target: '1.1.1.1:53', interval: 60 },
+    { name: 'Résolution wikipedia.org', type: 'dns', target: 'wikipedia.org', interval: 300 },
+    { name: 'Certificat github.com', type: 'tls', target: 'github.com', interval: 3600, warn_days: 14 },
+  ] }
+  const r = await act('import', { data: ex }, null, 30000)
+  if (r) { toast(`${r.added} sonde(s) d'exemple ajoutée(s)`); load() }
+}
+
+load()
+setInterval(() => { if (!document.hidden) load() }, 60000)
+</script>
+</body>
+</html>

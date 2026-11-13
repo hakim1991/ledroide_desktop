@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Coffre de mots de passe</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); border-color: var(--border); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 6px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=range] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .mono { font-family: var(--mono); }
+
+  /* Lock screen */
+  #lock { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .lockcard { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+              padding: 28px 28px 24px; box-shadow: 0 20px 50px rgba(0,0,0,.35); }
+  .lockcard .big { font-size: 38px; text-align: center; margin-bottom: 6px; }
+  .lockcard h2 { text-align: center; font-size: 17px; margin-bottom: 4px; }
+  .lockcard p { text-align: center; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+  .lockcard form { display: flex; flex-direction: column; gap: 10px; }
+  .lockcard input { padding: 9px 11px; font-size: 14px; }
+  .lockcard .msg { min-height: 18px; color: #fca5a5; font-size: 12.5px; text-align: center; }
+  .lockcard .info { color: #fcd34d; font-size: 12px; text-align: center; margin-top: 4px; }
+  .lockcard button.primary { padding: 9px; font-size: 14px; }
+
+  /* App */
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 6px; }
+  #q { width: 280px; max-width: 34vw; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border);
+               border-radius: 8px; padding: 4px; z-index: 50; min-width: 260px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+  #app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #main { flex: 1; min-height: 0; display: flex; }
+  #side { width: 210px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; padding: 8px 6px; }
+  .side-h { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 10px 8px 4px; display: flex; }
+  .nav { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: #c4c4cc; }
+  .nav:hover { background: var(--surface2); }
+  .nav.on { background: rgba(99,102,241,.18); color: #fff; }
+  .nav .ic { width: 16px; text-align: center; flex-shrink: 0; }
+  .nav .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav .n { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .nav .n.bad { color: #fca5a5; }
+  .nav.sub { padding-left: calc(8px + var(--d) * 14px); }
+
+  #list { width: 340px; flex-shrink: 0; border-right: 1px solid var(--border); overflow-y: auto; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .item:hover { background: #1a1a1f; }
+  .item.on { background: rgba(99,102,241,.16); }
+  .av { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+        font-weight: 700; color: #fff; flex-shrink: 0; font-size: 14px; }
+  .item .txt { flex: 1; min-width: 0; }
+  .item .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .u { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .item .badges { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+  .b { font-size: 10px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+  .b.w { color: #fca5a5; border-color: rgba(239,68,68,.35); }
+  .b.r { color: #fcd34d; border-color: rgba(245,158,11,.35); }
+  .star { color: #fbbf24; }
+  #listEmpty { padding: 40px 20px; text-align: center; color: var(--muted); line-height: 1.6; }
+
+  #detail { flex: 1; min-width: 0; overflow-y: auto; }
+  .placeholder { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); flex-direction: column; gap: 8px; }
+  .placeholder .big { font-size: 40px; opacity: .6; }
+  .d-head { display: flex; align-items: center; gap: 12px; padding: 18px 22px 12px; }
+  .d-head .av { width: 46px; height: 46px; font-size: 20px; border-radius: 12px; }
+  .d-head h2 { font-size: 18px; font-weight: 600; word-break: break-word; }
+  .d-head .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .d-body { padding: 0 22px 22px; display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+  .fld { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; }
+  .fld .k { font-size: 11px; color: var(--muted); margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
+  .fld .row { display: flex; align-items: center; gap: 6px; }
+  .fld .v { flex: 1; min-width: 0; word-break: break-all; font-size: 13.5px; user-select: text; }
+  .fld .v.pw { font-family: var(--mono); letter-spacing: .02em; }
+  .fld .v.notes { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.5; }
+  .fld .acts { display: flex; gap: 4px; flex-shrink: 0; }
+  .fld .acts button { padding: 3px 8px; font-size: 12px; }
+  .meter { height: 5px; border-radius: 3px; background: var(--surface2); overflow: hidden; margin-top: 7px; }
+  .meter > div { height: 100%; border-radius: 3px; transition: width .2s, background .2s; }
+  .meter-lbl { font-size: 11.5px; margin-top: 4px; color: var(--muted); }
+  .totp { display: flex; align-items: center; gap: 14px; }
+  .totp .code { font-family: var(--mono); font-size: 26px; letter-spacing: .12em; font-weight: 600; cursor: pointer; user-select: text; }
+  .ring { width: 30px; height: 30px; flex-shrink: 0; }
+  .ring circle { fill: none; stroke-width: 3.2; }
+  .ring .bg { stroke: var(--surface2); }
+  .ring .fg { stroke: var(--accent); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset 1s linear; }
+  .ring.low .fg { stroke: var(--warn); }
+  .ring text { fill: var(--muted); font-size: 10px; text-anchor: middle; dominant-baseline: central; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { background: var(--surface2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 10px; font-size: 12px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent); }
+  .meta { color: var(--muted); font-size: 11.5px; line-height: 1.7; }
+  details.hist summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  details.hist .h { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: 12px; }
+  details.hist .h .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .warnbox { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); color: #fecaca; border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+
+  /* Dialogs */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(600px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.small { width: min(420px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .dialog .content.one { grid-template-columns: 1fr; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .field.row { flex-direction: row; align-items: center; gap: 8px; }
+  .field textarea { min-height: 80px; resize: vertical; }
+  .inrow { display: flex; gap: 6px; }
+  .inrow input { flex: 1; min-width: 0; }
+  .note { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  .note.bad { color: #fca5a5; }
+  .note.good { color: #86efac; }
+
+  .gen-out { display: flex; gap: 6px; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .gen-out .v { flex: 1; font-family: var(--mono); font-size: 15px; word-break: break-all; user-select: text; min-height: 20px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+  .opts label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .slider { display: flex; align-items: center; gap: 10px; }
+  .slider input[type=range] { flex: 1; }
+  .slider b { width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+  #clipbar { position: fixed; bottom: 16px; right: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+             padding: 7px 10px; font-size: 12px; display: flex; gap: 8px; align-items: center; z-index: 90; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+  #clipbar button { padding: 2px 8px; font-size: 11.5px; }
+</style>
+</head>
+<body>
+
+<div id="lock" class="hidden">
+  <div class="lockcard">
+    <div class="big">🔐</div>
+    <h2 id="lockTitle">Coffre verrouillé</h2>
+    <p id="lockText">Saisissez votre mot de passe maître pour déverrouiller le coffre.</p>
+    <form id="lockForm" autocomplete="off">
+      <input type="password" id="pw1" placeholder="Mot de passe maître" autocomplete="off" />
+      <input type="password" id="pw2" placeholder="Confirmer le mot de passe" class="hidden" autocomplete="off" />
+      <div id="pwMeter" class="hidden"><div class="meter"><div></div></div><div class="meter-lbl"></div></div>
+      <button class="primary" id="lockBtn" type="submit">Déverrouiller</button>
+      <div class="msg" id="lockMsg"></div>
+    </form>
+    <div class="info" id="lockInfo"></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <span class="title">🔐 Coffre</span>
+    <input id="q" type="search" placeholder="Rechercher (Ctrl+F)…" autocomplete="off" />
+    <button class="primary" id="btnNew" title="Nouvelle entrée (Ctrl+N)">＋ Entrée</button>
+    <button id="btnGen" title="Générateur (Ctrl+G)">🎲 Générateur</button>
+    <span class="spacer"></span>
+    <div class="menu">
+      <button class="icon" id="btnMenu" title="Plus d'actions">⋯</button>
+      <div class="menu-list hidden" id="menuList">
+        <button data-act="import-csv">⬆️ Importer un CSV (Chrome, Firefox, Bitwarden)…</button>
+        <button data-act="import-enc">⬆️ Importer un export chiffré…</button>
+        <button data-act="export-enc">⬇️ Exporter (fichier chiffré)…</button>
+        <hr>
+        <button data-act="settings">⚙️ Réglages…</button>
+        <button data-act="change-pw">🔑 Changer le mot de passe maître…</button>
+        <hr>
+        <button data-act="reset" class="danger">🗑 Réinitialiser le coffre…</button>
+      </div>
+    </div>
+    <button id="btnLock" title="Verrouiller (Ctrl+L)">🔒 Verrouiller</button>
+    <input type="file" id="csvFile" accept=".csv,text/csv" class="hidden" />
+    <input type="file" id="encFile" accept=".json,application/json" class="hidden" />
+  </header>
+  <div id="main">
+    <nav id="side"></nav>
+    <div id="list"></div>
+    <section id="detail"></section>
+  </div>
+</div>
+
+<div id="clipbar" class="hidden"><span id="clipTxt"></span><button id="clipClear">Effacer</button></div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'password-vault'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const SCORE_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981']
+const SCORE_LABELS = ['Très faible', 'Faible', 'Moyen', 'Fort', 'Très fort']
+const AV_COLORS = ['#6366f1', '#0ea5e9', '#22c55e', '#eab308', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#14b8a6', '#64748b']
+const SLOW = { timeout: 60000 }
+
+const state = {
+  status: null, settings: { auto_lock_minutes: 5, clipboard_seconds: 20, lock_on_hide: true },
+  list: null, sel: null, entry: null, filter: { view: 'all', folder: null, tag: '' }, q: '',
+  reveal: false, totpTimer: null, codes: {},
+}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+async function act(action, payload, okMsg, opts) {
+  try { const r = await call(action, payload, opts); if (okMsg) toast(okMsg); return r }
+  catch (e) {
+    if (e.code === 'LOCKED') { showLock('expired'); return null }
+    toast(e.message || String(e), true); return null
+  }
+}
+function avColor(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length] }
+function avatar(e) { const s = e.host || e.title || '?'; return `<div class="av" style="background:${avColor(s)}">${esc((e.title || s)[0].toUpperCase())}</div>` }
+function fmtDate(iso) { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) }
+function ago(iso) {
+  const d = new Date(iso); if (isNaN(d)) return ''
+  const days = Math.floor((Date.now() - d) / 86400000)
+  return days < 1 ? "aujourd'hui" : days < 30 ? `il y a ${days} j` : days < 365 ? `il y a ${Math.floor(days / 30)} mois` : `il y a ${Math.floor(days / 365)} an(s)`
+}
+
+// ── Clipboard with auto-clear ────────────────────────────────────────────────
+let clip = { value: null, timer: null, tick: null, until: 0 }
+async function writeClip(text) {
+  try { await navigator.clipboard.writeText(text); return true } catch {}
+  const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'
+  document.body.appendChild(ta); ta.select()
+  let ok = false; try { ok = document.execCommand('copy') } catch {}
+  ta.remove(); return ok
+}
+async function copy(text, label) {
+  if (!text) return
+  if (!(await writeClip(text))) { toast('Copie impossible', true); return }
+  const secs = Number(state.settings.clipboard_seconds) || 0
+  clearClipTimers()
+  if (!secs) { toast(`${label} copié`); return }
+  clip.value = text; clip.until = Date.now() + secs * 1000
+  clip.timer = setTimeout(clearClipboard, secs * 1000)
+  clip.tick = setInterval(renderClipbar, 500)
+  renderClipbar()
+  toast(`${label} copié — effacé dans ${secs} s`)
+}
+function clearClipTimers() { clearTimeout(clip.timer); clearInterval(clip.tick); clip.timer = clip.tick = null }
+function renderClipbar() {
+  const left = Math.max(0, Math.ceil((clip.until - Date.now()) / 1000))
+  $('#clipTxt').textContent = `📋 Presse-papiers effacé dans ${left} s`
+  $('#clipbar').classList.toggle('hidden', !clip.value)
+}
+async function clearClipboard() {
+  const value = clip.value
+  clearClipTimers(); clip.value = null; renderClipbar()
+  if (!value) return
+  let current = null
+  try { current = await navigator.clipboard.readText() } catch {}
+  if (current === null || current === value) await writeClip(' ')
+}
+$('#clipClear').onclick = clearClipboard
+
+// ── Lock screen ──────────────────────────────────────────────────────────────
+function showLock(reason) {
+  stopTotp()
+  state.list = null; state.sel = null; state.entry = null; state.codes = {}
+  $('#side').innerHTML = $('#list').innerHTML = $('#detail').innerHTML = ''
+  $$('.overlay').forEach((o) => o.remove())
+  $('#app').classList.add('hidden'); $('#lock').classList.remove('hidden')
+  const init = state.status && state.status.initialized
+  $('#lockTitle').textContent = init ? 'Coffre verrouillé' : 'Créer votre coffre'
+  $('#lockText').textContent = init ? 'Saisissez votre mot de passe maître pour déverrouiller le coffre.'
+    : 'Choisissez un mot de passe maître. Il chiffre toutes vos données : s’il est perdu, le coffre ne peut pas être récupéré.'
+  $('#pw2').classList.toggle('hidden', init); $('#pwMeter').classList.toggle('hidden', init)
+  $('#lockBtn').textContent = init ? 'Déverrouiller' : 'Créer le coffre'
+  $('#pw1').value = $('#pw2').value = ''
+  $('#lockMsg').textContent = ''
+  $('#lockInfo').textContent = reason === 'auto' ? 'Verrouillé automatiquement après inactivité.'
+    : reason === 'hidden' ? 'Verrouillé car le module a été masqué.' : reason === 'expired' ? 'Session expirée : le coffre a été verrouillé.' : ''
+  if (state.status && !state.status.dependency_ok) $('#lockInfo').textContent = 'La bibliothèque « cryptography » est absente : réactivez le module pour l’installer.'
+  setTimeout(() => $('#pw1').focus(), 0)
+}
+
+$('#pw1').addEventListener('input', debounce(async () => {
+  if (state.status && state.status.initialized) return
+  meter($('#pwMeter'), $('#pw1').value)
+}, 150))
+
+$('#lockForm').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const pw = $('#pw1').value
+  if (!pw) return
+  const init = state.status && state.status.initialized
+  $('#lockBtn').disabled = true; $('#lockMsg').textContent = ''
+  $('#lockBtn').textContent = init ? 'Vérification…' : 'Création…'
+  try {
+    if (init) await call('unlock', { password: pw }, SLOW)
+    else await call('setup', { password: pw, confirm: $('#pw2').value }, SLOW)
+    $('#pw1').value = $('#pw2').value = ''
+    await enterApp()
+  } catch (err) {
+    $('#lockMsg').textContent = err.message
+    $('#pw1').select()
+  } finally {
+    $('#lockBtn').disabled = false
+    $('#lockBtn').textContent = init ? 'Déverrouiller' : 'Créer le coffre'
+  }
+})
+
+async function refreshStatus() {
+  try { state.status = await call('status') } catch (e) { $('#lock').classList.remove('hidden'); $('#lockMsg').textContent = e.message; return }
+  state.settings = state.status.settings
+  if (state.status.unlocked && state.settings.lock_on_hide) { await call('lock', { reason: 'reload' }).catch(() => {}); state.status.unlocked = false }
+  if (state.status.unlocked) await enterApp()
+  else showLock()
+}
+
+async function enterApp() {
+  const st = await act('status'); if (!st) return
+  state.status = st; state.settings = st.settings
+  $('#lock').classList.add('hidden'); $('#app').classList.remove('hidden')
+  await reload()
+  $('#q').focus()
+}
+
+async function lockNow(reason = 'manual') {
+  await call('lock', { reason }).catch(() => {})
+  state.status = await call('status').catch(() => state.status)
+  showLock(reason)
+}
+
+window.ledroide.on(MODULE_ID, 'locked', (d) => { if (!$('#app').classList.contains('hidden')) showLock(d && d.reason) })
+
+// ── List / sidebar ───────────────────────────────────────────────────────────
+async function reload(keepSel = true) {
+  const f = state.filter
+  const r = await act('entries.list', { q: state.q, view: f.view, folder: f.folder, tag: f.tag })
+  if (!r) return
+  state.list = r
+  renderSide(); renderList()
+  if (keepSel && state.sel && r.items.some((i) => i.id === state.sel)) await openEntry(state.sel, true)
+  else if (!r.items.some((i) => i.id === state.sel)) { state.sel = null; state.entry = null; renderDetail() }
+}
+
+function navItem(ic, lbl, n, on, attrs, bad = false, depth = 0) {
+  return `<div class="nav${on ? ' on' : ''}${depth ? ' sub' : ''}" style="--d:${depth}" ${attrs}><span class="ic">${ic}</span><span class="lbl">${esc(lbl)}</span>${n !== null ? `<span class="n${bad && n ? ' bad' : ''}">${n}</span>` : ''}</div>`
+}
+function renderSide() {
+  const r = state.list, f = state.filter, c = r.counts
+  const views = [['all', '🗂', 'Toutes', r.total], ['favorites', '★', 'Favoris', c.favorites], ['totp', '⏱', 'Codes TOTP', c.totp],
+    ['weak', '⚠', 'Faibles', c.weak], ['reused', '♻', 'Réutilisés', c.reused]]
+  let html = views.map(([v, ic, l, n]) => navItem(ic, l, n, f.view === v && f.folder === null && !f.tag, `data-view="${v}"`, v === 'weak' || v === 'reused')).join('')
+  const folders = {}
+  for (const [name, n] of Object.entries(r.folders)) {
+    if (!name) continue
+    const parts = name.split('/')
+    parts.forEach((_, i) => { const p = parts.slice(0, i + 1).join('/'); folders[p] = (folders[p] || 0) + (i === parts.length - 1 ? n : 0) })
+  }
+  const total = (p) => Object.entries(r.folders).filter(([k]) => k === p || k.startsWith(p + '/')).reduce((a, [, n]) => a + n, 0)
+  const fnames = Object.keys(folders).sort((a, b) => a.localeCompare(b, 'fr'))
+  if (fnames.length || r.folders['']) {
+    html += `<div class="side-h">Dossiers</div>`
+    html += fnames.map((p) => navItem('📁', p.split('/').pop(), total(p), f.folder === p, `data-folder="${esc(p)}" title="${esc(p)}"`, false, p.split('/').length - 1)).join('')
+    if (r.folders['']) html += navItem('·', 'Sans dossier', r.folders[''], f.folder === '', 'data-folder=""')
+  }
+  const tags = Object.entries(r.tags)
+  if (tags.length) {
+    html += `<div class="side-h">Tags</div>`
+    html += tags.map(([t, n]) => navItem('#', t, n, f.tag === t, `data-tag="${esc(t)}"`)).join('')
+  }
+  $('#side').innerHTML = html
+}
+$('#side').addEventListener('click', (e) => {
+  const n = e.target.closest('.nav'); if (!n) return
+  if (n.dataset.view) state.filter = { view: n.dataset.view, folder: null, tag: '' }
+  else if (n.dataset.folder !== undefined) state.filter = { view: 'all', folder: n.dataset.folder, tag: '' }
+  else if (n.dataset.tag) state.filter = { view: 'all', folder: null, tag: n.dataset.tag }
+  reload()
+})
+$('#side').addEventListener('contextmenu', async (e) => {
+  const n = e.target.closest('.nav[data-folder]'); if (!n || !n.dataset.folder) return
+  e.preventDefault()
+  const v = await ask('Renommer le dossier', 'Nouveau chemin (utilisez / pour les sous-dossiers)', n.dataset.folder)
+  if (v === null || v === n.dataset.folder) return
+  const r = await act('folder.rename', { old: n.dataset.folder, new: v })
+  if (r) { toast(`${r.moved} entrée(s) déplacée(s)`); state.filter.folder = v || null; reload() }
+})
+
+function renderList() {
+  const r = state.list
+  if (!r.items.length) {
+    const any = r.total > 0
+    $('#list').innerHTML = `<div id="listEmpty">${any ? 'Aucune entrée ne correspond.' : 'Le coffre est vide.<br>Ajoutez une entrée ou importez vos mots de passe depuis un navigateur (menu ⋯).'}
+      ${any ? '' : '<div style="margin-top:12px"><button class="primary" id="emptyNew">＋ Nouvelle entrée</button></div>'}</div>`
+    const b = $('#emptyNew'); if (b) b.onclick = () => openEditor(null)
+    return
+  }
+  $('#list').innerHTML = r.items.map((i) => `
+    <div class="item${i.id === state.sel ? ' on' : ''}" data-id="${i.id}">
+      ${avatar(i)}
+      <div class="txt"><div class="t">${i.favorite ? '<span class="star">★</span> ' : ''}${esc(i.title)}</div>
+        <div class="u">${esc(i.username || i.host || (i.has_password ? '' : 'Note'))}</div></div>
+      <div class="badges">${i.has_totp ? '<span class="b">2FA</span>' : ''}${i.score !== null && i.score <= 1 ? '<span class="b w">faible</span>' : ''}${i.reused ? '<span class="b r">réutilisé</span>' : ''}</div>
+    </div>`).join('')
+}
+$('#list').addEventListener('click', (e) => { const it = e.target.closest('.item'); if (it) openEntry(it.dataset.id) })
+$('#list').addEventListener('dblclick', (e) => {
+  const it = e.target.closest('.item'); if (!it) return
+  const i = state.list.items.find((x) => x.id === it.dataset.id)
+  if (i && i.has_password) act('entry.get', { id: i.id }).then((en) => en && copy(en.password, 'Mot de passe'))
+})
+
+// ── Detail ───────────────────────────────────────────────────────────────────
+async function openEntry(id, keepReveal = false) {
+  const e = await act('entry.get', { id }); if (!e) return
+  if (state.sel !== id || !keepReveal) state.reveal = false
+  state.sel = id; state.entry = e
+  $$('.item').forEach((n) => n.classList.toggle('on', n.dataset.id === id))
+  renderDetail()
+}
+
+function fieldRow(key, valueHtml, acts, cls = '') {
+  return `<div class="fld"><div class="k">${key}</div><div class="row"><div class="v ${cls}">${valueHtml}</div><div class="acts">${acts}</div></div></div>`
+}
+
+function renderDetail() {
+  stopTotp()
+  const e = state.entry
+  if (!e) {
+    $('#detail').innerHTML = `<div class="placeholder"><div class="big">🔐</div><div>Sélectionnez une entrée</div>
+      <div style="font-size:12px">Double-clic sur une entrée : copier son mot de passe</div></div>`
+    return
+  }
+  const host = e.url ? (e.url.match(/^[a-z]+:\/\/([^/:?#]+)/i) || [, e.url])[1].replace(/^www\./, '') : ''
+  const s = e.strength
+  let html = `<div class="d-head">${avatar({ ...e, host })}<div style="flex:1;min-width:0"><h2>${e.favorite ? '<span class="star">★</span> ' : ''}${esc(e.title)}</h2>
+    <div class="sub">${e.folder ? '📁 ' + esc(e.folder) + ' · ' : ''}modifiée ${esc(ago(e.updated))}</div></div>
+    <button class="icon" id="dFav" title="${e.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${e.favorite ? '★' : '☆'}</button>
+    <button id="dEdit">✏️ Modifier</button><button class="icon danger" id="dDel" title="Supprimer">🗑</button></div><div class="d-body">`
+  if (e.username) html += fieldRow('Identifiant', esc(e.username), `<button data-copy="username">Copier</button>`)
+  if (e.password) {
+    html += `<div class="fld"><div class="k">Mot de passe</div><div class="row">
+      <div class="v pw">${state.reveal ? esc(e.password) : '••••••••••••'}</div>
+      <div class="acts"><button id="dReveal">${state.reveal ? 'Masquer' : 'Afficher'}</button><button data-copy="password">Copier</button></div></div>
+      <div class="meter"><div style="width:${(s.score + 1) * 20}%;background:${SCORE_COLORS[s.score]}"></div></div>
+      <div class="meter-lbl">${SCORE_LABELS[s.score]} · ≈ ${Math.round(s.entropy)} bits${s.warnings.length ? ' · ' + esc(s.warnings.join(' · ')) : ''}
+      · changé ${esc(ago(e.password_changed))}</div></div>`
+  }
+  if (e.totp) {
+    if (e.totp_info && e.totp_info.error) html += `<div class="warnbox">Code TOTP invalide : ${esc(e.totp_info.error)}</div>`
+    else html += `<div class="fld"><div class="k">Code à usage unique (TOTP)${e.totp_info.issuer ? ' · ' + esc(e.totp_info.issuer) : ''}</div>
+      <div class="row"><div class="v"><div class="totp"><span class="code" id="totpCode" title="Cliquer pour copier">······</span>
+      <svg class="ring" id="totpRing" viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15"/><circle class="fg" cx="18" cy="18" r="15" stroke-dasharray="94.25" stroke-dashoffset="0"/><text x="18" y="18"></text></svg></div></div>
+      <div class="acts"><button id="totpCopy">Copier</button></div></div></div>`
+  }
+  if (e.url) html += fieldRow('Adresse (URL)', esc(e.url), `<button data-copy="url">Copier</button>`)
+  if (e.notes) html += `<div class="fld"><div class="k">Notes <span class="spacer"></span><button class="ghost" data-copy="notes" style="padding:1px 6px;font-size:11px">Copier</button></div><div class="v notes">${esc(e.notes)}</div></div>`
+  if (e.tags && e.tags.length) html += `<div class="fld"><div class="k">Tags</div><div class="chips">${e.tags.map((t) => `<span class="chip" data-tag="${esc(t)}">#${esc(t)}</span>`).join('')}</div></div>`
+  if (e.history && e.history.length) {
+    html += `<details class="hist fld"><summary>Anciens mots de passe (${e.history.length})</summary>
+      ${e.history.map((h, i) => `<div class="h"><span class="mono">${state.reveal ? esc(h.password) : '••••••••'}</span><span class="muted">jusqu'au ${esc(fmtDate(h.until))}</span><button data-hist="${i}" style="padding:2px 7px;font-size:11.5px">Copier</button></div>`).join('')}
+      <div style="margin-top:8px"><button class="ghost danger" id="histClear" style="font-size:11.5px">Effacer l'historique</button></div></details>`
+  }
+  html += `<div class="meta">Créée le ${esc(fmtDate(e.created))}<br>Modifiée le ${esc(fmtDate(e.updated))}</div></div>`
+  $('#detail').innerHTML = html
+  $$('#detail [data-copy]').forEach((b) => (b.onclick = () => copy(e[b.dataset.copy], { username: 'Identifiant', password: 'Mot de passe', url: 'Adresse', notes: 'Notes' }[b.dataset.copy])))
+  $$('#detail [data-hist]').forEach((b) => (b.onclick = () => copy(e.history[Number(b.dataset.hist)].password, 'Ancien mot de passe')))
+  $$('#detail .chip[data-tag]').forEach((c) => (c.onclick = () => { state.filter = { view: 'all', folder: null, tag: c.dataset.tag }; reload() }))
+  const rv = $('#dReveal'); if (rv) rv.onclick = () => { state.reveal = !state.reveal; renderDetail() }
+  $('#dEdit').onclick = () => openEditor(e)
+  $('#dDel').onclick = () => deleteEntry(e)
+  $('#dFav').onclick = async () => { if (await act('entry.favorite', { id: e.id, favorite: !e.favorite })) reload() }
+  const hc = $('#histClear'); if (hc) hc.onclick = async () => { if (confirm('Effacer l’historique des anciens mots de passe ?') && await act('entry.clear_history', { id: e.id })) openEntry(e.id, true) }
+  if (e.totp && !(e.totp_info && e.totp_info.error)) startTotp(e.id)
+}
+
+async function deleteEntry(e) {
+  if (!confirm(`Supprimer définitivement « ${e.title} » ?`)) return
+  if (await act('entry.delete', { id: e.id }, 'Entrée supprimée')) { state.sel = null; state.entry = null; reload(false) }
+}
+
+// ── TOTP ─────────────────────────────────────────────────────────────────────
+function stopTotp() { clearInterval(state.totpTimer); state.totpTimer = null }
+function startTotp(id) {
+  let code = null, expires = 0, period = 30, busy = false
+  const tick = async () => {
+    const left = (expires - Date.now()) / 1000
+    if ((left <= 0 || !code) && !busy) {
+      busy = true
+      const r = await act('totp.codes', { ids: [id] })
+      busy = false
+      if (!r || state.sel !== id) return
+      const c = r.codes[id]
+      if (!c || c.error) { $('#totpCode') && ($('#totpCode').textContent = '—'); return }
+      code = c.code; period = c.period; expires = Date.now() + c.remaining * 1000
+      const el = $('#totpCode'); if (el) el.textContent = code.length === 6 ? code.slice(0, 3) + ' ' + code.slice(3) : code.slice(0, 4) + ' ' + code.slice(4)
+    }
+    const ring = $('#totpRing'); if (!ring) return
+    const rem = Math.max(0, Math.ceil((expires - Date.now()) / 1000))
+    ring.querySelector('.fg').setAttribute('stroke-dashoffset', String(94.25 * (1 - rem / period)))
+    ring.querySelector('text').textContent = rem
+    ring.classList.toggle('low', rem <= 5)
+  }
+  const copyCode = () => code && copy(code, 'Code')
+  $('#totpCode').onclick = copyCode; $('#totpCopy').onclick = copyCode
+  tick(); state.totpTimer = setInterval(tick, 500)
+}
+
+// ── Dialogs ──────────────────────────────────────────────────────────────────
+function dialog(html, cls = '') {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${cls}">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); ov.remove() } })
+  return ov
+}
+function ask(title, label, value = '', type = 'text') {
+  return new Promise((resolve) => {
+    const ov = dialog(`<h3>${esc(title)}</h3><div class="content one"><div class="field"><label>${esc(label)}</label><input id="askV" type="${type}" value="${esc(value)}"></div></div>
+      <div class="foot"><span class="spacer"></span><button id="askNo">Annuler</button><button class="primary" id="askOk">OK</button></div>`, 'small')
+    const done = (v) => { ov.remove(); resolve(v) }
+    $('#askNo', ov).onclick = () => done(null)
+    $('#askOk', ov).onclick = () => done($('#askV', ov).value)
+    $('#askV', ov).addEventListener('keydown', (e) => { if (e.key === 'Enter') done($('#askV', ov).value) })
+    new MutationObserver((_, obs) => { if (!ov.isConnected) { obs.disconnect(); resolve(null) } }).observe(document.body, { childList: true })
+    setTimeout(() => { $('#askV', ov).focus(); $('#askV', ov).select() }, 0)
+  })
+}
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms) } }
+async function meter(box, pw) {
+  const bar = $('.meter > div', box), lbl = $('.meter-lbl', box)
+  if (!pw) { bar.style.width = '0'; lbl.textContent = ''; return }
+  const s = await call('strength', { password: pw }).catch(() => null); if (!s) return
+  bar.style.width = (s.score + 1) * 20 + '%'; bar.style.background = SCORE_COLORS[s.score]
+  lbl.textContent = `${s.label} · ≈ ${Math.round(s.entropy)} bits${s.warnings.length ? ' · ' + s.warnings.join(' · ') : ''}`
+}
+
+function openEditor(entry) {
+  const e = entry ? { ...entry } : { title: '', username: '', password: '', url: '', notes: '', folder: state.filter.folder || '', tags: state.filter.tag ? [state.filter.tag] : [], favorite: false, totp: '' }
+  const folders = Object.keys((state.list && state.list.folders) || {}).filter(Boolean)
+  const ov = dialog(`<h3>${entry ? 'Modifier l’entrée' : 'Nouvelle entrée'}</h3>
+    <div class="content">
+      <div class="field full"><label>Titre</label><input id="eTitle" maxlength="200" value="${esc(e.title)}" placeholder="ex. Messagerie (déduit de l’URL si vide)"></div>
+      <div class="field"><label>Identifiant</label><input id="eUser" maxlength="500" value="${esc(e.username)}" autocomplete="off"></div>
+      <div class="field"><label>Adresse (URL)</label><input id="eUrl" maxlength="2000" value="${esc(e.url)}" placeholder="https://…"></div>
+      <div class="field full"><label>Mot de passe</label>
+        <div class="inrow"><input id="ePw" type="password" class="mono" maxlength="2000" value="${esc(e.password)}" autocomplete="new-password">
+        <button class="icon" id="ePwShow" title="Afficher">👁</button><button id="ePwGen" title="Générer">🎲 Générer</button></div>
+        <div id="eMeter"><div class="meter"><div></div></div><div class="meter-lbl"></div></div></div>
+      <div class="field full"><label>Code TOTP (secret base32 ou URI otpauth://)</label>
+        <input id="eTotp" class="mono" maxlength="2000" value="${esc(e.totp)}" placeholder="JBSW Y3DP EHPK 3PXP ou otpauth://totp/…" autocomplete="off">
+        <div class="note" id="eTotpNote"></div></div>
+      <div class="field"><label>Dossier (/ pour les sous-dossiers)</label><input id="eFolder" list="eFolders" maxlength="100" value="${esc(e.folder)}">
+        <datalist id="eFolders">${folders.map((f) => `<option value="${esc(f)}">`).join('')}</datalist></div>
+      <div class="field"><label>Tags (séparés par des virgules)</label><input id="eTags" value="${esc((e.tags || []).join(', '))}"></div>
+      <div class="field full"><label>Notes</label><textarea id="eNotes" maxlength="50000">${esc(e.notes)}</textarea></div>
+      <label class="field row full"><input type="checkbox" id="eFav" ${e.favorite ? 'checked' : ''}> Favori</label>
+    </div>
+    <div class="foot"><span class="note">Tout est chiffré, y compris le titre, l’URL et les notes.</span><span class="spacer"></span><button id="eCancel">Annuler</button><button class="primary" id="eSave">Enregistrer</button></div>`)
+  const pw = $('#ePw', ov)
+  const upd = debounce(() => meter($('#eMeter', ov), pw.value), 150)
+  pw.addEventListener('input', upd); upd()
+  $('#ePwShow', ov).onclick = () => { pw.type = pw.type === 'password' ? 'text' : 'password' }
+  $('#ePwGen', ov).onclick = () => openGenerator((v) => { pw.value = v; pw.type = 'text'; upd() })
+  const totpNote = debounce(async () => {
+    const v = $('#eTotp', ov).value.trim(), n = $('#eTotpNote', ov)
+    if (!v) { n.textContent = ''; n.className = 'note'; return }
+    try { const r = await call('totp.preview', { totp: v }); n.textContent = `✓ Code actuel : ${r.code} (${r.digits} chiffres, ${r.algorithm}${r.issuer ? ', ' + r.issuer : ''})`; n.className = 'note good' }
+    catch (err) { n.textContent = err.message; n.className = 'note bad' }
+  }, 250)
+  $('#eTotp', ov).addEventListener('input', totpNote); totpNote()
+  $('#eCancel', ov).onclick = () => ov.remove()
+  const save = async () => {
+    const data = { title: $('#eTitle', ov).value, username: $('#eUser', ov).value, password: pw.value, url: $('#eUrl', ov).value,
+      notes: $('#eNotes', ov).value, folder: $('#eFolder', ov).value, totp: $('#eTotp', ov).value, favorite: $('#eFav', ov).checked,
+      tags: $('#eTags', ov).value.split(',').map((t) => t.trim()).filter(Boolean) }
+    const r = await act('entry.save', { id: entry ? entry.id : null, entry: data }, entry ? 'Entrée enregistrée' : 'Entrée ajoutée')
+    if (!r) return
+    ov.remove(); state.sel = r.id
+    await reload(); await openEntry(r.id)
+  }
+  $('#eSave', ov).onclick = save
+  ov.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.ctrlKey) save() })
+  setTimeout(() => $('#eTitle', ov).focus(), 0)
+}
+
+const GEN_KEY = 'pv-gen'
+function genOpts() {
+  try { return { mode: 'password', length: 20, lower: true, upper: true, digits: true, symbols: true, exclude_ambiguous: false,
+    words: 5, separator: '-', capitalize: true, number: true, ...JSON.parse(localStorage.getItem(GEN_KEY) || '{}') } }
+  catch { return { mode: 'password', length: 20, lower: true, upper: true, digits: true, symbols: true, words: 5, separator: '-', capitalize: true, number: true } }
+}
+function openGenerator(onUse) {
+  const o = genOpts()
+  const ov = dialog(`<h3>Générateur de mots de passe</h3>
+    <div class="content one">
+      <div class="gen-out"><div class="v" id="gV"></div><button class="icon" id="gAgain" title="Régénérer">↻</button><button id="gCopy">Copier</button></div>
+      <div><div class="meter"><div id="gBar"></div></div><div class="meter-lbl" id="gLbl"></div></div>
+      <div class="seg" style="justify-self:start"><button data-m="password">Mot de passe</button><button data-m="passphrase">Phrase de passe</button></div>
+      <div id="gPw">
+        <div class="field"><label>Longueur</label><div class="slider"><input type="range" id="gLen" min="4" max="64" value="${o.length}"><b id="gLenV">${o.length}</b></div></div>
+        <div class="opts" style="margin-top:8px">
+          <label><input type="checkbox" id="gLower" ${o.lower ? 'checked' : ''}> a-z</label>
+          <label><input type="checkbox" id="gUpper" ${o.upper ? 'checked' : ''}> A-Z</label>
+          <label><input type="checkbox" id="gDigits" ${o.digits ? 'checked' : ''}> 0-9</label>
+          <label><input type="checkbox" id="gSymbols" ${o.symbols ? 'checked' : ''}> !#$%…</label>
+          <label><input type="checkbox" id="gAmb" ${o.exclude_ambiguous ? 'checked' : ''}> Exclure les ambigus (l, 1, O, 0…)</label>
+        </div>
+      </div>
+      <div id="gPp">
+        <div class="field"><label>Nombre de mots</label><div class="slider"><input type="range" id="gWords" min="3" max="10" value="${o.words}"><b id="gWordsV">${o.words}</b></div></div>
+        <div class="opts" style="margin-top:8px;align-items:center">
+          <label>Séparateur <select id="gSep">${[['-', 'tiret'], ['.', 'point'], ['_', 'souligné'], [' ', 'espace'], ['', 'aucun']].map(([v, l]) => `<option value="${esc(v)}" ${o.separator === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          <label><input type="checkbox" id="gCap" ${o.capitalize ? 'checked' : ''}> Majuscules</label>
+          <label><input type="checkbox" id="gNum" ${o.number ? 'checked' : ''}> Ajouter un nombre</label>
+        </div>
+      </div>
+    </div>
+    <div class="foot"><span class="spacer"></span><button id="gClose">Fermer</button>${onUse ? '<button class="primary" id="gUse">Utiliser</button>' : ''}</div>`)
+  let current = ''
+  const read = () => ({ mode: o.mode, length: +$('#gLen', ov).value, lower: $('#gLower', ov).checked, upper: $('#gUpper', ov).checked,
+    digits: $('#gDigits', ov).checked, symbols: $('#gSymbols', ov).checked, exclude_ambiguous: $('#gAmb', ov).checked,
+    words: +$('#gWords', ov).value, separator: $('#gSep', ov).value, capitalize: $('#gCap', ov).checked, number: $('#gNum', ov).checked })
+  const gen = async () => {
+    const opts = read(); Object.assign(o, opts)
+    try { localStorage.setItem(GEN_KEY, JSON.stringify(opts)) } catch {}
+    $('#gLenV', ov).textContent = opts.length; $('#gWordsV', ov).textContent = opts.words
+    $$('.seg button', ov).forEach((b) => b.classList.toggle('on', b.dataset.m === o.mode))
+    $('#gPw', ov).classList.toggle('hidden', o.mode !== 'password'); $('#gPp', ov).classList.toggle('hidden', o.mode !== 'passphrase')
+    try {
+      const r = await call('generate', opts)
+      current = r.password; $('#gV', ov).textContent = current
+      $('#gBar', ov).style.width = (r.score + 1) * 20 + '%'; $('#gBar', ov).style.background = SCORE_COLORS[r.score]
+      $('#gLbl', ov).textContent = `${r.label} · ${Math.round(r.entropy)} bits d’entropie · ${current.length} caractères`
+    } catch (err) { current = ''; $('#gV', ov).textContent = ''; $('#gLbl', ov).textContent = err.message }
+  }
+  $$('input, select', ov).forEach((i) => i.addEventListener('input', gen))
+  $$('.seg button', ov).forEach((b) => (b.onclick = () => { o.mode = b.dataset.m; gen() }))
+  $('#gAgain', ov).onclick = gen
+  $('#gCopy', ov).onclick = () => copy(current, 'Mot de passe')
+  $('#gClose', ov).onclick = () => ov.remove()
+  if (onUse) $('#gUse', ov).onclick = () => { if (current) { onUse(current); ov.remove() } }
+  gen()
+}
+
+function openSettings() {
+  const s = state.settings
+  const ov = dialog(`<h3>Réglages</h3><div class="content one">
+    <div class="field"><label>Verrouillage automatique après inactivité (minutes, 0 = jamais)</label><input type="number" id="sLock" min="0" max="240" value="${s.auto_lock_minutes}"></div>
+    <div class="field"><label>Effacement du presse-papiers après copie (secondes, 0 = jamais)</label><input type="number" id="sClip" min="0" max="300" value="${s.clipboard_seconds}"></div>
+    <label class="field row"><input type="checkbox" id="sHide" ${s.lock_on_hide ? 'checked' : ''}> Verrouiller quand le module est masqué (changement de module, fenêtre réduite)</label>
+    </div><div class="foot"><span class="spacer"></span><button id="sNo">Annuler</button><button class="primary" id="sOk">Enregistrer</button></div>`, 'small')
+  $('#sNo', ov).onclick = () => ov.remove()
+  $('#sOk', ov).onclick = async () => {
+    const r = await act('settings.save', { auto_lock_minutes: +$('#sLock', ov).value, clipboard_seconds: +$('#sClip', ov).value, lock_on_hide: $('#sHide', ov).checked }, 'Réglages enregistrés')
+    if (r) { state.settings = r.settings; ov.remove() }
+  }
+}
+
+function openChangePw() {
+  const ov = dialog(`<h3>Changer le mot de passe maître</h3><div class="content one">
+    <div class="field"><label>Mot de passe actuel</label><input type="password" id="cCur" autocomplete="off"></div>
+    <div class="field"><label>Nouveau mot de passe</label><input type="password" id="cNew" autocomplete="off"><div id="cMeter"><div class="meter"><div></div></div><div class="meter-lbl"></div></div></div>
+    <div class="field"><label>Confirmer le nouveau mot de passe</label><input type="password" id="cConf" autocomplete="off"></div>
+    <div class="note">Toutes les entrées sont re-chiffrées avec la nouvelle clé, en une seule transaction.</div>
+    </div><div class="foot"><span class="spacer"></span><button id="cNo">Annuler</button><button class="primary" id="cOk">Changer</button></div>`, 'small')
+  $('#cNew', ov).addEventListener('input', debounce(() => meter($('#cMeter', ov), $('#cNew', ov).value), 150))
+  $('#cNo', ov).onclick = () => ov.remove()
+  $('#cOk', ov).onclick = async () => {
+    $('#cOk', ov).disabled = true; $('#cOk', ov).textContent = 'Re-chiffrement…'
+    const r = await act('change_password', { current: $('#cCur', ov).value, new: $('#cNew', ov).value, confirm: $('#cConf', ov).value }, null, SLOW)
+    $('#cOk', ov).disabled = false; $('#cOk', ov).textContent = 'Changer'
+    if (r) { ov.remove(); toast(`Mot de passe changé — ${r.reencrypted} entrée(s) re-chiffrée(s)`) }
+  }
+  setTimeout(() => $('#cCur', ov).focus(), 0)
+}
+
+function download(name, content, type) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type }))
+  a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
+function openExport() {
+  const ov = dialog(`<h3>Exporter le coffre (chiffré)</h3><div class="content one">
+    <div class="note">Le fichier est chiffré (AES-256-GCM + scrypt) avec le mot de passe d’export choisi ci-dessous. Il peut être réimporté dans ce module.</div>
+    <div class="field"><label>Mot de passe maître (vérification)</label><input type="password" id="xMaster" autocomplete="off"></div>
+    <div class="field"><label>Mot de passe du fichier d’export</label><input type="password" id="xPw" autocomplete="off"></div>
+    <div class="field"><label>Confirmer</label><input type="password" id="xConf" autocomplete="off"></div>
+    </div><div class="foot"><span class="spacer"></span><button id="xNo">Annuler</button><button class="primary" id="xOk">Exporter</button></div>`, 'small')
+  $('#xNo', ov).onclick = () => ov.remove()
+  $('#xOk', ov).onclick = async () => {
+    $('#xOk', ov).disabled = true
+    const r = await act('export.encrypted', { master: $('#xMaster', ov).value, password: $('#xPw', ov).value, confirm: $('#xConf', ov).value }, null, SLOW)
+    $('#xOk', ov).disabled = false
+    if (!r) return
+    const { count, ...file } = r
+    download(`coffre-${new Date().toISOString().slice(0, 10)}.vault.json`, JSON.stringify(file, null, 2), 'application/json')
+    ov.remove(); toast(`${count} entrée(s) exportée(s)`)
+  }
+  setTimeout(() => $('#xMaster', ov).focus(), 0)
+}
+
+async function importCsv(file) {
+  if (file.size > 30e6) { toast('Fichier trop volumineux', true); return }
+  const text = await file.text()
+  const r = await act('import.csv', { text, skip_duplicates: true }, null, { timeout: 300000 })
+  if (!r) return
+  toast(`Import ${r.format} : ${r.imported} entrée(s) ajoutée(s)${r.skipped ? `, ${r.skipped} doublon(s) ignoré(s)` : ''}${r.errors.length ? `, ${r.errors.length} erreur(s)` : ''}`)
+  if (r.errors.length) setTimeout(() => toast(r.errors.slice(0, 3).join(' · '), true), 2400)
+  if (r.imported) setTimeout(() => alert('Import terminé. Le fichier CSV contient vos mots de passe EN CLAIR : pensez à le supprimer de votre disque.'), 300)
+  reload()
+}
+
+async function importEnc(file) {
+  let data
+  try { data = JSON.parse(await file.text()) } catch { toast('Fichier JSON invalide', true); return }
+  const pw = await ask('Importer un export chiffré', 'Mot de passe du fichier', '', 'password')
+  if (pw === null) return
+  const r = await act('import.encrypted', { data, password: pw }, null, SLOW)
+  if (!r) return
+  toast(`${r.imported} entrée(s) importée(s)${r.skipped ? `, ${r.skipped} déjà présente(s)` : ''}`)
+  reload()
+}
+
+async function resetVault() {
+  const v = await ask('Réinitialiser le coffre', 'Toutes les entrées seront détruites définitivement. Tapez SUPPRIMER pour confirmer.')
+  if (v === null) return
+  if (v !== 'SUPPRIMER') { toast('Confirmation incorrecte', true); return }
+  if (await act('reset_vault', { confirm: 'SUPPRIMER' }, 'Coffre réinitialisé')) { state.status = await call('status'); showLock() }
+}
+
+// ── Header ───────────────────────────────────────────────────────────────────
+$('#q').addEventListener('input', debounce(() => { state.q = $('#q').value; reload() }, 150))
+$('#q').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { $('#q').value = ''; state.q = ''; reload() }
+  if (e.key === 'Enter' && state.list && state.list.items[0]) openEntry(state.list.items[0].id)
+})
+$('#btnNew').onclick = () => openEditor(null)
+$('#btnGen').onclick = () => openGenerator(null)
+$('#btnLock').onclick = () => lockNow()
+$('#btnMenu').onclick = (e) => { e.stopPropagation(); $('#menuList').classList.toggle('hidden') }
+document.addEventListener('click', () => $('#menuList').classList.add('hidden'))
+$('#menuList').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return
+  $('#menuList').classList.add('hidden')
+  const a = b.dataset.act
+  if (a === 'import-csv') $('#csvFile').click()
+  else if (a === 'import-enc') $('#encFile').click()
+  else if (a === 'export-enc') openExport()
+  else if (a === 'settings') openSettings()
+  else if (a === 'change-pw') openChangePw()
+  else if (a === 'reset') resetVault()
+})
+$('#csvFile').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importCsv(f) }
+$('#encFile').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importEnc(f) }
+
+// ── Activity, hiding, shortcuts ──────────────────────────────────────────────
+const unlockedUi = () => !$('#app').classList.contains('hidden')
+let lastPing = 0
+function activity() {
+  if (!unlockedUi()) return
+  const now = Date.now()
+  if (now - lastPing < 15000) return
+  lastPing = now
+  call('ping').then((r) => { if (r && !r.unlocked && unlockedUi()) showLock('auto') }).catch(() => {})
+}
+for (const ev of ['mousemove', 'keydown', 'mousedown', 'wheel']) document.addEventListener(ev, activity, { passive: true })
+
+let lastFrame = performance.now()
+const frameLoop = () => { lastFrame = performance.now(); requestAnimationFrame(frameLoop) }
+requestAnimationFrame(frameLoop)
+const isHidden = () => document.visibilityState === 'hidden' || window.innerWidth === 0 || window.innerHeight === 0 || performance.now() - lastFrame > 3000
+function onMaybeHidden() { if (unlockedUi() && state.settings.lock_on_hide && isHidden()) lockNow('hidden') }
+document.addEventListener('visibilitychange', onMaybeHidden)
+window.addEventListener('resize', onMaybeHidden)
+setInterval(onMaybeHidden, 1000)
+window.addEventListener('pagehide', () => { if (unlockedUi() && state.settings.lock_on_hide) call('lock', { reason: 'hidden' }).catch(() => {}) })
+
+document.addEventListener('keydown', (e) => {
+  if (!unlockedUi()) return
+  const k = e.key.toLowerCase()
+  if (e.ctrlKey && k === 'l') { e.preventDefault(); lockNow() }
+  if (document.querySelector('.overlay')) return
+  if (e.ctrlKey && k === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select() }
+  else if (e.ctrlKey && k === 'n') { e.preventDefault(); openEditor(null) }
+  else if (e.ctrlKey && k === 'g') { e.preventDefault(); openGenerator(null) }
+  else if (e.key === 'Delete' && state.entry && document.activeElement === document.body) deleteEntry(state.entry)
+  else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && state.list && state.list.items.length && document.activeElement.tagName !== 'TEXTAREA') {
+    const items = state.list.items, i = items.findIndex((x) => x.id === state.sel)
+    const next = items[Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]
+    if (next) { e.preventDefault(); openEntry(next.id); const n = $(`.item[data-id="${next.id}"]`); if (n) n.scrollIntoView({ block: 'nearest' }) }
+  }
+})
+
+refreshStatus()
+</script>
+</body>
+</html>

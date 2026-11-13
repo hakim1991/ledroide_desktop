@@ -1,0 +1,32 @@
+{
+  "id": "speedtest",
+  "name": "Test de débit",
+  "version": "1.0.0",
+  "description": "Mesure la latence, la gigue et les débits descendant et montant de votre connexion via les serveurs publics de Cloudflare (speed.cloudflare.com), avec connexions parallèles, jauge en direct, historique, graphique et export CSV.",
+  "category": "Réseau",
+  "tags": [
+    "débit",
+    "speedtest",
+    "bande passante",
+    "latence",
+    "internet"
+  ],
+  "icon": "🚀",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

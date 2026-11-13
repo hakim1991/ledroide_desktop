@@ -1,0 +1,33 @@
+{
+  "id": "lan-inventory",
+  "name": "Inventaire réseau local",
+  "version": "1.0.0",
+  "description": "Inventaire des appareils du réseau local : balayage (ping limité + table ARP), noms (DNS inverse, NetBIOS, mDNS), fabricant d'après l'adresse MAC, ports courants ouverts, historique (première/dernière vue, adresses IP), noms et notes par appareil, alerte « nouvel appareil », balayage périodique et export CSV.",
+  "category": "Réseau",
+  "tags": [
+    "réseau",
+    "lan",
+    "inventaire",
+    "appareils",
+    "arp"
+  ],
+  "icon": "🖧",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network",
+    "process"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

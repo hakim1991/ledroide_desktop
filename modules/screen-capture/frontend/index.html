@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Capture d'écran</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.rec { background: #b91c1c; border-color: #b91c1c; color: #fff; font-weight: 600; }
+  button.icon { padding: 5px 8px; min-width: 32px; }
+  button.on { background: rgba(99,102,241,.25); border-color: var(--accent); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; user-select: text; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=range] { accent-color: var(--accent); padding: 0; }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .sep { width: 1px; height: 22px; background: var(--border); margin: 0 3px; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 8px; }
+  .tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .tabs button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .tabs button.on { background: var(--surface2); color: var(--text); }
+  #main { flex: 1; min-height: 0; display: flex; }
+  #side { width: 270px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+  .sect { display: flex; flex-direction: column; gap: 8px; }
+  .sect h3 { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .modes button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 11.5px; }
+  .modes button span { font-size: 18px; }
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field label { font-size: 11.5px; color: var(--muted); }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 0; }
+  button.big { padding: 9px; font-size: 14px; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  .mons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .mon { border: 2px solid var(--border); border-radius: 6px; overflow: hidden; cursor: pointer; position: relative; background: #000; }
+  .mon img { width: 100%; display: block; }
+  .mon span { position: absolute; left: 4px; bottom: 3px; font-size: 10.5px; background: rgba(0,0,0,.7); padding: 0 5px; border-radius: 4px; }
+  .mon.on { border-color: var(--accent); }
+  .recbox { border: 1px solid rgba(239,68,68,.5); background: rgba(239,68,68,.08); border-radius: 8px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; }
+  .recdot { width: 10px; height: 10px; border-radius: 50%; background: var(--err); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+
+  #center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #tools { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .sw { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; }
+  .sw.on { border-color: #fff; }
+  #stage { flex: 1; min-height: 0; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+           background: repeating-conic-gradient(#141418 0 25%, #101013 0 50%) 0 0 / 22px 22px; }
+  #cv { box-shadow: 0 6px 30px rgba(0,0,0,.6); }
+  #stage video, #stage > img { max-width: calc(100% - 24px); max-height: calc(100% - 24px); box-shadow: 0 6px 30px rgba(0,0,0,.6); }
+  #textIn { position: absolute; z-index: 5; background: rgba(0,0,0,.6); border: 1px dashed #fff; min-width: 120px; }
+  #actions { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; flex: 0 0 auto; }
+  #info { flex: 1 1 200px; min-width: 0; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty { text-align: center; color: var(--muted); line-height: 1.8; padding: 30px; }
+  .empty .big { font-size: 46px; }
+  #countdown { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); z-index: 90; pointer-events: none; }
+  #countdown div { font-size: 120px; font-weight: 700; color: #fff; text-shadow: 0 6px 30px rgba(0,0,0,.6); }
+  #zoneBar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6; background: var(--surface); border: 1px solid var(--accent);
+             border-radius: 8px; padding: 6px 10px; display: flex; gap: 8px; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+
+  #hist { flex: 1; overflow-y: auto; padding: 14px; }
+  .hhead { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: pointer; position: relative; }
+  .card:hover { border-color: #3f3f46; }
+  .card.sel { border-color: var(--accent); }
+  .card .th { height: 120px; background: #000 center / contain no-repeat; }
+  .card .meta { padding: 7px 9px; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+  .card .meta b { color: var(--text); font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .kind { position: absolute; top: 6px; left: 6px; font-size: 10.5px; background: rgba(0,0,0,.75); padding: 1px 6px; border-radius: 8px; }
+  .card input { position: absolute; top: 6px; right: 6px; accent-color: var(--accent); }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(460px, calc(100vw - 32px)); box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; display: flex; flex-direction: column; gap: 10px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">📸 Capture d'écran</span>
+  <div class="tabs"><button data-v="edit" class="on">Capture</button><button data-v="hist">Historique <span id="histCount" class="muted"></span></button></div>
+  <span class="spacer"></span>
+  <span class="muted" id="depWarn" style="color:#fca5a5"></span>
+</header>
+<div id="main">
+  <aside id="side">
+    <div class="sect">
+      <h3>Nouvelle capture</h3>
+      <div class="modes" id="modes">
+        <button data-m="all"><span>🖥️</span>Tous les écrans</button>
+        <button data-m="monitor"><span>🗔</span>Un écran</button>
+        <button data-m="zone"><span>⬚</span>Zone</button>
+      </div>
+      <div class="mons" id="mons"></div>
+      <div class="field"><label>Retardateur</label>
+        <select id="delay"><option value="0">Immédiat</option><option value="3">3 secondes</option><option value="5">5 secondes</option><option value="10">10 secondes</option></select></div>
+      <button class="primary big" id="btnCapture">📸 Capturer</button>
+      <div class="hint">La fenêtre de l’application apparaît sur la capture : utilisez le retardateur pour afficher une autre fenêtre. Zone : capturez, puis tracez la zone sur l’image.
+        Pas de raccourci clavier global (un module ne peut pas en enregistrer).</div>
+    </div>
+    <div class="sect">
+      <h3>Vidéo de l’écran</h3>
+      <div class="field"><label>Source</label><select id="vSrc"></select></div>
+      <div class="row"><div class="field"><label>Images/s</label><select id="vFps"><option>5</option><option>10</option><option selected>15</option><option>24</option><option>30</option></select></div>
+        <div class="field"><label>Durée max.</label><select id="vMax"><option value="15">15 s</option><option value="30">30 s</option><option value="60" selected>1 min</option><option value="300">5 min</option><option value="900">15 min</option><option value="1800">30 min</option></select></div></div>
+      <div class="field"><label>Démarrage</label><select id="vDelay"><option value="0">Immédiat</option><option value="3">Dans 3 s</option><option value="5">Dans 5 s</option></select></div>
+      <button class="rec big" id="btnRec">⏺ Enregistrer</button>
+      <div class="recbox hidden" id="recBox"><span class="recdot"></span><b id="recTime">0:00</b><span class="muted" id="recInfo"></span><span class="spacer"></span><button id="btnStop">⏹ Arrêter</button></div>
+      <div class="hint">MP4 (H.264), sans son ni curseur. Export GIF court depuis la vidéo.</div>
+    </div>
+  </aside>
+  <section id="center">
+    <div id="editView" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div id="tools" class="hidden">
+        <button class="icon" data-t="move" title="Sélection / déplacement (V)">🖱️</button>
+        <button class="icon" data-t="arrow" title="Flèche (A)">➚</button>
+        <button class="icon" data-t="rect" title="Rectangle (R)">▭</button>
+        <button class="icon" data-t="text" title="Texte (T)">T</button>
+        <button class="icon" data-t="hl" title="Surligneur (H)">🖍️</button>
+        <button class="icon" data-t="pixel" title="Pixelliser une zone (P)">▦</button>
+        <button class="icon" data-t="blur" title="Flouter une zone (B)">◍</button>
+        <button class="icon" data-t="crop" title="Recadrer (C)">⌗</button>
+        <span class="sep"></span>
+        <span id="swatches" style="display:flex;gap:4px"></span>
+        <input type="color" id="colorIn" title="Autre couleur" style="width:30px;height:26px;padding:1px" />
+        <span class="sep"></span>
+        <span class="muted">Épaisseur</span><input type="range" id="width" min="1" max="20" value="4" style="width:80px" />
+        <span class="sep"></span>
+        <button class="icon" id="btnUndo" title="Annuler (Ctrl+Z)">↶</button>
+        <button class="icon" id="btnRedo" title="Rétablir (Ctrl+Y)">↷</button>
+        <button id="btnClearAnn" title="Retirer toutes les annotations">Tout effacer</button>
+        <span class="spacer"></span>
+        <span class="muted" id="zoomInfo"></span>
+      </div>
+      <div id="stage">
+        <div class="empty" id="emptyStage"><div class="big">📸</div>Choisissez un mode puis cliquez sur <b>Capturer</b>.<br>
+          Les captures s’ouvrent ici pour être annotées, copiées ou enregistrées.</div>
+        <canvas id="cv" class="hidden"></canvas>
+        <input id="textIn" class="hidden" placeholder="Texte puis Entrée" />
+      </div>
+      <div id="actions" class="hidden">
+        <span id="info"></span>
+        <span id="imgActions" class="acts">
+          <button id="btnCopy" title="Copier l’image annotée (Ctrl+C)">📋 Copier</button>
+          <button id="btnSave" title="Remplacer la capture par la version annotée (Ctrl+S)">💾 Enregistrer</button>
+          <button id="btnSaveNew" title="Garder l’original et ajouter la version annotée à l’historique">➕ Nouvelle version</button>
+          <button id="btnPng">⬇ PNG</button>
+          <button id="btnJpg">⬇ JPG</button>
+          <button id="btnFolder" class="primary" title="Enregistrer dans un dossier">📁 Enregistrer dans…</button>
+        </span>
+        <span id="vidActions" class="acts hidden">
+          <button id="btnGif">🎞 Exporter en GIF…</button>
+          <button id="btnDl">⬇ Télécharger</button>
+          <button id="btnFolderV" class="primary">📁 Enregistrer dans…</button>
+        </span>
+        <button class="danger icon" id="btnDel" title="Supprimer de l’historique">🗑</button>
+      </div>
+    </div>
+    <div id="histView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div id="hist"></div>
+    </div>
+  </section>
+</div>
+<div id="countdown" class="hidden"><div id="cdNum"></div></div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'screen-capture'
+const API = `/modules/${MODULE_ID}/api`
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, r = document) => r.querySelector(s)
+const $$ = (s, r = document) => [...r.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const COLORS = ['#ef4444', '#f59e0b', '#facc15', '#22c55e', '#3b82f6', '#a855f7', '#ffffff', '#000000']
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 6000 : 2400)
+}
+async function act(action, payload, opts) { try { return await call(action, payload, opts) } catch (e) { toast(e.message || String(e), true); return null } }
+function fmtSize(n) { return n < 1024 ** 2 ? `${(n / 1024).toFixed(0)} Ko` : `${(n / 1024 ** 2).toFixed(1)} Mo` }
+const fmtDate = (iso) => new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' })
+const fmtDur = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+
+const S = {
+  info: null, mode: localGet('sc-mode') || 'all', monitor: Number(localGet('sc-mon')) || 1, cur: null, img: null,
+  anns: [], redo: [], tool: 'arrow', color: localGet('sc-color') || '#ef4444', width: 4, crop: null, scale: 1,
+  drag: null, sel: -1, zone: false, history: [], checked: new Set(), recJob: null, busy: false,
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+async function init() {
+  S.info = await act('info')
+  if (!S.info) return
+  const d = S.info.deps
+  const miss = [!d.mss && 'mss', !d.PIL && 'Pillow', !d.imageio_ffmpeg && 'imageio-ffmpeg'].filter(Boolean)
+  $('#depWarn').textContent = miss.length ? `Dépendances manquantes : ${miss.join(', ')}` : ''
+  const mons = S.info.monitors
+  if (!mons.some((m) => m.index === S.monitor && m.index > 0)) S.monitor = 1
+  $('#vSrc').innerHTML = mons.map((m) => `<option value="${m.index}" ${m.index === S.monitor ? 'selected' : ''}>${esc(m.label)}</option>`).join('')
+  renderModes()
+  $('#swatches').innerHTML = COLORS.map((c) => `<span class="sw" data-c="${c}" style="background:${c}"></span>`).join('')
+  $$('.sw').forEach((s) => s.onclick = () => setColor(s.dataset.c))
+  setColor(S.color); setTool('arrow')
+  if (S.info.recording) showRec(S.info.recording)
+  await loadHistory()
+  if (S.history[0] && localGet('sc-last') === S.history[0].id) openCapture(S.history[0])
+  loadPreviews()
+}
+async function loadPreviews() {
+  if (S.info.monitors.length <= 2) { $('#mons').innerHTML = ''; return }
+  const r = await call('monitor.preview', {}, { timeout: 30000 }).catch(() => null)
+  if (!r) return
+  $('#mons').innerHTML = r.previews.map((p) => `<div class="mon ${p.index === S.monitor ? 'on' : ''}" data-i="${p.index}" title="${esc(S.info.monitors[p.index].label)}"><img src="${p.data}"><span>Écran ${p.index}</span></div>`).join('')
+  $$('.mon').forEach((m) => m.onclick = () => { S.monitor = +m.dataset.i; localSet('sc-mon', S.monitor); $('#vSrc').value = S.monitor; renderModes() })
+  renderModes()
+}
+function renderModes() {
+  $$('#modes button').forEach((b) => b.classList.toggle('on', b.dataset.m === S.mode))
+  $$('.mon').forEach((m) => m.classList.toggle('on', +m.dataset.i === S.monitor))
+  $('#mons').classList.toggle('hidden', S.mode === 'all' || S.info?.monitors.length <= 2)
+}
+$$('#modes button').forEach((b) => b.onclick = () => { S.mode = b.dataset.m; localSet('sc-mode', S.mode); renderModes() })
+
+// ── Capture ───────────────────────────────────────────────────────────────────
+function countdown(n) {
+  $('#countdown').classList.toggle('hidden', !n)
+  $('#cdNum').textContent = n || ''
+}
+$('#btnCapture').onclick = async () => {
+  if (S.busy) return
+  S.busy = true; $('#btnCapture').disabled = true
+  const payload = { target: S.mode === 'all' ? 'all' : 'monitor', monitor: S.monitor, delay: +$('#delay').value }
+  try {
+    const c = await window.ledroide.run(MODULE_ID, 'capture', payload, { onProgress: (p) => countdown(p.countdown) })
+    countdown(0)
+    await loadHistory()
+    await openCapture(c)
+    if (S.mode === 'zone') startZone()
+    else toast(`Capture ${c.width}×${c.height} enregistrée dans l’historique`)
+  } catch (e) { countdown(0); toast(e.message, true) }
+  finally { S.busy = false; $('#btnCapture').disabled = false }
+}
+
+// ── Viewer / editor ───────────────────────────────────────────────────────────
+function switchView(v) {
+  $$('header .tabs button').forEach((b) => b.classList.toggle('on', b.dataset.v === v))
+  $('#editView').classList.toggle('hidden', v !== 'edit')
+  $('#histView').classList.toggle('hidden', v !== 'hist')
+  if (v === 'hist') renderHistory()
+  else fit()
+}
+$$('header .tabs button').forEach((b) => b.onclick = () => switchView(b.dataset.v))
+
+async function openCapture(c) {
+  if (S.anns.length && S.cur && S.cur.id !== c.id && !confirm('Abandonner les annotations non enregistrées ?')) return
+  S.cur = c; localSet('sc-last', c.id)
+  S.anns = []; S.redo = []; S.crop = null; S.sel = -1; S.zone = false
+  $('#zoneBar')?.remove()
+  $('#emptyStage').classList.add('hidden')
+  $$('#stage video, #stage > img').forEach((e) => e.remove())
+  const isImg = c.kind === 'image'
+  $('#cv').classList.toggle('hidden', !isImg)
+  $('#tools').classList.toggle('hidden', !isImg)
+  $('#actions').classList.remove('hidden')
+  $('#imgActions').classList.toggle('hidden', !isImg)
+  $('#vidActions').classList.toggle('hidden', isImg)
+  $('#btnGif').classList.toggle('hidden', c.kind !== 'video')
+  $('#info').textContent = `${c.title || c.source} · ${c.width}×${c.height}${c.duration ? ' · ' + fmtDur(c.duration) + ` · ${c.fps} img/s` : ''} · ${fmtSize(c.size)} · ${fmtDate(c.created_at)}`
+  switchView('edit')
+  if (isImg) {
+    const img = new Image()
+    img.src = `${API}/file/${c.id}?t=${Date.now()}`
+    await img.decode().catch(() => toast('Image illisible', true))
+    S.img = img
+    fit()
+  } else if (c.kind === 'video') {
+    const v = document.createElement('video')
+    v.src = `${API}/file/${c.id}?t=${Date.now()}`; v.controls = true; v.autoplay = false
+    $('#stage').appendChild(v)
+  } else {
+    const g = document.createElement('img')
+    g.src = `${API}/file/${c.id}?t=${Date.now()}`
+    $('#stage').appendChild(g)
+  }
+}
+function fit() {
+  if (!S.img || S.cur?.kind !== 'image') return
+  const st = $('#stage'), cv = $('#cv')
+  const cw = st.clientWidth - 24, ch = st.clientHeight - 24
+  if (cw <= 0 || ch <= 0) return
+  S.scale = Math.min(cw / S.img.naturalWidth, ch / S.img.naturalHeight, 1)
+  const dpr = window.devicePixelRatio || 1
+  cv.width = Math.round(S.img.naturalWidth * S.scale * dpr)
+  cv.height = Math.round(S.img.naturalHeight * S.scale * dpr)
+  cv.style.width = `${Math.round(S.img.naturalWidth * S.scale)}px`
+  cv.style.height = `${Math.round(S.img.naturalHeight * S.scale)}px`
+  $('#zoomInfo').textContent = `${Math.round(S.scale * 100)} %`
+  draw()
+}
+new ResizeObserver(() => fit()).observe($('#stage'))
+
+function norm(a) { return { x: Math.min(a.x1, a.x2), y: Math.min(a.y1, a.y2), w: Math.abs(a.x2 - a.x1), h: Math.abs(a.y2 - a.y1) } }
+function bbox(a) {
+  if (a.type === 'hl') { const xs = a.pts.map((p) => p[0]), ys = a.pts.map((p) => p[1]); const m = a.w; return { x: Math.min(...xs) - m, y: Math.min(...ys) - m, w: Math.max(...xs) - Math.min(...xs) + 2 * m, h: Math.max(...ys) - Math.min(...ys) + 2 * m } }
+  if (a.type === 'text') return { x: a.x1, y: a.y1, w: a.tw || 50, h: a.size * 1.25 }
+  const r = norm(a); const m = a.type === 'arrow' ? a.w * 3 : 0
+  return { x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m }
+}
+function drawAnn(ctx, a, src) {
+  ctx.save()
+  ctx.strokeStyle = ctx.fillStyle = a.color; ctx.lineWidth = a.w; ctx.lineCap = ctx.lineJoin = 'round'
+  if (a.type === 'rect') { const r = norm(a); ctx.strokeRect(r.x, r.y, r.w, r.h) }
+  else if (a.type === 'arrow') {
+    const ang = Math.atan2(a.y2 - a.y1, a.x2 - a.x1), head = Math.max(12, a.w * 4)
+    const bx = a.x2 - Math.cos(ang) * head * .8, by = a.y2 - Math.sin(ang) * head * .8
+    ctx.beginPath(); ctx.moveTo(a.x1, a.y1); ctx.lineTo(bx, by); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(a.x2, a.y2)
+    ctx.lineTo(a.x2 - head * Math.cos(ang - .45), a.y2 - head * Math.sin(ang - .45))
+    ctx.lineTo(a.x2 - head * Math.cos(ang + .45), a.y2 - head * Math.sin(ang + .45))
+    ctx.closePath(); ctx.fill()
+  } else if (a.type === 'hl') {
+    ctx.globalAlpha = .38; ctx.globalCompositeOperation = 'multiply'; ctx.lineWidth = a.w
+    ctx.beginPath(); a.pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke()
+  } else if (a.type === 'text') {
+    ctx.font = `600 ${a.size}px system-ui, 'Segoe UI', sans-serif`; ctx.textBaseline = 'top'
+    a.tw = ctx.measureText(a.text).width
+    ctx.lineWidth = Math.max(2, a.size / 7); ctx.strokeStyle = a.color === '#000000' ? '#ffffff' : 'rgba(0,0,0,.75)'
+    ctx.strokeText(a.text, a.x1, a.y1); ctx.fillText(a.text, a.x1, a.y1)
+  } else if (a.type === 'pixel' || a.type === 'blur') {
+    const r = norm(a)
+    if (r.w >= 2 && r.h >= 2) {
+      if (a.type === 'pixel') {
+        const b = Math.max(6, Math.round(Math.min(r.w, r.h) / 12))
+        const tmp = document.createElement('canvas'); tmp.width = Math.max(1, Math.ceil(r.w / b)); tmp.height = Math.max(1, Math.ceil(r.h / b))
+        tmp.getContext('2d').drawImage(src, r.x, r.y, r.w, r.h, 0, 0, tmp.width, tmp.height)
+        ctx.imageSmoothingEnabled = false; ctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, r.x, r.y, r.w, r.h)
+      } else {
+        ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip()
+        ctx.filter = `blur(${Math.max(6, Math.round(Math.min(r.w, r.h) / 10))}px)`
+        ctx.drawImage(src, r.x - 30, r.y - 30, r.w + 60, r.h + 60, r.x - 30, r.y - 30, r.w + 60, r.h + 60)
+      }
+    }
+  }
+  ctx.restore()
+}
+function render(ctx, scale, exporting) {
+  ctx.save(); ctx.scale(scale, scale)
+  ctx.drawImage(S.img, 0, 0)
+  for (const a of S.anns.filter((x) => x.type === 'pixel' || x.type === 'blur')) drawAnn(ctx, a, S.img)
+  for (const a of S.anns.filter((x) => x.type !== 'pixel' && x.type !== 'blur')) drawAnn(ctx, a, S.img)
+  if (!exporting) {
+    const live = S.drag?.ann
+    if (live) drawAnn(ctx, live, S.img)
+    if (S.sel >= 0 && S.anns[S.sel]) {
+      const b = bbox(S.anns[S.sel]); ctx.setLineDash([6 / scale, 4 / scale]); ctx.lineWidth = 1.5 / scale; ctx.strokeStyle = '#818cf8'
+      ctx.strokeRect(b.x - 4 / scale, b.y - 4 / scale, b.w + 8 / scale, b.h + 8 / scale)
+    }
+    const c = S.drag?.crop || S.crop || (S.zone && S.drag?.zone)
+    const z = S.zone && S.drag?.zone
+    if (c || S.zone) {
+      const r = z ? norm(S.drag.zone) : c ? (c.x1 !== undefined ? norm(c) : c) : null
+      ctx.fillStyle = 'rgba(0,0,0,.55)'
+      const W = S.img.naturalWidth, H = S.img.naturalHeight
+      if (r) {
+        ctx.fillRect(0, 0, W, r.y); ctx.fillRect(0, r.y + r.h, W, H - r.y - r.h)
+        ctx.fillRect(0, r.y, r.x, r.h); ctx.fillRect(r.x + r.w, r.y, W - r.x - r.w, r.h)
+        ctx.setLineDash([8 / scale, 5 / scale]); ctx.lineWidth = 2 / scale; ctx.strokeStyle = '#fff'; ctx.strokeRect(r.x, r.y, r.w, r.h)
+        ctx.setLineDash([]); ctx.font = `${13 / scale}px system-ui`; ctx.fillStyle = '#fff'
+        ctx.fillText(`${Math.round(r.w)} × ${Math.round(r.h)}`, r.x + 4 / scale, r.y - 6 / scale > 12 / scale ? r.y - 6 / scale : r.y + 16 / scale)
+      } else if (S.zone) ctx.fillRect(0, 0, W, H)
+    }
+  }
+  ctx.restore()
+}
+function draw() {
+  if (!S.img) return
+  const cv = $('#cv'), ctx = cv.getContext('2d')
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height)
+  render(ctx, S.scale * (window.devicePixelRatio || 1), false)
+  $('#btnUndo').disabled = !S.anns.length && !S.crop
+  $('#btnRedo').disabled = !S.redo.length
+}
+function setTool(t) {
+  S.tool = t; $$('#tools [data-t]').forEach((b) => b.classList.toggle('on', b.dataset.t === t))
+  $('#cv').style.cursor = t === 'move' ? 'default' : t === 'text' ? 'text' : 'crosshair'
+  if (t !== 'move') { S.sel = -1; draw() }
+}
+function setColor(c) { S.color = c; localSet('sc-color', c); $('#colorIn').value = c; $$('.sw').forEach((s) => s.classList.toggle('on', s.dataset.c === c)); if (S.sel >= 0) { S.anns[S.sel].color = c; draw() } }
+$$('#tools [data-t]').forEach((b) => b.onclick = () => setTool(b.dataset.t))
+$('#colorIn').oninput = (e) => setColor(e.target.value)
+$('#width').oninput = (e) => { S.width = +e.target.value; if (S.sel >= 0) { const a = S.anns[S.sel]; if (a.type === 'text') a.size = 12 + S.width * 3; else a.w = a.type === 'hl' ? S.width * 4 : S.width; draw() } }
+
+function toImg(e) {
+  const r = $('#cv').getBoundingClientRect()
+  return { x: Math.max(0, Math.min(S.img.naturalWidth, (e.clientX - r.left) / S.scale)), y: Math.max(0, Math.min(S.img.naturalHeight, (e.clientY - r.top) / S.scale)) }
+}
+function pushAnn(a) { S.anns.push(a); S.redo = []; draw() }
+$('#cv').addEventListener('mousedown', (e) => {
+  if (!S.img || e.button !== 0) return
+  commitText()
+  const p = toImg(e)
+  if (S.zone) { S.drag = { zone: { x1: p.x, y1: p.y, x2: p.x, y2: p.y } }; return }
+  if (S.tool === 'move') {
+    S.sel = -1
+    for (let i = S.anns.length - 1; i >= 0; i--) { const b = bbox(S.anns[i]); if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) { S.sel = i; break } }
+    if (S.sel >= 0) S.drag = { move: true, last: p }
+    draw(); return
+  }
+  if (S.tool === 'text') { startText(p, e); return }
+  if (S.tool === 'crop') { S.drag = { crop: { x1: p.x, y1: p.y, x2: p.x, y2: p.y } }; return }
+  const w = S.tool === 'hl' ? S.width * 4 : S.width
+  const color = S.tool === 'hl' && ['#ffffff', '#000000'].includes(S.color) ? '#facc15' : S.color
+  S.drag = { ann: S.tool === 'hl' ? { type: 'hl', pts: [[p.x, p.y]], color, w } : { type: S.tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, color, w } }
+})
+window.addEventListener('mousemove', (e) => {
+  if (!S.drag || !S.img) return
+  const p = toImg(e)
+  if (S.drag.zone) { S.drag.zone.x2 = p.x; S.drag.zone.y2 = p.y }
+  else if (S.drag.crop) { S.drag.crop.x2 = p.x; S.drag.crop.y2 = p.y }
+  else if (S.drag.move) {
+    const a = S.anns[S.sel], dx = p.x - S.drag.last.x, dy = p.y - S.drag.last.y
+    if (a.type === 'hl') a.pts = a.pts.map(([x, y]) => [x + dx, y + dy])
+    else { a.x1 += dx; a.y1 += dy; if (a.x2 !== undefined) { a.x2 += dx; a.y2 += dy } }
+    S.drag.last = p
+  } else if (S.drag.ann.type === 'hl') S.drag.ann.pts.push([p.x, p.y])
+  else {
+    const a = S.drag.ann
+    a.x2 = p.x; a.y2 = p.y
+    if (e.shiftKey && a.type === 'arrow') { if (Math.abs(a.x2 - a.x1) > Math.abs(a.y2 - a.y1)) a.y2 = a.y1; else a.x2 = a.x1 }
+  }
+  draw()
+})
+window.addEventListener('mouseup', () => {
+  if (!S.drag) return
+  const d = S.drag; S.drag = null
+  if (d.zone) {
+    const r = norm(d.zone)
+    if (r.w > 8 && r.h > 8) S.zoneRect = r
+    draw(); drawZoneRect(); return
+  }
+  if (d.crop) { const r = norm(d.crop); if (r.w > 8 && r.h > 8) { S.redo = []; S.anns.push({ type: 'cropmark', prev: S.crop }); S.crop = r }; draw(); return }
+  if (d.ann) {
+    const a = d.ann, big = a.type === 'hl' ? a.pts.length > 1 : Math.hypot(a.x2 - a.x1, a.y2 - a.y1) > 4
+    if (big) pushAnn(a); else draw()
+  }
+})
+function drawZoneRect() {
+  draw()
+  if (!S.zoneRect) return
+  const ctx = $('#cv').getContext('2d'), sc = S.scale * (window.devicePixelRatio || 1), r = S.zoneRect, W = S.img.naturalWidth, H = S.img.naturalHeight
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.scale(sc, sc)
+  ctx.drawImage(S.img, 0, 0); ctx.fillStyle = 'rgba(0,0,0,.55)'
+  ctx.fillRect(0, 0, W, r.y); ctx.fillRect(0, r.y + r.h, W, H - r.y - r.h); ctx.fillRect(0, r.y, r.x, r.h); ctx.fillRect(r.x + r.w, r.y, W - r.x - r.w, r.h)
+  ctx.setLineDash([8 / sc, 5 / sc]); ctx.lineWidth = 2 / sc; ctx.strokeStyle = '#fff'; ctx.strokeRect(r.x, r.y, r.w, r.h)
+  ctx.restore()
+  $('#zoneOk').disabled = false
+  $('#zoneDim').textContent = `${Math.round(r.w)} × ${Math.round(r.h)} px`
+}
+function startZone() {
+  S.zone = true; S.zoneRect = null
+  const bar = document.createElement('div'); bar.id = 'zoneBar'
+  bar.innerHTML = `<b>Tracez la zone à garder</b><span class="muted" id="zoneDim"></span><button class="primary" id="zoneOk" disabled>✔ Valider la zone</button><button id="zoneAll">Garder tout</button>`
+  $('#stage').appendChild(bar)
+  $('#cv').style.cursor = 'crosshair'
+  $('#zoneOk').onclick = async () => {
+    const r = S.zoneRect
+    const c = await act('capture.crop', { id: S.cur.id, rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) } })
+    if (!c) return
+    endZone(); await loadHistory(); openCapture(c); toast(`Zone ${c.width}×${c.height} capturée`)
+  }
+  $('#zoneAll').onclick = () => { endZone(); toast('Image entière conservée') }
+  draw()
+}
+function endZone() { S.zone = false; S.zoneRect = null; $('#zoneBar')?.remove(); setTool(S.tool); draw() }
+
+function startText(p, e) {
+  const inp = $('#textIn'), st = $('#stage').getBoundingClientRect()
+  inp.classList.remove('hidden'); inp.value = ''
+  inp.style.left = `${e.clientX - st.left}px`; inp.style.top = `${e.clientY - st.top - 4}px`
+  inp.style.color = S.color; inp.style.fontSize = `${Math.max(12, (12 + S.width * 3) * S.scale)}px`
+  inp.dataset.x = p.x; inp.dataset.y = p.y
+  setTimeout(() => inp.focus(), 0)
+}
+function commitText() {
+  const inp = $('#textIn')
+  if (inp.classList.contains('hidden')) return
+  inp.classList.add('hidden')
+  const t = inp.value.trim()
+  if (t) pushAnn({ type: 'text', x1: +inp.dataset.x, y1: +inp.dataset.y, text: t, color: S.color, size: 12 + S.width * 3, w: 0 })
+}
+$('#textIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') commitText(); if (e.key === 'Escape') { e.target.value = ''; commitText() } e.stopPropagation() })
+$('#textIn').addEventListener('blur', commitText)
+
+function undo() {
+  const a = S.anns.pop()
+  if (!a) return
+  if (a.type === 'cropmark') { S.redo.push({ ...a, crop: S.crop }); S.crop = a.prev } else S.redo.push(a)
+  S.sel = -1; draw()
+}
+function redo() {
+  const a = S.redo.pop()
+  if (!a) return
+  if (a.type === 'cropmark') { S.anns.push({ type: 'cropmark', prev: S.crop }); S.crop = a.crop } else S.anns.push(a)
+  draw()
+}
+$('#btnUndo').onclick = undo
+$('#btnRedo').onclick = redo
+$('#btnClearAnn').onclick = () => { if (S.anns.length && confirm('Retirer toutes les annotations et le recadrage ?')) { S.anns = []; S.redo = []; S.crop = null; S.sel = -1; draw() } }
+
+function exportBlob(type = 'image/png', quality = .92) {
+  const c = S.crop || { x: 0, y: 0, w: S.img.naturalWidth, h: S.img.naturalHeight }
+  const cv = document.createElement('canvas'); cv.width = Math.round(c.w); cv.height = Math.round(c.h)
+  const ctx = cv.getContext('2d')
+  if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height) }
+  ctx.translate(-Math.round(c.x), -Math.round(c.y))
+  const anns = S.anns; S.anns = anns.filter((a) => a.type !== 'cropmark')
+  render(ctx, 1, true); S.anns = anns
+  return new Promise((res) => cv.toBlob(res, type, quality))
+}
+const dirty = () => S.anns.some((a) => a.type !== 'cropmark') || !!S.crop
+async function post(url, blob) {
+  const r = await fetch(url, { method: 'POST', body: blob, headers: { 'Content-Type': 'application/octet-stream' } })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.error || j.detail?.error || `Erreur ${r.status}`)
+  return j
+}
+async function copy() {
+  if (!S.img) return
+  try {
+    if (dirty()) await post(`${API}/clipboard`, await exportBlob())
+    else { const r = await act('clipboard.copy', { id: S.cur.id }); if (!r) return }
+    toast('Image copiée dans le presse-papiers')
+  } catch (e) { toast(e.message, true) }
+}
+async function saveEdit(mode) {
+  if (!dirty()) { toast('Aucune annotation à enregistrer'); return }
+  try {
+    const c = await post(`${API}/edit/${S.cur.id}?mode=${mode}`, await exportBlob())
+    S.anns = []; await loadHistory(); await openCapture(c)
+    toast(mode === 'new' ? 'Nouvelle version ajoutée à l’historique' : 'Capture enregistrée')
+  } catch (e) { toast(e.message, true) }
+}
+async function download(type) {
+  const ext = type === 'image/png' ? 'png' : 'jpg'
+  const blob = await exportBlob(type, .9)
+  dl(URL.createObjectURL(blob), `Capture_${stamp(S.cur.created_at)}.${ext}`, true)
+}
+function stamp(iso) { return iso.replace(/[:T]/g, '-').slice(0, 19) }
+function dl(href, name, revoke) {
+  const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove()
+  if (revoke) setTimeout(() => URL.revokeObjectURL(href), 10000)
+}
+$('#btnCopy').onclick = copy
+$('#btnSave').onclick = () => saveEdit('replace')
+$('#btnSaveNew').onclick = () => saveEdit('new')
+$('#btnPng').onclick = () => download('image/png')
+$('#btnJpg').onclick = () => download('image/jpeg')
+$('#btnDl').onclick = () => dl(`${API}/file/${S.cur.id}`, `Capture_${stamp(S.cur.created_at)}.${S.cur.kind === 'gif' ? 'gif' : 'mp4'}`)
+function folderDialog() {
+  const isImg = S.cur.kind === 'image'
+  const folder = localGet('sc-folder') || (S.info.pictures + '\\Captures')
+  const ov = document.createElement('div'); ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog"><h3>Enregistrer dans un dossier</h3><div class="content">
+    <div class="field"><label>Dossier</label><input id="fFolder" value="${esc(folder)}" /></div>
+    ${isImg ? `<div class="row"><div class="field"><label>Format</label><select id="fFmt"><option value="png">PNG (sans perte)</option><option value="jpg">JPG</option></select></div>
+      <div class="field"><label>Qualité JPG</label><input id="fQ" type="number" min="30" max="100" value="90" /></div></div>` : ''}
+    ${isImg && dirty() ? '<div class="hint">Les annotations non enregistrées seront d’abord enregistrées dans la capture.</div>' : ''}
+    <div class="hint">Le fichier est nommé d’après la date de la capture ; rien n’est écrasé.</div></div>
+    <div class="foot"><button id="fOpen">Ouvrir le dossier</button><span class="spacer"></span><button id="fCancel">Annuler</button><button class="primary" id="fOk">Enregistrer</button></div></div>`
+  document.body.appendChild(ov)
+  $('#fCancel', ov).onclick = () => ov.remove()
+  $('#fOpen', ov).onclick = () => act('open_folder', { folder: $('#fFolder', ov).value.trim() })
+  $('#fOk', ov).onclick = async () => {
+    const f = $('#fFolder', ov).value.trim()
+    if (isImg && dirty()) { await saveEdit('replace') }
+    const r = await act('save_to', { id: S.cur.id, folder: f, format: isImg ? $('#fFmt', ov).value : undefined, quality: isImg ? +$('#fQ', ov).value : undefined })
+    if (r) { localSet('sc-folder', f); ov.remove(); toast(`Enregistré : ${r.path}`) }
+  }
+}
+$('#btnFolder').onclick = folderDialog
+$('#btnFolderV').onclick = folderDialog
+$('#btnDel').onclick = async () => {
+  if (!S.cur || !confirm('Supprimer cette capture de l’historique ?')) return
+  if (await act('capture.delete', { id: S.cur.id })) {
+    S.anns = []; S.cur = null; S.img = null
+    $('#cv').classList.add('hidden'); $('#tools').classList.add('hidden'); $('#actions').classList.add('hidden'); $$('#stage video, #stage > img').forEach((e) => e.remove())
+    $('#emptyStage').classList.remove('hidden'); loadHistory()
+  }
+}
+$('#btnGif').onclick = () => {
+  const c = S.cur
+  const ov = document.createElement('div'); ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog"><h3>Exporter en GIF</h3><div class="content">
+    <div class="row"><div class="field"><label>Début (s)</label><input id="gS" type="number" min="0" step="0.5" value="0" max="${c.duration}" /></div>
+      <div class="field"><label>Durée (s, 30 max.)</label><input id="gD" type="number" min="0.5" max="30" step="0.5" value="${Math.min(5, c.duration || 5)}" /></div></div>
+    <div class="row"><div class="field"><label>Images/s</label><select id="gF"><option>5</option><option selected>10</option><option>15</option><option>20</option></select></div>
+      <div class="field"><label>Largeur (px)</label><select id="gW"><option>320</option><option>480</option><option selected>640</option><option>800</option><option>1024</option></select></div></div>
+    <div class="hint">Vidéo de ${fmtDur(c.duration || 0)}. Un GIF reste lourd : préférez une durée courte et une largeur réduite.</div></div>
+    <div class="foot"><span class="spacer"></span><button id="gC">Annuler</button><button class="primary" id="gOk">Créer le GIF</button></div></div>`
+  document.body.appendChild(ov)
+  $('#gC', ov).onclick = () => ov.remove()
+  $('#gOk', ov).onclick = async () => {
+    $('#gOk', ov).disabled = true; $('#gOk', ov).textContent = 'Conversion…'
+    try {
+      const g = await window.ledroide.run(MODULE_ID, 'gif.export', { id: c.id, start: +$('#gS', ov).value, duration: +$('#gD', ov).value, fps: +$('#gF', ov).value, width: +$('#gW', ov).value })
+      ov.remove(); await loadHistory(); openCapture(g); toast(`GIF créé (${fmtSize(g.size)})`)
+    } catch (e) { toast(e.message, true); $('#gOk', ov).disabled = false; $('#gOk', ov).textContent = 'Créer le GIF' }
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || $('.overlay')) return
+  if (S.cur?.kind !== 'image' || $('#editView').classList.contains('hidden')) return
+  const k = e.key.toLowerCase()
+  if (e.ctrlKey && k === 'z') { e.preventDefault(); undo() }
+  else if (e.ctrlKey && k === 'y') { e.preventDefault(); redo() }
+  else if (e.ctrlKey && k === 'c') { e.preventDefault(); copy() }
+  else if (e.ctrlKey && k === 's') { e.preventDefault(); saveEdit('replace') }
+  else if ((k === 'delete' || k === 'backspace') && S.sel >= 0) { S.redo.push(S.anns.splice(S.sel, 1)[0]); S.sel = -1; draw() }
+  else if (k === 'escape') { if (S.zone) endZone(); else { S.sel = -1; draw() } }
+  else if (!e.ctrlKey) { const t = { v: 'move', a: 'arrow', r: 'rect', t: 'text', h: 'hl', p: 'pixel', b: 'blur', c: 'crop' }[k]; if (t) setTool(t) }
+})
+
+// ── History ───────────────────────────────────────────────────────────────────
+async function loadHistory() {
+  const r = await act('history.list')
+  if (!r) return
+  S.history = r.captures; S.totalSize = r.total_size
+  $('#histCount').textContent = r.captures.length ? `(${r.captures.length})` : ''
+  if (!$('#histView').classList.contains('hidden')) renderHistory()
+}
+function renderHistory() {
+  const K = { image: '🖼 Image', video: '🎬 Vidéo', gif: '🎞 GIF' }
+  S.checked = new Set([...S.checked].filter((id) => S.history.some((c) => c.id === id)))
+  $('#hist').innerHTML = `<div class="hhead"><b>${S.history.length} élément(s)</b><span class="muted">${fmtSize(S.totalSize || 0)}</span><span class="spacer"></span>
+      <select id="hFilter"><option value="">Tout</option><option value="image">Images</option><option value="video">Vidéos</option><option value="gif">GIF</option></select>
+      <button class="danger" id="hDel" ${S.checked.size ? '' : 'disabled'}>🗑 Supprimer la sélection (${S.checked.size})</button></div>
+    ${S.history.length ? `<div class="grid">${S.history.filter((c) => !S.hFilter || c.kind === S.hFilter).map((c) => `<div class="card ${S.cur?.id === c.id ? 'sel' : ''}" data-id="${c.id}">
+      <div class="th" style="background-image:url('${c.thumb}')"></div><span class="kind">${K[c.kind]}${c.duration ? ' · ' + fmtDur(c.duration) : ''}</span>
+      <input type="checkbox" data-c="${c.id}" ${S.checked.has(c.id) ? 'checked' : ''} />
+      <div class="meta"><b>${esc(c.title || c.source)}</b>${esc(fmtDate(c.created_at))} · ${c.width}×${c.height} · ${fmtSize(c.size)}</div></div>`).join('')}</div>`
+      : '<div class="empty"><div class="big">🗂</div>Aucune capture pour l’instant.</div>'}`
+  $('#hFilter').value = S.hFilter || ''
+  $('#hFilter').onchange = (e) => { S.hFilter = e.target.value; renderHistory() }
+  $$('.card').forEach((el) => el.onclick = (e) => { if (e.target.tagName === 'INPUT') return; const c = S.history.find((x) => x.id === el.dataset.id); if (c) openCapture(c) })
+  $$('[data-c]').forEach((cb) => cb.onchange = () => { cb.checked ? S.checked.add(cb.dataset.c) : S.checked.delete(cb.dataset.c); renderHistory() })
+  $('#hDel').onclick = async () => {
+    if (!confirm(`Supprimer ${S.checked.size} élément(s) ?`)) return
+    if (await act('capture.delete', { ids: [...S.checked] })) { if (S.checked.has(S.cur?.id)) { S.cur = null; S.anns = [] } S.checked.clear(); loadHistory() }
+  }
+}
+
+// ── Recording ─────────────────────────────────────────────────────────────────
+function showRec(st) {
+  $('#btnRec').classList.toggle('hidden', !!st); $('#recBox').classList.toggle('hidden', !st)
+  if (st) { $('#recTime').textContent = fmtDur(st.elapsed || 0); $('#recInfo').textContent = st.countdown ? `départ dans ${st.countdown} s` : `/ ${fmtDur(st.max || +$('#vMax').value)}` }
+}
+$('#btnRec').onclick = async () => {
+  const mon = +$('#vSrc').value
+  const payload = { target: mon === 0 ? 'all' : 'monitor', monitor: mon || 1, fps: +$('#vFps').value, max_s: +$('#vMax').value, delay: +$('#vDelay').value }
+  showRec({ elapsed: 0, max: payload.max_s })
+  try {
+    const v = await window.ledroide.run(MODULE_ID, 'record', payload, {
+      onStart: (id) => (S.recJob = id),
+      onProgress: (p) => { if (p.countdown) { countdown(p.countdown); showRec({ elapsed: 0, max: payload.max_s, countdown: p.countdown }) } else { countdown(0); showRec({ elapsed: p.elapsed || 0, max: payload.max_s }) } },
+    })
+    countdown(0)
+    await loadHistory(); openCapture(v); toast(`Vidéo enregistrée : ${fmtDur(v.duration)} (${fmtSize(v.size)})`)
+  } catch (e) { countdown(0); toast(e.code === 'JOB_CANCELLED' ? 'Enregistrement annulé' : e.message, e.code !== 'JOB_CANCELLED') }
+  finally { S.recJob = null; showRec(null) }
+}
+$('#btnStop').onclick = async () => { $('#btnStop').disabled = true; await act('record.stop'); $('#btnStop').disabled = false }
+window.ledroide.on(MODULE_ID, 'record:started', (st) => { if (!S.recJob) showRec(st) })
+window.ledroide.on(MODULE_ID, 'record:stopped', () => { if (!S.recJob) { showRec(null); loadHistory() } })
+window.ledroide.on(MODULE_ID, 'history:changed', () => { if (!$('#histView').classList.contains('hidden')) loadHistory() })
+
+init()
+</script>
+</body>
+</html>

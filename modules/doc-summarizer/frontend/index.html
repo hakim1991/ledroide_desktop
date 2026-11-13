@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Résumeur de documents</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --info: #38bdf8;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.45); color: #fca5a5; font-weight: 600; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  button.small { padding: 2px 8px; font-size: 11.5px; }
+  button.icon { padding: 3px 7px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .spacer { flex: 1; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+
+  #side { width: 270px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; min-height: 0; }
+  .side-top { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .side-top input { width: 100%; }
+  #list { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+  .item { display: flex; align-items: center; gap: 8px; padding: 7px 6px; border-radius: 6px; cursor: pointer; }
+  .item:hover { background: var(--surface2); }
+  .item.current { background: rgba(99,102,241,.14); }
+  .item .ic { width: 20px; text-align: center; flex-shrink: 0; font-size: 15px; }
+  .item .body { flex: 1; min-width: 0; }
+  .item .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .sub { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .acts { display: none; gap: 2px; }
+  .item:hover .acts { display: flex; }
+  .item input.rename { width: 100%; padding: 2px 6px; }
+  .busy-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-h); flex-shrink: 0; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .side-empty { color: var(--muted); text-align: center; padding: 24px 8px; font-size: 12px; line-height: 1.5; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  #keybar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: rgba(245,158,11,.1);
+            border-bottom: 1px solid rgba(245,158,11,.35); color: #fcd34d; line-height: 1.45; flex-shrink: 0; }
+  #keybar .txt { flex: 1; }
+  #keybar code { font-family: var(--mono); background: rgba(0,0,0,.3); padding: 0 5px; border-radius: 4px; color: #fde68a; }
+  .linklike { color: var(--accent-h); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; font-weight: 600; }
+  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+  /* import */
+  .import-wrap { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 30px 20px; }
+  .import { width: min(720px, 100%); display: flex; flex-direction: column; gap: 14px; }
+  .import h2 { font-size: 19px; display: flex; gap: 10px; align-items: center; }
+  .import .lead { color: var(--muted); line-height: 1.5; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+  .tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); padding: 8px 12px; }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tabs button .badge { margin-left: 5px; background: var(--surface2); border-radius: 8px; padding: 0 6px; font-size: 10.5px; color: var(--muted); }
+  .drop { border: 2px dashed #3f3f46; border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer;
+          display: flex; flex-direction: column; gap: 8px; align-items: center; color: var(--muted); transition: .15s; background: var(--surface); }
+  .drop:hover, .drop.over { border-color: var(--accent); color: var(--text); background: rgba(99,102,241,.06); }
+  .drop .big { font-size: 34px; }
+  .drop b { color: var(--text); }
+  .formats { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .formats span { font-size: 11px; padding: 1px 7px; border: 1px solid var(--border); border-radius: 8px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row input { flex: 1; }
+  .paste textarea { width: 100%; min-height: 220px; resize: vertical; line-height: 1.5; }
+  .import-status { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); }
+  .error-box { color: #fca5a5; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: 8px;
+               padding: 10px 12px; display: flex; gap: 10px; align-items: center; line-height: 1.45; }
+  .error-box span { flex: 1; }
+
+  /* doc */
+  .dochead { padding: 12px 16px 0; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .dh-top { display: flex; gap: 10px; align-items: flex-start; }
+  .dh-title { font-size: 16px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dh-meta { color: var(--muted); font-size: 11.5px; margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .dh-meta a { color: var(--accent-h); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
+  .pill { padding: 1px 8px; border-radius: 9px; font-size: 11px; border: 1px solid var(--border); color: #a1a1aa; }
+  .pill.direct { border-color: rgba(34,197,94,.4); color: #86efac; }
+  .pill.chunked { border-color: rgba(56,189,248,.4); color: #7dd3fc; }
+  .dh-left { flex: 1; min-width: 0; }
+  .dh-ctrl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .dh-ctrl label { color: var(--muted); display: flex; gap: 5px; align-items: center; }
+  .dh-ctrl select { max-width: 170px; }
+  .doctabs { margin-top: 10px; }
+
+  .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .toolbar { display: flex; gap: 8px; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+  .toolbar .meta { color: var(--muted); font-size: 11.5px; }
+  .out { flex: 1; overflow-y: auto; padding: 18px 0 30px; }
+  .out .inner { max-width: 860px; margin: 0 auto; padding: 0 22px; line-height: 1.6; font-size: 13.5px; }
+  .placeholder { color: var(--muted); padding: 50px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; line-height: 1.5; }
+  .placeholder .big { font-size: 30px; }
+  .progress { max-width: 860px; margin: 0 auto 14px; padding: 0 22px; }
+  .progress .bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .progress .bar div { height: 100%; background: var(--accent); transition: width .3s; }
+  .progress .lbl { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.25);
+             border-top-color: var(--accent-h); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cursor { display: inline-block; width: 7px; height: 14px; background: var(--accent-h); vertical-align: -2px; margin-left: 2px; animation: pulse .8s steps(2) infinite; }
+  .flag { padding: 1px 6px; border-radius: 8px; font-size: 10.5px; background: rgba(245,158,11,.14); color: var(--warn); }
+
+  #source-text { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; line-height: 1.55; color: #c4c4cc; overflow-wrap: anywhere; }
+
+  /* chat */
+  .thread { max-width: 860px; margin: 0 auto; padding: 0 22px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { display: flex; flex-direction: column; gap: 4px; }
+  .msg.user { align-items: flex-end; }
+  .bubble { border-radius: 10px; padding: 9px 13px; line-height: 1.55; max-width: 100%; overflow-wrap: anywhere; }
+  .msg.user .bubble { background: rgba(99,102,241,.16); border: 1px solid rgba(99,102,241,.3); white-space: pre-wrap; max-width: 85%; }
+  .msg.assistant .bubble { background: var(--surface); border: 1px solid var(--border); }
+  .msg-meta { color: var(--muted); font-size: 11px; display: flex; gap: 8px; align-items: center; }
+  .suggest { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .suggest button { white-space: normal; text-align: left; color: var(--text); }
+  .composer-wrap { padding: 8px 22px 14px; flex-shrink: 0; }
+  .composer { max-width: 860px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px; display: flex; gap: 8px; align-items: flex-end; }
+  .composer:focus-within { border-color: var(--accent); }
+  .composer textarea { flex: 1; border: none; background: transparent; resize: none; min-height: 38px; max-height: 200px; line-height: 1.5; padding: 4px 6px; }
+
+  /* markdown */
+  .md > :first-child { margin-top: 0; }
+  .md > :last-child { margin-bottom: 0; }
+  .md p, .md ul, .md ol, .md blockquote, .md .codeblock, .md table, .md hr { margin: 0 0 10px; }
+  .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { margin: 16px 0 8px; line-height: 1.3; font-weight: 650; }
+  .md h1 { font-size: 19px; } .md h2 { font-size: 16.5px; } .md h3 { font-size: 15px; } .md h4, .md h5, .md h6 { font-size: 13.5px; }
+  .md ul, .md ol { padding-left: 22px; }
+  .md li { margin: 3px 0; }
+  .md a { color: var(--accent-h); }
+  .md strong { color: #fff; }
+  .md code { font-family: var(--mono); font-size: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  .md blockquote { border-left: 3px solid #3f3f46; padding: 2px 10px; color: #a1a1aa; }
+  .md hr { border: none; border-top: 1px solid var(--border); }
+  .md table { border-collapse: collapse; display: block; overflow-x: auto; }
+  .md th, .md td { border: 1px solid var(--border); padding: 4px 9px; text-align: left; vertical-align: top; }
+  .md th { background: var(--surface2); }
+  .codeblock { background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .cb-head { display: flex; align-items: center; justify-content: space-between; padding: 3px 6px 3px 10px; background: var(--surface2);
+             border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; font-family: var(--mono); }
+  .codeblock pre { margin: 0; padding: 9px 11px; overflow-x: auto; }
+  .codeblock pre code { background: none; border: none; padding: 0; font-size: 12.3px; line-height: 1.5; white-space: pre; }
+
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); background: var(--bg); z-index: 30; }
+  #toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border);
+           padding: 8px 14px; border-radius: 8px; z-index: 60; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.err { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+  #toast.ok { border-color: rgba(34,197,94,.45); }
+  .ask-back { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 200; }
+  .ask-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; width: min(460px, calc(100vw - 32px));
+             box-shadow: 0 12px 40px rgba(0,0,0,.5); display: flex; flex-direction: column; gap: 10px; line-height: 1.5; }
+  .ask-box h3 { font-size: 15px; }
+  .ask-box ol { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+  .ask-box code { font-family: var(--mono); color: var(--accent-h); background: var(--surface2); padding: 1px 5px; border-radius: 4px; }
+  .ask-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="side-top">
+    <button class="primary" id="btn-new" title="Importer un nouveau document (Ctrl+N)">＋ Nouveau document</button>
+    <input id="search" type="search" placeholder="Rechercher dans l'historique…" />
+  </div>
+  <div id="list"></div>
+</aside>
+
+<main id="main">
+  <div id="loading"><span class="spinner"></span> Chargement…</div>
+  <div id="keybar" class="hidden">
+    <span style="font-size:18px">🔑</span>
+    <span class="txt" id="keybar-txt"></span>
+    <button class="small" id="key-retry">Vérifier à nouveau</button>
+  </div>
+
+  <section class="view" id="view-import">
+    <div class="import-wrap">
+      <div class="import">
+        <h2>📰 Résumer un document</h2>
+        <div class="lead">Importez un PDF, un document Word, un fichier texte ou Markdown, une page web, ou collez directement un texte.
+          Vous pourrez ensuite obtenir un résumé, les points clés, le plan, et poser des questions sur son contenu.</div>
+        <div class="tabs" id="imp-tabs">
+          <button data-t="file" class="on">📄 Fichier</button>
+          <button data-t="url">🌐 Page web</button>
+          <button data-t="text">📋 Texte collé</button>
+        </div>
+        <div data-p="file">
+          <div class="drop" id="drop">
+            <div class="big">📥</div>
+            <div><b>Déposez un fichier ici</b> ou cliquez pour le choisir</div>
+            <div class="formats"><span>PDF</span><span>DOCX</span><span>TXT</span><span>Markdown</span><span>HTML</span></div>
+            <div style="font-size:11.5px" id="max-size">Jusqu'à 10 Mo</div>
+          </div>
+          <input type="file" id="file" hidden accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm,.rst,.csv,.log,.json,.xml,.tex,application/pdf,text/*" />
+        </div>
+        <div data-p="url" class="hidden">
+          <div class="row">
+            <input id="url" type="url" placeholder="https://exemple.fr/article" spellcheck="false" />
+            <button class="primary" id="btn-url">Charger la page</button>
+          </div>
+          <div class="muted" style="margin-top:8px;font-size:12px;line-height:1.5">Le texte principal de la page est extrait (menus, publicités et pieds de page sont ignorés). Les liens directs vers un PDF fonctionnent aussi.</div>
+        </div>
+        <div data-p="text" class="hidden paste">
+          <input id="paste-title" placeholder="Titre (facultatif)" maxlength="200" style="width:100%;margin-bottom:8px" />
+          <textarea id="paste" placeholder="Collez ici le texte à résumer…"></textarea>
+          <div class="row" style="margin-top:8px"><span class="muted spacer" id="paste-count"></span><button class="primary" id="btn-paste">Utiliser ce texte</button></div>
+        </div>
+        <div id="imp-status" class="hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view hidden" id="view-doc">
+    <div class="dochead">
+      <div class="dh-top">
+        <div class="dh-left">
+          <div class="dh-title" id="d-title"></div>
+          <div class="dh-meta" id="d-meta"></div>
+        </div>
+        <div class="dh-ctrl">
+          <label title="Langue des synthèses et des réponses">🌐 <select id="lang"></select></label>
+          <select id="model" title="Modèle Claude"></select>
+          <button id="btn-export" title="Exporter toutes les synthèses et les questions-réponses en Markdown">⬇ Export .md</button>
+        </div>
+      </div>
+      <div class="tabs doctabs" id="doc-tabs">
+        <button data-t="summary" class="on">📝 Résumé</button>
+        <button data-t="keypoints">🎯 Points clés</button>
+        <button data-t="outline">🗂 Plan</button>
+        <button data-t="chat">💬 Questions-réponses</button>
+        <button data-t="source">📄 Texte source</button>
+      </div>
+    </div>
+
+    <div class="pane" id="pane-gen">
+      <div class="toolbar">
+        <div class="seg" id="length-seg">
+          <button data-l="short">Court</button><button data-l="medium" class="on">Moyen</button><button data-l="detailed">Détaillé</button>
+        </div>
+        <button class="primary" id="btn-gen">Générer</button>
+        <button class="danger hidden" id="btn-stop">■ Arrêter</button>
+        <button class="ghost" id="btn-copy" disabled>Copier</button>
+        <span class="spacer"></span>
+        <span class="meta" id="gen-meta"></span>
+      </div>
+      <div class="out" id="gen-out"></div>
+    </div>
+
+    <div class="pane hidden" id="pane-chat">
+      <div class="toolbar">
+        <span class="meta">Les réponses s'appuient uniquement sur le contenu du document.</span>
+        <span class="spacer"></span>
+        <button class="ghost small" id="btn-clear-chat">🗑 Vider la discussion</button>
+      </div>
+      <div class="out" id="chat-out"></div>
+      <div class="composer-wrap">
+        <div class="composer">
+          <textarea id="ask" rows="1" placeholder="Posez une question sur le document… (Entrée pour envoyer)"></textarea>
+          <button class="danger hidden" id="ask-stop">■ Arrêter</button>
+          <button class="primary" id="ask-send">Envoyer ➤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane hidden" id="pane-source">
+      <div class="toolbar"><span class="meta" id="source-meta"></span><span class="spacer"></span><button class="ghost small" id="btn-copy-src">Copier le texte</button></div>
+      <div class="out"><div class="inner"><div id="source-text"></div></div></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'doc-summarizer';
+const L = window.ledroide;
+const $ = (id) => document.getElementById(id);
+
+// MD-START
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderInline(text) {
+  const codes = [];
+  const links = [];
+  let s = String(text).replace(/`([^`\n]+)`/g, (m, c) => { codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000'; });
+  s = escapeHtml(s);
+  const keep = (html) => { links.push(html); return '\u0001' + (links.length - 1) + '\u0001'; };
+  s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, label, url) => {
+    if (!/^(https?:\/\/|mailto:)/i.test(url)) return label;
+    return keep('<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');
+  });
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<]+[^\s<.,;:!?)'&])/g, (m, pre, url) =>
+    pre + keep('<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>'));
+  s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
+       .replace(/(^|[^\w])__(?=\S)([\s\S]*?\S)__(?!\w)/g, '$1<strong>$2</strong>')
+       .replace(/(^|[^*\w])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![*\w])/g, '$1<em>$2</em>')
+       .replace(/(^|[^\w])_(?=[^\s_])([^_\n]*?[^\s_])_(?!\w)/g, '$1<em>$2</em>')
+       .replace(/~~(?=\S)([^~\n]*?\S)~~/g, '<del>$1</del>');
+  s = s.replace(/\u0001(\d+)\u0001/g, (m, i) => links[+i]);
+  s = s.replace(/\u0000(\d+)\u0000/g, (m, i) => '<code>' + escapeHtml(codes[+i]) + '</code>');
+  return s;
+}
+
+function codeBlockHtml(code, lang) {
+  return '<div class="codeblock"><div class="cb-head"><span>' + escapeHtml(lang || 'code') +
+    '</span><button class="ghost small cb-copy" type="button">Copier</button></div><pre><code>' +
+    escapeHtml(code) + '</code></pre></div>';
+}
+
+const LIST_RE = /^(\s*)([-*+]|\d{1,9}[.)])\s+(.*)$/;
+const FENCE_RE = /^\s*(`{3,}|~{3,})\s*([\w#+.-]*)\s*$/;
+const TABLE_SEP_RE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+
+function splitRow(line) {
+  let t = line.trim();
+  if (t.startsWith('|')) t = t.slice(1);
+  if (t.endsWith('|')) t = t.slice(0, -1);
+  return t.split('|').map((c) => c.trim());
+}
+
+function renderList(block) {
+  const first = block[0].match(LIST_RE);
+  const base = first[1].length;
+  const ordered = /\d/.test(first[2]);
+  const items = [];
+  let cur = null;
+  for (const l of block) {
+    const m = l.match(LIST_RE);
+    if (m && m[1].length <= base) { cur = { head: m[3], rest: [] }; items.push(cur); }
+    else if (cur) cur.rest.push(l.replace(new RegExp('^ {0,' + (base + 4) + '}'), ''));
+  }
+  const start = ordered ? parseInt(first[2], 10) : 1;
+  let html = ordered ? (start !== 1 ? '<ol start="' + start + '">' : '<ol>') : '<ul>';
+  for (const it of items) {
+    const rest = it.rest.join('\n').trim() ? renderMarkdown(it.rest.join('\n')) : '';
+    html += '<li>' + renderInline(it.head) + rest + '</li>';
+  }
+  return html + (ordered ? '</ol>' : '</ul>');
+}
+
+function renderMarkdown(src) {
+  const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').replace(/[\u0000\u0001]/g, '').split('\n');
+  const out = [];
+  let para = [];
+  const flush = () => { if (para.length) { out.push('<p>' + para.map(renderInline).join('<br>') + '</p>'); para = []; } };
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    let m;
+    if ((m = line.match(FENCE_RE))) {
+      flush();
+      const close = new RegExp('^\\s*' + (m[1][0] === '`' ? '`' : '~') + '{' + m[1].length + ',}\\s*$');
+      const buf = [];
+      i++;
+      while (i < lines.length && !close.test(lines[i])) { buf.push(lines[i]); i++; }
+      i++;
+      out.push(codeBlockHtml(buf.join('\n'), m[2]));
+      continue;
+    }
+    if (!line.trim()) { flush(); i++; continue; }
+    if ((m = line.match(/^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/))) {
+      flush();
+      out.push('<h' + m[1].length + '>' + renderInline(m[2]) + '</h' + m[1].length + '>');
+      i++; continue;
+    }
+    if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(line)) { flush(); out.push('<hr>'); i++; continue; }
+    if (/^\s{0,3}>/.test(line)) {
+      flush();
+      const buf = [];
+      while (i < lines.length && /^\s{0,3}>/.test(lines[i])) { buf.push(lines[i].replace(/^\s{0,3}>\s?/, '')); i++; }
+      out.push('<blockquote>' + renderMarkdown(buf.join('\n')) + '</blockquote>');
+      continue;
+    }
+    if (line.includes('|') && i + 1 < lines.length && TABLE_SEP_RE.test(lines[i + 1]) && lines[i + 1].includes('-')) {
+      flush();
+      const head = splitRow(line);
+      let html = '<table><thead><tr>' + head.map((c) => '<th>' + renderInline(c) + '</th>').join('') + '</tr></thead><tbody>';
+      i += 2;
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) {
+        const cells = splitRow(lines[i]);
+        html += '<tr>' + head.map((_, k) => '<td>' + renderInline(cells[k] || '') + '</td>').join('') + '</tr>';
+        i++;
+      }
+      out.push(html + '</tbody></table>');
+      continue;
+    }
+    if (LIST_RE.test(line)) {
+      flush();
+      const block = [];
+      const head = line.match(LIST_RE);
+      const ordered = /\d/.test(head[2]);
+      while (i < lines.length) {
+        const l = lines[i];
+        const lm = l.match(LIST_RE);
+        if (block.length && lm && lm[1].length <= head[1].length && /\d/.test(lm[2]) !== ordered) break;
+        if (lm ||(block.length && /^\s{2,}\S/.test(l))) { block.push(l); i++; continue; }
+        if (!l.trim() && i + 1 < lines.length && (LIST_RE.test(lines[i + 1]) || /^\s{2,}\S/.test(lines[i + 1]))) {
+          block.push(l); i++; continue;
+        }
+        if (block.length && FENCE_RE.test(l) && /^\s{2,}/.test(l)) { block.push(l); i++; continue; }
+        break;
+      }
+      out.push(renderList(block));
+      continue;
+    }
+    para.push(line);
+    i++;
+  }
+  flush();
+  return out.join('');
+}
+// MD-END
+
+const LANGS = ['français', 'anglais', 'espagnol', 'allemand', 'italien', 'portugais', 'néerlandais', 'polonais',
+  'arabe', 'chinois', 'japonais', 'coréen', 'russe', 'turc', 'Langue du document'];
+const TYPE_ICON = { pdf: '📕', docx: '📘', text: '📄', markdown: '📝', html: '🌐', url: '🌐', paste: '📋' };
+const TYPE_LABEL = { pdf: 'PDF', docx: 'Word', text: 'Texte', markdown: 'Markdown', html: 'HTML', url: 'Page web', paste: 'Texte collé' };
+const KIND_INFO = {
+  summary: { icon: '📝', label: 'Résumé', desc: 'Un résumé fidèle du document, dans la longueur choisie.' },
+  keypoints: { icon: '🎯', label: 'Points clés', desc: 'Les idées essentielles sous forme de liste, de la plus importante à la moins importante.' },
+  outline: { icon: '🗂', label: 'Plan', desc: 'La structure du document : parties, sous-parties et leur contenu.' },
+};
+
+const state = {
+  status: null, docs: [], view: null, tab: 'summary', length: 'medium', impTab: 'file',
+  reqs: {}, renaming: null, importing: false, source: null,
+};
+
+function pref(k, v) {
+  try {
+    if (v === undefined) return localStorage.getItem('ds:' + k);
+    localStorage.setItem('ds:' + k, v);
+  } catch (e) { return null; }
+}
+
+let toastTimer = null;
+function toast(msg, kind) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (kind ? ' ' + kind : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, kind === 'err' ? 5000 : 2500);
+}
+
+function dialog(build) {
+  return new Promise((resolve) => {
+    const back = document.createElement('div');
+    back.className = 'ask-back';
+    const box = document.createElement('div');
+    box.className = 'ask-box';
+    back.append(box);
+    const close = (v) => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(false); } };
+    build(box, close);
+    back.onclick = (e) => { if (e.target === back) close(false); };
+    document.addEventListener('keydown', onKey, true);
+    document.body.append(back);
+    const f = box.querySelector('button.danger, button.primary');
+    if (f) f.focus();
+  });
+}
+
+function askConfirm(message, okLabel) {
+  return dialog((box, close) => {
+    const p = document.createElement('p');
+    p.textContent = message;
+    const btns = document.createElement('div');
+    btns.className = 'ask-btns';
+    const c = document.createElement('button'); c.textContent = 'Annuler'; c.onclick = () => close(false);
+    const ok = document.createElement('button'); ok.className = 'danger'; ok.textContent = okLabel || 'Confirmer'; ok.onclick = () => close(true);
+    btns.append(c, ok);
+    box.append(p, btns);
+  });
+}
+
+function showKeyHelp() {
+  return dialog((box, close) => {
+    box.innerHTML = '<h3>🔑 Configurer la clé d\'API Anthropic</h3><ol>' +
+      '<li>Créez une clé sur <b>console.anthropic.com</b> (rubrique « API Keys »).</li>' +
+      '<li>Dans la barre latérale gauche de LedroideDesktop, ouvrez <b>🔑 Variables</b>.</li>' +
+      '<li>Ajoutez la variable <code>ANTHROPIC_API_KEY</code> avec votre clé comme valeur (cochez « secret »).</li>' +
+      '<li>Revenez ici : la clé est prise en compte immédiatement, sans redémarrage.</li></ol>' +
+      '<div class="muted">La clé reste dans le backend local : elle n\'est jamais affichée dans cette interface ni écrite dans les journaux.</div>' +
+      '<div class="ask-btns"><button class="primary">Compris</button></div>';
+    box.querySelector('button').onclick = () => close(true);
+  });
+}
+
+function api(action, payload, timeout) {
+  return L.call(MODULE_ID, action, payload || {}, { timeout: timeout || 20000 });
+}
+
+function newRid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
+  return (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 32);
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    ta.remove();
+    if (!ok) { toast('Copie impossible', 'err'); return; }
+  }
+  toast('Copié dans le presse-papiers', 'ok');
+}
+
+function download(name, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+const fmt = (n) => (n || 0).toLocaleString('fr-FR');
+function relDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return "à l'instant";
+  if (diff < 3600) return 'il y a ' + Math.floor(diff / 60) + ' min';
+  if (diff < 86400) return 'il y a ' + Math.floor(diff / 3600) + ' h';
+  if (diff < 7 * 86400) return 'il y a ' + Math.floor(diff / 86400) + ' j';
+  return d.toLocaleDateString('fr-FR');
+}
+function modelLabel(id) {
+  const m = (state.status && state.status.models || []).find((x) => x.id === id);
+  return m ? m.label.replace(/^Claude /, '') : (id || '');
+}
+
+// ── Status & key ───────────────────────────────────────────────────────────
+
+async function refreshStatus(showToast) {
+  try { state.status = await api('status'); }
+  catch (e) { toast('Backend indisponible : ' + e.message, 'err'); return; }
+  renderKeybar();
+  if (showToast) toast(state.status.has_key ? 'Clé d\'API détectée ✓' : 'Clé toujours absente', state.status.has_key ? 'ok' : 'err');
+}
+
+function renderKeybar() {
+  const st = state.status;
+  const bar = $('keybar');
+  if (!st || (st.has_key && st.sdk_available)) { bar.classList.add('hidden'); return; }
+  const txt = $('keybar-txt');
+  txt.innerHTML = '';
+  if (!st.sdk_available) {
+    txt.textContent = 'La bibliothèque Python « anthropic » n\'est pas installée : désactivez puis réactivez le module (Catalogue), ou installez-la depuis le menu « Bibliothèques ».';
+  } else {
+    txt.append('Clé d\'API manquante : les synthèses et les questions nécessitent ');
+    const c = document.createElement('code'); c.textContent = 'ANTHROPIC_API_KEY'; txt.append(c);
+    txt.append(', à définir dans le menu ');
+    const a = document.createElement('button'); a.className = 'linklike'; a.textContent = '🔑 Variables';
+    a.title = 'Comment ajouter la clé'; a.onclick = showKeyHelp; txt.append(a);
+    txt.append(' de l\'application. L\'import et l\'historique restent utilisables.');
+  }
+  bar.classList.remove('hidden');
+}
+
+function handleError(e) {
+  if (e.code === 'API_KEY_MISSING' || e.code === 'DEPENDENCY_MISSING' || e.code === 'INVALID_KEY') refreshStatus();
+  toast(e.message || String(e), 'err');
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+
+async function loadList() {
+  try { state.docs = (await api('doc:list')).items; } catch (e) { toast(e.message, 'err'); }
+  renderList();
+}
+
+function renderList() {
+  const list = $('list');
+  list.innerHTML = '';
+  const q = $('search').value.trim().toLowerCase();
+  const items = state.docs.filter((d) => !q || d.title.toLowerCase().includes(q) || (d.source_ref || '').toLowerCase().includes(q));
+  if (!items.length) {
+    list.innerHTML = '<div class="side-empty">' + (state.docs.length ? 'Aucun résultat.' : 'Aucun document pour l\'instant.<br>Importez-en un pour commencer.') + '</div>';
+    return;
+  }
+  const cur = state.view && state.view.document.id;
+  for (const d of items) {
+    const el = document.createElement('div');
+    el.className = 'item' + (d.id === cur ? ' current' : '');
+    if (state.renaming === d.id) {
+      const inp = document.createElement('input');
+      inp.className = 'rename'; inp.value = d.title; inp.maxLength = 200;
+      let done = false;
+      const commit = async (save) => {
+        if (done) return; done = true;
+        const v = inp.value.trim();
+        if (save && v && v !== d.title) {
+          try {
+            const r = await api('doc:rename', { id: d.id, title: v });
+            d.title = r.document.title;
+            if (state.view && state.view.document.id === d.id) { state.view.document.title = d.title; renderHead(); }
+          } catch (e) { toast(e.message, 'err'); }
+        }
+        state.renaming = null; renderList();
+      };
+      inp.onkeydown = (e) => { if (e.key === 'Enter') commit(true); if (e.key === 'Escape') { e.stopPropagation(); commit(false); } };
+      inp.onblur = () => commit(true);
+      el.appendChild(inp); list.appendChild(el);
+      setTimeout(() => { inp.focus(); inp.select(); });
+      continue;
+    }
+    const busy = d.busy || Object.values(state.reqs).some((r) => r.docId === d.id);
+    el.innerHTML = '<span class="ic"></span><div class="body"><div class="lbl"></div><div class="sub"></div></div>' +
+      (busy ? '<span class="busy-dot" title="Génération en cours"></span>' : '') +
+      '<div class="acts"><button class="ghost icon" data-a="rename" title="Renommer">✎</button><button class="ghost icon" data-a="del" title="Supprimer">🗑</button></div>';
+    el.querySelector('.ic').textContent = TYPE_ICON[d.source_type] || '📄';
+    el.querySelector('.lbl').textContent = d.title;
+    const extras = [];
+    if (d.n_outputs) extras.push(d.n_outputs + ' synthèse' + (d.n_outputs > 1 ? 's' : ''));
+    if (d.n_questions) extras.push(d.n_questions + ' question' + (d.n_questions > 1 ? 's' : ''));
+    el.querySelector('.sub').textContent = [fmt(d.words) + ' mots', ...extras, relDate(d.updated_at)].join(' · ');
+    el.title = (TYPE_LABEL[d.source_type] || '') + (d.source_ref ? ' — ' + d.source_ref : '');
+    el.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (b && b.dataset.a === 'rename') { state.renaming = d.id; renderList(); return; }
+      if (b && b.dataset.a === 'del') { deleteDoc(d); return; }
+      openDoc(d.id);
+    };
+    el.ondblclick = (e) => { if (!e.target.closest('button')) { state.renaming = d.id; renderList(); } };
+    list.appendChild(el);
+  }
+}
+
+async function deleteDoc(d) {
+  if (!await askConfirm('Supprimer « ' + d.title + ' » et toutes ses synthèses ? Cette action est définitive.', 'Supprimer')) return;
+  try {
+    await api('doc:delete', { id: d.id });
+    for (const [rid, r] of Object.entries(state.reqs)) if (r.docId === d.id) delete state.reqs[rid];
+    if (state.view && state.view.document.id === d.id) showImport();
+    toast('Document supprimé');
+    loadList();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Import ─────────────────────────────────────────────────────────────────
+
+function showImport() {
+  state.view = null; state.source = null;
+  $('view-import').classList.remove('hidden');
+  $('view-doc').classList.add('hidden');
+  renderList();
+}
+
+function setImpTab(t) {
+  state.impTab = t;
+  document.querySelectorAll('#imp-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('#view-import [data-p]').forEach((p) => p.classList.toggle('hidden', p.dataset.p !== t));
+  if (t === 'url') $('url').focus();
+  if (t === 'text') $('paste').focus();
+}
+
+function impStatus(kind, text) {
+  const s = $('imp-status');
+  if (!kind) { s.className = 'hidden'; s.innerHTML = ''; return; }
+  s.className = kind === 'err' ? 'error-box' : 'import-status';
+  s.innerHTML = (kind === 'busy' ? '<span class="spinner"></span>' : '⚠') + '<span></span>';
+  s.querySelector('span:last-child').textContent = text;
+}
+
+async function doImport(payload, label) {
+  if (state.importing) return;
+  state.importing = true;
+  impStatus('busy', label);
+  document.querySelectorAll('#view-import button').forEach((b) => { b.disabled = true; });
+  try {
+    const v = await api('doc:import', payload, 120000);
+    impStatus(null);
+    state.tab = 'summary';
+    await loadList();
+    setView(v);
+    toast('Document importé : ' + fmt(v.document.words) + ' mots', 'ok');
+    $('paste').value = ''; $('paste-title').value = ''; $('url').value = ''; updatePasteCount();
+  } catch (e) {
+    impStatus('err', e.message);
+  } finally {
+    state.importing = false;
+    document.querySelectorAll('#view-import button').forEach((b) => { b.disabled = false; });
+  }
+}
+
+function readFile(file) {
+  const max = (state.status ? state.status.max_file_mb : 10) * 1024 * 1024;
+  if (file.size > max) { impStatus('err', 'Fichier trop volumineux (' + (file.size / 1048576).toFixed(1) + ' Mo, maximum ' + (max / 1048576) + ' Mo).'); return; }
+  if (!file.size) { impStatus('err', 'Le fichier est vide.'); return; }
+  const fr = new FileReader();
+  fr.onload = () => {
+    const data = String(fr.result).split(',')[1] || '';
+    doImport({ source: 'file', name: file.name, data }, 'Extraction du texte de « ' + file.name + ' »…');
+  };
+  fr.onerror = () => impStatus('err', 'Lecture du fichier impossible.');
+  fr.readAsDataURL(file);
+}
+
+function updatePasteCount() {
+  const n = $('paste').value.length;
+  $('paste-count').textContent = n ? fmt(n) + ' caractères' : '';
+}
+
+// ── Document view ──────────────────────────────────────────────────────────
+
+async function openDoc(id) {
+  try { setView(await api('doc:get', { id })); }
+  catch (e) { toast(e.message, 'err'); }
+}
+
+function setView(v) {
+  const changed = !state.view || state.view.document.id !== v.document.id;
+  state.view = v;
+  if (changed) state.source = null;
+  for (const b of v.busy || []) {
+    if (!state.reqs[b.request_id]) {
+      state.reqs[b.request_id] = { docId: v.document.id, scope: b.scope, kind: b.kind, variant: b.variant, text: b.text, progress: b.progress };
+    }
+  }
+  $('view-import').classList.add('hidden');
+  $('view-doc').classList.remove('hidden');
+  renderList();
+  renderHead();
+  setTab(state.tab, true);
+}
+
+function renderHead() {
+  const d = state.view.document;
+  $('d-title').textContent = (TYPE_ICON[d.source_type] || '📄') + ' ' + d.title;
+  $('d-title').title = d.title;
+  const meta = $('d-meta');
+  meta.innerHTML = '';
+  const add = (t) => { const s = document.createElement('span'); s.textContent = t; meta.appendChild(s); return s; };
+  add(TYPE_LABEL[d.source_type] || d.source_type);
+  if (d.source_type === 'url' && d.source_ref) {
+    const a = document.createElement('a'); a.href = d.source_ref; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.textContent = d.source_ref; a.title = d.source_ref; meta.appendChild(a);
+  } else if (d.source_ref) add(d.source_ref);
+  if (d.pages) add(d.pages + ' pages');
+  add(fmt(d.words) + ' mots');
+  add('≈ ' + fmt(d.est_tokens) + ' tokens');
+  const pill = add(d.strategy === 'direct' ? 'Lecture intégrale' : 'Découpage en ' + d.parts + ' parties');
+  pill.className = 'pill ' + d.strategy;
+  pill.title = d.strategy === 'direct'
+    ? 'Le document tient dans le contexte du modèle : il est envoyé en entier (mis en cache pour les synthèses et questions suivantes).'
+    : 'Document très long : chaque partie est d\'abord condensée en notes (une seule fois, réutilisées ensuite), puis la synthèse est rédigée à partir de ces notes. Pour les questions, les passages les plus pertinents du texte intégral sont ajoutés.';
+}
+
+function setTab(t, force) {
+  if (state.tab === t && !force) return;
+  state.tab = t;
+  document.querySelectorAll('#doc-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
+  $('pane-gen').classList.toggle('hidden', !KIND_INFO[t]);
+  $('pane-chat').classList.toggle('hidden', t !== 'chat');
+  $('pane-source').classList.toggle('hidden', t !== 'source');
+  if (KIND_INFO[t]) renderGen(true);
+  else if (t === 'chat') { renderChat(true); $('ask').focus(); }
+  else renderSource();
+}
+
+function variantOf(kind) { return kind === 'summary' ? state.length : ''; }
+
+function findReq(docId, scope, kind, variant) {
+  for (const [rid, r] of Object.entries(state.reqs)) {
+    if (r.docId === docId && r.scope === scope && (scope === 'chat' || (r.kind === kind && r.variant === variant))) return [rid, r];
+  }
+  return [null, null];
+}
+
+function currentOutput() {
+  const kind = state.tab;
+  return (state.view.outputs || []).find((o) => o.kind === kind && o.variant === variantOf(kind));
+}
+
+function renderGen(scrollTop) {
+  if (!state.view || !KIND_INFO[state.tab]) return;
+  const kind = state.tab;
+  const info = KIND_INFO[kind];
+  const d = state.view.document;
+  $('length-seg').classList.toggle('hidden', kind !== 'summary');
+  document.querySelectorAll('#length-seg button').forEach((b) => b.classList.toggle('on', b.dataset.l === state.length));
+  const [rid, req] = findReq(d.id, 'gen', kind, variantOf(kind));
+  const out = currentOutput();
+  $('btn-gen').classList.toggle('hidden', !!req);
+  $('btn-stop').classList.toggle('hidden', !req);
+  $('btn-gen').textContent = out ? '↻ Régénérer' : '✨ Générer';
+  $('btn-copy').disabled = !(out || (req && req.text));
+  const meta = $('gen-meta');
+  if (req) meta.textContent = 'Génération en cours…';
+  else if (out) {
+    const u = out.usage || {};
+    meta.textContent = [modelLabel(out.model), out.lang, (out.strategy === 'chunked' ? 'découpage' : 'lecture intégrale'),
+      '↑ ' + fmt(u.input) + ' · ↓ ' + fmt(u.output) + ' tokens', relDate(out.created_at)].join(' · ');
+  } else meta.textContent = '';
+  const box = $('gen-out');
+  box.innerHTML = '';
+  if (req) {
+    if (req.progress && req.progress.total) {
+      const p = document.createElement('div');
+      p.className = 'progress';
+      const pct = Math.round(100 * req.progress.done / req.progress.total);
+      p.innerHTML = '<div class="lbl"><span class="spinner"></span><span></span></div><div class="bar"><div></div></div>';
+      p.querySelector('.lbl span:last-child').textContent = (req.progress.phase === 'reduce' ? 'Condensation des notes' : 'Lecture du document long') +
+        ' — ' + req.progress.done + ' / ' + req.progress.total + ' parties';
+      p.querySelector('.bar div').style.width = pct + '%';
+      box.appendChild(p);
+    }
+    const inner = document.createElement('div');
+    inner.className = 'inner md';
+    if (req.text) {
+      inner.innerHTML = renderMarkdown(req.text);
+      const cur = document.createElement('span'); cur.className = 'cursor';
+      const last = inner.lastElementChild;
+      if (last && /^(P|LI|H\d)$/.test(last.tagName)) last.appendChild(cur);
+      else if (last && /^(UL|OL)$/.test(last.tagName) && last.lastElementChild) last.lastElementChild.appendChild(cur);
+      else inner.appendChild(cur);
+    } else if (!(req.progress && req.progress.total)) {
+      inner.innerHTML = '<div class="placeholder"><span class="spinner"></span><div>' +
+        (req.progress && req.progress.phase === 'write' ? 'Rédaction…' : 'Envoi du document…') + '</div></div>';
+    }
+    box.appendChild(inner);
+    box.scrollTop = box.scrollHeight;
+    return;
+  }
+  if (out) {
+    const inner = document.createElement('div');
+    inner.className = 'inner md';
+    inner.innerHTML = renderMarkdown(out.content);
+    if (out.truncated) inner.insertAdjacentHTML('beforeend', '<p><span class="flag">Réponse tronquée (max_tokens atteint) : augmentez « max_tokens » dans la configuration du module.</span></p>');
+    box.appendChild(inner);
+    if (scrollTop) box.scrollTop = 0;
+    return;
+  }
+  const lbl = kind === 'summary' ? info.label + ' ' + { short: 'court', medium: 'moyen', detailed: 'détaillé' }[state.length] : info.label;
+  box.innerHTML = '<div class="placeholder"><div class="big">' + info.icon + '</div><div></div><div class="muted"></div></div>';
+  box.querySelector('.placeholder div:nth-child(2)').textContent = info.desc;
+  box.querySelector('.placeholder .muted').textContent = 'Cliquez sur « Générer » pour obtenir le ' + lbl.toLowerCase() +
+    (d.strategy === 'chunked' ? ' (document long : lecture en ' + d.parts + ' parties, avec progression).' : '.');
+}
+
+async function generate() {
+  const d = state.view.document;
+  const kind = state.tab;
+  if (!KIND_INFO[kind]) return;
+  const variant = variantOf(kind);
+  if (findReq(d.id, 'gen', kind, variant)[0]) return;
+  const rid = newRid();
+  state.reqs[rid] = { docId: d.id, scope: 'gen', kind, variant, text: '', progress: null };
+  renderGen(); renderList();
+  try {
+    await api('gen:run', { doc_id: d.id, request_id: rid, kind, length: state.length, lang: $('lang').value, model: $('model').value });
+  } catch (e) {
+    delete state.reqs[rid];
+    renderGen(); renderList();
+    handleError(e);
+  }
+}
+
+async function stopReq(rid) {
+  if (!rid) return;
+  try { await api('req:stop', { request_id: rid }); } catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────
+
+function renderChat(scrollEnd) {
+  if (!state.view || state.tab !== 'chat') return;
+  const d = state.view.document;
+  const [rid, req] = findReq(d.id, 'chat');
+  $('ask-send').classList.toggle('hidden', !!req);
+  $('ask-stop').classList.toggle('hidden', !req);
+  $('btn-clear-chat').disabled = !!req || !(state.view.messages || []).length;
+  const box = $('chat-out');
+  const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  const thread = document.createElement('div');
+  thread.className = 'thread';
+  const msgs = state.view.messages || [];
+  if (!msgs.length && !req) {
+    thread.innerHTML = '<div class="placeholder" style="padding-top:30px"><div class="big">💬</div><div>Posez une question sur « <span></span> ».</div><div class="suggest"></div></div>';
+    thread.querySelector('span').textContent = d.title;
+    const sug = thread.querySelector('.suggest');
+    ['Quelle est la conclusion principale de ce document ?', 'Quels chiffres ou données importantes sont mentionnés ?',
+     'Explique-moi ce document comme à un débutant.', 'Quels sont les points faibles ou les limites évoqués ?'].forEach((s) => {
+      const b = document.createElement('button'); b.textContent = s; b.onclick = () => { $('ask').value = s; ask(); };
+      sug.appendChild(b);
+    });
+  }
+  for (const m of msgs) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + m.role;
+    const b = document.createElement('div');
+    b.className = 'bubble' + (m.role === 'assistant' ? ' md' : '');
+    if (m.role === 'assistant') b.innerHTML = renderMarkdown(m.content); else b.textContent = m.content;
+    el.appendChild(b);
+    if (m.role === 'assistant') {
+      const meta = document.createElement('div');
+      meta.className = 'msg-meta';
+      meta.textContent = modelLabel(m.model);
+      if (m.stopped) meta.insertAdjacentHTML('beforeend', '<span class="flag">interrompue</span>');
+      const c = document.createElement('button'); c.className = 'ghost small'; c.textContent = 'Copier'; c.onclick = () => copyText(m.content);
+      meta.appendChild(c);
+      el.appendChild(meta);
+    }
+    thread.appendChild(el);
+  }
+  if (req) {
+    const el = document.createElement('div');
+    el.className = 'msg assistant';
+    const b = document.createElement('div');
+    b.className = 'bubble md';
+    if (req.text) { b.innerHTML = renderMarkdown(req.text); b.insertAdjacentHTML('beforeend', '<span class="cursor"></span>'); }
+    else {
+      const p = req.progress;
+      const label = p && p.total ? 'Lecture du document long — ' + p.done + ' / ' + p.total + ' parties…' : 'Recherche dans le document…';
+      b.innerHTML = '<div class="progress" style="padding:0;margin:0"><div class="lbl"><span class="spinner"></span><span></span></div></div>';
+      b.querySelector('.lbl span:last-child').textContent = label;
+    }
+    el.appendChild(b);
+    thread.appendChild(el);
+  }
+  box.innerHTML = '';
+  box.appendChild(thread);
+  if (scrollEnd || atEnd) box.scrollTop = box.scrollHeight;
+}
+
+async function ask() {
+  const text = $('ask').value.trim();
+  if (!text || !state.view) return;
+  const d = state.view.document;
+  if (findReq(d.id, 'chat')[0]) return;
+  const rid = newRid();
+  state.reqs[rid] = { docId: d.id, scope: 'chat', text: '', progress: null };
+  $('ask').value = ''; autoGrow();
+  const tmp = { id: 'tmp', role: 'user', content: text };
+  state.view.messages.push(tmp);
+  renderChat(true);
+  try {
+    const r = await api('chat:ask', { doc_id: d.id, request_id: rid, text, lang: $('lang').value, model: $('model').value });
+    Object.assign(tmp, r.user_message);
+  } catch (e) {
+    delete state.reqs[rid];
+    state.view.messages = state.view.messages.filter((m) => m !== tmp);
+    $('ask').value = text; autoGrow();
+    renderChat();
+    handleError(e);
+  }
+}
+
+function autoGrow() {
+  const t = $('ask');
+  t.style.height = 'auto';
+  t.style.height = Math.min(t.scrollHeight, 200) + 'px';
+}
+
+// ── Source ─────────────────────────────────────────────────────────────────
+
+async function renderSource() {
+  const d = state.view.document;
+  $('source-meta').textContent = fmt(d.chars) + ' caractères · ' + fmt(d.words) + ' mots';
+  if (!state.source || state.source.id !== d.id) {
+    $('source-text').textContent = 'Chargement…';
+    try {
+      const r = await api('doc:text', { id: d.id }, 30000);
+      state.source = { id: d.id, text: r.text, truncated: r.truncated };
+    } catch (e) { $('source-text').textContent = '⚠ ' + e.message; return; }
+  }
+  if (!state.view || state.view.document.id !== d.id) return;
+  $('source-text').textContent = state.source.text + (state.source.truncated ? '\n\n[… affichage limité aux 400 000 premiers caractères]' : '');
+}
+
+// ── Events ─────────────────────────────────────────────────────────────────
+
+let queued = false;
+function queueRender() {
+  if (queued) return;
+  queued = true;
+  requestAnimationFrame(() => {
+    queued = false;
+    if (!state.view) return;
+    if (state.tab === 'chat') renderChat(); else if (KIND_INFO[state.tab]) renderGen();
+  });
+}
+
+L.on(MODULE_ID, 'stream:delta', (d) => {
+  const r = state.reqs[d.request_id];
+  if (!r) return;
+  r.text += d.text;
+  if (state.view && state.view.document.id === r.docId) queueRender();
+});
+
+L.on(MODULE_ID, 'stream:status', (d) => {
+  const r = state.reqs[d.request_id];
+  if (!r) return;
+  r.progress = { phase: d.phase, done: d.done, total: d.total, message: d.message };
+  if (state.view && state.view.document.id === r.docId) queueRender();
+});
+
+L.on(MODULE_ID, 'stream:done', (d) => {
+  const r = state.reqs[d.request_id];
+  delete state.reqs[d.request_id];
+  const here = state.view && state.view.document.id === d.doc_id;
+  if (here) {
+    if (d.output) {
+      state.view.outputs = (state.view.outputs || []).filter((o) => !(o.kind === d.output.kind && o.variant === d.output.variant));
+      state.view.outputs.push(d.output);
+    }
+    if (d.scope === 'chat' && d.message) state.view.messages.push(d.message);
+    if (d.stopped) toast('Génération interrompue');
+    if (state.tab === 'chat') renderChat(); else if (KIND_INFO[state.tab]) renderGen();
+  } else if (r && d.output) {
+    toast((KIND_INFO[d.output.kind] || {}).label + ' prêt pour un autre document', 'ok');
+  }
+  loadList();
+});
+
+L.on(MODULE_ID, 'stream:error', (d) => {
+  delete state.reqs[d.request_id];
+  if (state.view && state.view.document.id === d.doc_id) {
+    if (state.tab === 'chat') renderChat(); else if (KIND_INFO[state.tab]) renderGen();
+  }
+  handleError({ message: d.error, code: d.code });
+  renderList();
+});
+
+// ── Wiring ─────────────────────────────────────────────────────────────────
+
+$('btn-new').onclick = showImport;
+$('search').oninput = renderList;
+document.querySelectorAll('#imp-tabs button').forEach((b) => { b.onclick = () => setImpTab(b.dataset.t); });
+document.querySelectorAll('#doc-tabs button').forEach((b) => { b.onclick = () => setTab(b.dataset.t); });
+document.querySelectorAll('#length-seg button').forEach((b) => {
+  b.onclick = () => { state.length = b.dataset.l; pref('length', state.length); renderGen(true); };
+});
+const drop = $('drop');
+drop.onclick = () => $('file').click();
+$('file').onchange = () => { const f = $('file').files[0]; $('file').value = ''; if (f) readFile(f); };
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) readFile(f); });
+$('btn-url').onclick = () => {
+  const u = $('url').value.trim();
+  if (!u) { $('url').focus(); return; }
+  doImport({ source: 'url', url: u }, 'Chargement de la page…');
+};
+$('url').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-url').click(); });
+$('btn-paste').onclick = () => {
+  const t = $('paste').value;
+  if (!t.trim()) { toast('Collez d\'abord un texte', 'err'); $('paste').focus(); return; }
+  doImport({ source: 'text', text: t, title: $('paste-title').value }, 'Enregistrement du texte…');
+};
+$('paste').addEventListener('input', updatePasteCount);
+
+$('btn-gen').onclick = generate;
+$('btn-stop').onclick = () => { const d = state.view.document; stopReq(findReq(d.id, 'gen', state.tab, variantOf(state.tab))[0]); };
+$('btn-copy').onclick = () => {
+  const d = state.view.document;
+  const req = findReq(d.id, 'gen', state.tab, variantOf(state.tab))[1];
+  const out = currentOutput();
+  copyText(req ? req.text : out ? out.content : '');
+};
+$('btn-export').onclick = async () => {
+  try {
+    const r = await api('doc:export', { id: state.view.document.id });
+    download(r.filename, r.markdown, 'text/markdown;charset=utf-8');
+  } catch (e) { toast(e.message, 'err'); }
+};
+$('ask-send').onclick = ask;
+$('ask-stop').onclick = () => stopReq(findReq(state.view.document.id, 'chat')[0]);
+$('ask').addEventListener('input', autoGrow);
+$('ask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } });
+$('btn-clear-chat').onclick = async () => {
+  if (!await askConfirm('Effacer toutes les questions et réponses de ce document ?', 'Vider')) return;
+  try { await api('doc:clear_chat', { id: state.view.document.id }); state.view.messages = []; renderChat(); loadList(); }
+  catch (e) { toast(e.message, 'err'); }
+};
+$('btn-copy-src').onclick = () => { if (state.source) copyText(state.source.text); };
+$('key-retry').onclick = () => refreshStatus(true);
+$('lang').onchange = () => pref('lang', $('lang').value);
+$('model').onchange = () => pref('model', $('model').value);
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); showImport(); }
+  if (e.key === 'Escape' && state.view && !document.querySelector('.ask-back')) {
+    const d = state.view.document;
+    const rid = state.tab === 'chat' ? findReq(d.id, 'chat')[0] : findReq(d.id, 'gen', state.tab, variantOf(state.tab))[0];
+    if (rid) stopReq(rid);
+  }
+});
+window.addEventListener('focus', () => { if (state.status && (!state.status.has_key || !state.status.sdk_available)) refreshStatus(); });
+
+(async function init() {
+  await refreshStatus();
+  if (!state.status) {
+    $('loading').innerHTML = '<div class="error-box"><span>⚠ Impossible de joindre le backend du module.</span></div>';
+    return;
+  }
+  for (const l of LANGS) { const o = document.createElement('option'); o.value = l; o.textContent = l; $('lang').appendChild(o); }
+  $('lang').value = LANGS.includes(pref('lang')) ? pref('lang') : 'français';
+  for (const m of state.status.models) {
+    const o = document.createElement('option'); o.value = m.id; o.textContent = m.label.replace(/^Claude /, ''); o.title = m.hint; $('model').appendChild(o);
+  }
+  const pm = pref('model');
+  $('model').value = state.status.models.some((m) => m.id === pm) ? pm : state.status.settings.model;
+  if (['short', 'medium', 'detailed'].includes(pref('length'))) state.length = pref('length');
+  $('max-size').textContent = 'Jusqu\'à ' + state.status.max_file_mb + ' Mo';
+  await loadList();
+  if (state.docs.length) await openDoc(state.docs[0].id); else showImport();
+  $('loading').classList.add('hidden');
+})();
+</script>
+</body>
+</html>

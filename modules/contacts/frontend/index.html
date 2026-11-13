@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Contacts</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.sm { padding: 2px 7px; font-size: 11.5px; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); border-color: var(--border); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 4px; }
+  #q { width: 260px; max-width: 30vw; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  .seg .cnt { background: var(--err); color: #fff; border-radius: 8px; padding: 0 6px; font-size: 10.5px; margin-left: 4px; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border);
+               border-radius: 8px; padding: 4px; z-index: 50; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+  main { flex: 1; min-height: 0; display: flex; }
+  #side { width: 200px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; padding: 8px 6px; }
+  .side-h { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 12px 8px 4px; }
+  .nav { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: #c4c4cc; }
+  .nav:hover { background: var(--surface2); }
+  .nav.on { background: rgba(99,102,241,.18); color: #fff; }
+  .nav .ic { width: 16px; text-align: center; }
+  .nav .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav .n { color: var(--muted); font-size: 11.5px; }
+  .bday { padding: 5px 8px; font-size: 12px; cursor: pointer; border-radius: 6px; display: flex; gap: 6px; }
+  .bday:hover { background: var(--surface2); }
+  .bday .when { color: var(--muted); margin-left: auto; white-space: nowrap; }
+  .bday .when.today { color: #fcd34d; }
+
+  #listWrap { width: 330px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .listbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .listbar select { padding: 2px 6px; font-size: 12px; }
+  #list { flex: 1; overflow-y: auto; }
+  .letter { position: sticky; top: 0; background: var(--bg); color: var(--muted); font-size: 11px; font-weight: 600; padding: 4px 12px; border-bottom: 1px solid var(--line); z-index: 1; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .item:hover { background: #1a1a1f; }
+  .item.on { background: rgba(99,102,241,.16); }
+  .av { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;
+        color: #fff; flex-shrink: 0; font-size: 13px; background-size: cover; background-position: center; }
+  .item .txt { flex: 1; min-width: 0; }
+  .item .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .u { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .pill { font-size: 10.5px; padding: 1px 6px; border-radius: 8px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+  .pill.late { color: #fecaca; border-color: rgba(239,68,68,.45); background: rgba(239,68,68,.1); }
+  .pill.soon { color: #fde68a; border-color: rgba(245,158,11,.4); }
+  .star { color: #fbbf24; }
+  .empty { padding: 40px 20px; text-align: center; color: var(--muted); line-height: 1.6; }
+
+  #detail { flex: 1; min-width: 0; overflow-y: auto; }
+  .placeholder { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 8px; }
+  .placeholder .big { font-size: 42px; opacity: .6; }
+  .d-head { display: flex; gap: 16px; align-items: center; padding: 20px 24px 14px; }
+  .d-head .av { width: 72px; height: 72px; font-size: 26px; }
+  .d-head h2 { font-size: 19px; font-weight: 600; }
+  .d-head .sub { color: #a1a1aa; margin-top: 3px; }
+  .d-head .chips { margin-top: 6px; }
+  .d-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; padding: 0 24px 24px; align-items: start; }
+  @media (max-width: 1250px) { .d-grid { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  .card h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 10px 14px 6px; display: flex; align-items: center; gap: 6px; }
+  .card .body { padding: 0 14px 12px; }
+  .kv { display: flex; gap: 10px; padding: 5px 0; align-items: baseline; border-bottom: 1px solid var(--line); }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { width: 90px; flex-shrink: 0; color: var(--muted); font-size: 12px; }
+  .kv .v { flex: 1; min-width: 0; word-break: break-word; user-select: text; }
+  .kv .v a { color: var(--accent-h); text-decoration: none; }
+  .kv button { opacity: 0; }
+  .kv:hover button { opacity: 1; }
+  .notes { white-space: pre-wrap; line-height: 1.5; user-select: text; word-break: break-word; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { background: var(--surface2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 10px; font-size: 12px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent); }
+  .addrow { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .addrow input[type=text], .addrow textarea { flex: 1; min-width: 120px; }
+  .addrow textarea { min-height: 34px; height: 34px; resize: vertical; }
+  .fu { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .fu:last-child { border-bottom: none; }
+  .fu .ttl { flex: 1; min-width: 0; }
+  .fu.done .ttl { text-decoration: line-through; color: var(--muted); }
+  .fu .acts { display: flex; gap: 3px; opacity: 0; }
+  .fu:hover .acts { opacity: 1; }
+  .tl { position: relative; padding-left: 22px; }
+  .tl::before { content: ''; position: absolute; left: 8px; top: 4px; bottom: 4px; width: 2px; background: var(--border); }
+  .ev { position: relative; padding: 4px 0 10px; }
+  .ev .dot { position: absolute; left: -22px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface2);
+             border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .ev .h { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--muted); }
+  .ev .h b { color: var(--text); font-weight: 500; }
+  .ev .n { white-space: pre-wrap; margin-top: 2px; line-height: 1.45; word-break: break-word; }
+  .ev .acts { margin-left: auto; opacity: 0; display: flex; gap: 3px; }
+  .ev:hover .acts { opacity: 1; }
+
+  /* Follow-ups & duplicates pages */
+  .page { flex: 1; overflow-y: auto; padding: 18px 24px; }
+  .page h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 0 8px; display: flex; gap: 8px; align-items: center; }
+  .page h3:first-child { margin-top: 0; }
+  .page h3.late { color: #fca5a5; }
+  .frow { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; }
+  .frow .av { width: 28px; height: 28px; font-size: 11px; }
+  .frow .ttl { flex: 1; min-width: 0; }
+  .frow .who { color: var(--muted); font-size: 12px; cursor: pointer; }
+  .frow .who:hover { color: var(--accent-h); }
+  .frow .due { font-size: 12px; white-space: nowrap; color: #a1a1aa; }
+  .frow .due.late { color: #fca5a5; }
+  .frow.done .ttl { text-decoration: line-through; color: var(--muted); }
+  .dgroup { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .dgroup .why { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .dcards { display: flex; gap: 8px; flex-wrap: wrap; }
+  .dcard { flex: 1; min-width: 220px; max-width: 340px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--surface2); }
+  .dcard.keep { border-color: var(--accent); }
+  .dcard .top { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .dcard .lines { font-size: 12px; color: #a1a1aa; line-height: 1.6; word-break: break-all; }
+  .dcard label { display: flex; gap: 6px; align-items: center; font-size: 12px; margin-top: 6px; cursor: pointer; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(680px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.small { width: min(420px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .dialog .content.one { grid-template-columns: 1fr; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .field.row { flex-direction: row; align-items: center; gap: 8px; }
+  .field textarea { min-height: 70px; resize: vertical; }
+  .multi { display: flex; flex-direction: column; gap: 5px; }
+  .multi .r { display: flex; gap: 5px; }
+  .multi .r select { width: 110px; flex-shrink: 0; }
+  .multi .r input { flex: 1; min-width: 0; }
+  .photo-edit { display: flex; gap: 12px; align-items: center; }
+  .photo-edit .av { width: 64px; height: 64px; font-size: 22px; }
+  .sectlbl { grid-column: 1 / -1; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .note { color: var(--muted); font-size: 11.5px; }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">📇 Contacts</span>
+  <input id="q" type="search" placeholder="Rechercher (nom, société, e-mail, téléphone…)" autocomplete="off" />
+  <button class="primary" id="btnNew" title="Nouveau contact (Ctrl+N)">＋ Contact</button>
+  <span class="spacer"></span>
+  <div class="seg" id="tabs">
+    <button data-tab="contacts" class="on">Contacts</button>
+    <button data-tab="followups">Relances<span class="cnt hidden" id="lateCnt"></span></button>
+    <button data-tab="dupes">Doublons</button>
+  </div>
+  <div class="menu">
+    <button class="icon" id="btnMenu" title="Importer / exporter">⋯</button>
+    <div class="menu-list hidden" id="menuList">
+      <button data-act="import">⬆️ Importer (vCard .vcf ou CSV)…</button>
+      <hr>
+      <button data-act="vcf3">⬇️ Exporter tout en vCard 3.0</button>
+      <button data-act="vcf4">⬇️ Exporter tout en vCard 4.0</button>
+      <button data-act="csv">⬇️ Exporter tout en CSV</button>
+      <hr>
+      <button data-act="seed">🧪 Ajouter des contacts d'exemple</button>
+    </div>
+  </div>
+  <input type="file" id="importFile" accept=".vcf,.vcard,.csv,text/vcard,text/csv" class="hidden" multiple />
+</header>
+
+<main id="vContacts">
+  <nav id="side"></nav>
+  <div id="listWrap">
+    <div class="listbar"><span id="listCount"></span><span class="spacer"></span>Tri
+      <select id="sort"><option value="last_name">Nom</option><option value="first_name">Prénom</option><option value="recent">Dernier échange</option></select></div>
+    <div id="list"></div>
+  </div>
+  <section id="detail"></section>
+</main>
+<main id="vFollowups" class="hidden"><div class="page" id="fuPage"></div></main>
+<main id="vDupes" class="hidden"><div class="page" id="dupPage"></div></main>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'contacts'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const AV_COLORS = ['#6366f1', '#0ea5e9', '#22c55e', '#eab308', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#14b8a6', '#64748b']
+const KINDS = { call: ['📞', 'Appel'], email: ['✉️', 'E-mail'], meeting: ['🤝', 'Réunion'], message: ['💬', 'Message'], note: ['📝', 'Note'] }
+const PHONE_T = { mobile: 'Mobile', work: 'Travail', home: 'Domicile', fax: 'Fax', other: 'Autre' }
+const EMAIL_T = { work: 'Travail', home: 'Personnel', other: 'Autre' }
+const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+
+const state = { tab: 'contacts', list: null, sel: null, contact: null, filter: { view: 'all', tag: '' }, q: '', sort: localGet('ct-sort') || 'last_name', fuDone: false }
+
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+async function act(action, payload, okMsg, opts) {
+  try { const r = await call(action, payload, opts); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms) } }
+function avColor(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length] }
+function initials(name) { return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?' }
+function avatar(c, cls = 'av') {
+  if (c.photo) return `<div class="${cls}" style="background-image:url('${c.photo}')"></div>`
+  return `<div class="${cls}" style="background:${avColor(c.name)}">${esc(initials(c.name))}</div>`
+}
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+function fmtDay(iso) { if (!iso) return ''; const [y, m, d] = iso.slice(0, 10).split('-'); return `${+d} ${MONTHS[+m - 1]} ${y}` }
+function relDay(iso) {
+  const diff = Math.round((Date.parse(iso.slice(0, 10)) - Date.parse(todayIso())) / 86400000)
+  if (diff === 0) return "aujourd'hui"
+  if (diff === 1) return 'demain'
+  if (diff === -1) return 'hier'
+  return diff > 0 ? `dans ${diff} j` : `il y a ${-diff} j`
+}
+function fmtDT(s) { if (!s) return ''; const [d, t] = s.split('T'); return fmtDay(d) + (t ? ' · ' + t.slice(0, 5) : '') }
+function fmtBday(b) { if (!b) return ''; if (b.startsWith('--')) { const [, , m, d] = b.split('-'); return `${+d} ${MONTHS[+m - 1]}` } return fmtDay(b) }
+function bdayToInput(b) { if (!b) return ''; if (b.startsWith('--')) return `${b.slice(5, 7)}/${b.slice(2, 4)}`; const [y, m, d] = b.split('-'); return `${d}/${m}/${y}` }
+function bdayFromInput(s) {
+  s = s.trim(); if (!s) return ''
+  let m = s.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{4}))?$/)
+  if (m) return m[3] ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : `--${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+  m = s.match(/^\d{4}-\d{2}-\d{2}$/); if (m) return s
+  return s
+}
+function nowLocal() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16) }
+function addDays(n) { const d = new Date(); d.setDate(d.getDate() + n); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10) }
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function setTab(tab) {
+  state.tab = tab
+  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab))
+  $('#vContacts').classList.toggle('hidden', tab !== 'contacts')
+  $('#vFollowups').classList.toggle('hidden', tab !== 'followups')
+  $('#vDupes').classList.toggle('hidden', tab !== 'dupes')
+  if (tab === 'followups') renderFollowups()
+  if (tab === 'dupes') renderDupes()
+  if (tab === 'contacts') reload()
+}
+$('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab) })
+
+// ── Contacts list ────────────────────────────────────────────────────────────
+async function reload() {
+  const r = await act('contacts.list', { q: state.q, tag: state.filter.tag, view: state.filter.view, sort: state.sort })
+  if (!r) return
+  state.list = r
+  const late = r.followups.overdue
+  $('#lateCnt').textContent = late; $('#lateCnt').classList.toggle('hidden', !late)
+  renderSide(); renderList()
+  if (state.sel && !r.items.some((i) => i.id === state.sel) && state.filter.view === 'all' && !state.filter.tag && !state.q) { state.sel = null; state.contact = null }
+  if (!state.contact) renderDetail()
+}
+
+function renderSide() {
+  const r = state.list, f = state.filter
+  const nav = (ic, l, n, on, attrs) => `<div class="nav${on ? ' on' : ''}" ${attrs}><span class="ic">${ic}</span><span class="lbl">${esc(l)}</span><span class="n">${n}</span></div>`
+  let html = nav('👥', 'Tous', r.total, f.view === 'all' && !f.tag, 'data-view="all"')
+  html += nav('★', 'Favoris', r.favorites, f.view === 'favorites', 'data-view="favorites"')
+  html += nav('⏰', 'Avec relance', r.followups.todo, f.view === 'followup', 'data-view="followup"')
+  const tags = Object.entries(r.tags)
+  if (tags.length) html += `<div class="side-h">Tags</div>` + tags.map(([t, n]) => nav('#', t, n, f.tag === t, `data-tag="${esc(t)}"`)).join('')
+  if (r.birthdays.length) {
+    html += `<div class="side-h">🎂 Anniversaires (30 j)</div>` + r.birthdays.map((b) => `<div class="bday" data-id="${b.id}">
+      <span>${esc(b.name)}${b.age ? ` <span class="muted">(${b.age} ans)</span>` : ''}</span><span class="when${b.in_days === 0 ? ' today' : ''}">${b.in_days === 0 ? "aujourd'hui" : fmtBday('--' + b.date.slice(5))}</span></div>`).join('')
+  }
+  $('#side').innerHTML = html
+}
+$('#side').addEventListener('click', (e) => {
+  const b = e.target.closest('.bday'); if (b) { openContact(Number(b.dataset.id)); return }
+  const n = e.target.closest('.nav'); if (!n) return
+  state.filter = n.dataset.tag ? { view: 'all', tag: n.dataset.tag } : { view: n.dataset.view, tag: '' }
+  reload()
+})
+$('#side').addEventListener('contextmenu', async (e) => {
+  const n = e.target.closest('.nav[data-tag]'); if (!n) return
+  e.preventDefault()
+  const v = await ask('Renommer le tag', 'Nouveau nom (vide = supprimer le tag)', n.dataset.tag)
+  if (v === null) return
+  const r = await act('tags.rename', { old: n.dataset.tag, new: v })
+  if (r) { toast(`${r.updated} contact(s) mis à jour`); state.filter.tag = v.trim().toLowerCase(); if (!state.filter.tag) state.filter.view = 'all'; reload(); if (state.sel) openContact(state.sel) }
+})
+
+function renderList() {
+  const r = state.list
+  $('#listCount').textContent = `${r.items.length} contact${r.items.length > 1 ? 's' : ''}`
+  if (!r.items.length) {
+    $('#list').innerHTML = r.total ? '<div class="empty">Aucun contact ne correspond.</div>'
+      : `<div class="empty">Aucun contact pour l'instant.<br>Créez une fiche ou importez un fichier vCard / CSV.
+         <div style="margin-top:12px;display:flex;gap:6px;justify-content:center"><button class="primary" id="eNew">＋ Contact</button><button id="eImp">Importer…</button><button id="eSeed">Exemples</button></div></div>`
+    if (!r.total) { $('#eNew').onclick = () => openEditor(null); $('#eImp').onclick = () => $('#importFile').click(); $('#eSeed').onclick = seed }
+    return
+  }
+  let html = '', last = null
+  for (const i of r.items) {
+    if (state.sort !== 'recent') {
+      const key = (state.sort === 'first_name' ? i.first_name || i.name : i.last_name || i.name)
+      const l = (key || '#').normalize('NFD').replace(/[̀-ͯ]/g, '')[0].toUpperCase()
+      const letter = /[A-Z]/.test(l) ? l : '#'
+      if (letter !== last) { html += `<div class="letter">${letter}</div>`; last = letter }
+    }
+    const sub = [i.job_title && i.company ? `${i.job_title} · ${i.company}` : i.company || i.job_title, !i.company && !i.job_title ? i.email || i.phone : ''].filter(Boolean).join('')
+    const pill = i.next_due ? `<span class="pill ${i.overdue ? 'late' : i.next_due <= addDays(2) ? 'soon' : ''}" title="Prochaine relance">⏰ ${esc(relDay(i.next_due))}</span>` : ''
+    html += `<div class="item${i.id === state.sel ? ' on' : ''}" data-id="${i.id}">${avatar(i)}
+      <div class="txt"><div class="t">${i.favorite ? '<span class="star">★</span> ' : ''}${esc(i.name)}</div><div class="u">${esc(sub)}</div></div>${pill}</div>`
+  }
+  $('#list').innerHTML = html
+}
+$('#list').addEventListener('click', (e) => { const it = e.target.closest('.item'); if (it) openContact(Number(it.dataset.id)) })
+$('#sort').value = state.sort
+$('#sort').onchange = () => { state.sort = $('#sort').value; localSet('ct-sort', state.sort); reload() }
+
+// ── Detail ───────────────────────────────────────────────────────────────────
+async function openContact(id) {
+  if (state.tab !== 'contacts') setTab('contacts')
+  const c = await act('contact.get', { id }); if (!c) return
+  state.sel = id; state.contact = c
+  $$('.item').forEach((n) => n.classList.toggle('on', Number(n.dataset.id) === id))
+  renderDetail()
+}
+function setContact(c) { if (!c) return; state.contact = c; state.sel = c.id; renderDetail(); reload() }
+
+function renderDetail() {
+  const c = state.contact
+  if (!c) {
+    $('#detail').innerHTML = `<div class="placeholder"><div class="big">📇</div><div>Sélectionnez un contact</div></div>`
+    return
+  }
+  const a = c.address || {}
+  const addr = [a.street, [a.postal_code, a.city].filter(Boolean).join(' '), a.region, a.country].filter(Boolean)
+  const kv = (k, v, copyVal) => `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span>${copyVal ? `<button class="sm ghost" data-copy="${esc(copyVal)}">Copier</button>` : ''}</div>`
+  let infos = ''
+  infos += c.emails.map((e) => kv(EMAIL_T[e.type] || 'E-mail', `<a href="mailto:${esc(e.value)}">${esc(e.value)}</a>`, e.value)).join('')
+  infos += c.phones.map((p) => kv(PHONE_T[p.type] || 'Téléphone', esc(p.value), p.value)).join('')
+  if (addr.length) infos += kv('Adresse', esc(addr.join('\n')).replace(/\n/g, '<br>'), addr.join(', '))
+  if (c.birthday) infos += kv('Anniversaire', esc(fmtBday(c.birthday)) + (c.next_birthday ? ` <span class="muted">— ${c.next_birthday.age ? c.next_birthday.age + ' ans ' : ''}${esc(relDay(c.next_birthday.date))}</span>` : ''))
+  if (c.website) infos += kv('Site web', esc(c.website), c.website)
+  if (!infos) infos = '<div class="muted" style="padding:4px 0">Aucune coordonnée.</div>'
+  const today = todayIso()
+  const open = c.followups.filter((f) => !f.done), done = c.followups.filter((f) => f.done)
+  const fuRow = (f) => `<div class="fu${f.done ? ' done' : ''}"><input type="checkbox" data-fu-toggle="${f.id}" ${f.done ? 'checked' : ''} title="${f.done ? 'Rouvrir' : 'Marquer comme faite'}">
+    <span class="ttl">${esc(f.title)}</span>
+    <span class="pill ${!f.done && f.due < today ? 'late' : !f.done && f.due === today ? 'soon' : ''}">${esc(f.done ? 'faite' : relDay(f.due))} · ${esc(fmtDay(f.due))}</span>
+    <span class="acts">${f.done ? '' : `<button class="sm" data-fu-snooze="${f.id}" data-days="1" title="Reporter d'un jour">+1 j</button><button class="sm" data-fu-snooze="${f.id}" data-days="7" title="Reporter d'une semaine">+7 j</button>`}
+    <button class="sm" data-fu-edit="${f.id}" title="Modifier">✏️</button><button class="sm danger" data-fu-del="${f.id}" title="Supprimer">✕</button></span></div>`
+  $('#detail').innerHTML = `
+    <div class="d-head">${avatar(c)}<div style="flex:1;min-width:0">
+      <h2>${c.favorite ? '<span class="star">★</span> ' : ''}${esc(c.name)}</h2>
+      <div class="sub">${esc([c.job_title, c.company].filter(Boolean).join(' · '))}</div>
+      ${c.tags.length ? `<div class="chips">${c.tags.map((t) => `<span class="chip" data-tag="${esc(t)}">#${esc(t)}</span>`).join('')}</div>` : ''}</div>
+      <button class="icon" id="dFav" title="${c.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${c.favorite ? '★' : '☆'}</button>
+      <button id="dEdit">✏️ Modifier</button><button class="icon" id="dVcf" title="Exporter la fiche (vCard)">⬇️</button><button class="icon danger" id="dDel" title="Supprimer">🗑</button></div>
+    <div class="d-grid">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card"><h4>Coordonnées</h4><div class="body">${infos}</div></div>
+        ${c.notes ? `<div class="card"><h4>Notes</h4><div class="body notes">${esc(c.notes)}</div></div>` : ''}
+        <div class="card"><h4>⏰ Relances</h4><div class="body">
+          <div class="addrow"><input type="date" id="fuDue" value="${addDays(7)}"><input type="text" id="fuTitle" placeholder="Relancer pour…" maxlength="300"><button class="primary" id="fuAdd">Ajouter</button></div>
+          <div class="addrow" style="margin-top:-4px">${[[1, 'Demain'], [7, '+1 semaine'], [14, '+2 semaines'], [30, '+1 mois']].map(([d, l]) => `<button class="sm ghost" data-quick="${d}">${l}</button>`).join('')}</div>
+          ${open.map(fuRow).join('') || '<div class="muted" style="padding:4px 0">Aucune relance prévue.</div>'}
+          ${done.length ? `<details style="margin-top:6px"><summary class="muted" style="cursor:pointer;font-size:12px">Relances faites (${done.length})</summary>${done.map(fuRow).join('')}</details>` : ''}
+        </div></div>
+      </div>
+      <div class="card"><h4>Historique des échanges</h4><div class="body">
+        <div class="addrow"><select id="evKind">${Object.entries(KINDS).map(([k, [ic, l]]) => `<option value="${k}">${ic} ${l}</option>`).join('')}</select>
+          <input type="datetime-local" id="evAt" value="${nowLocal()}"></div>
+        <div class="addrow"><textarea id="evNote" placeholder="Compte rendu, points abordés…" maxlength="20000"></textarea><button class="primary" id="evAdd">Ajouter</button></div>
+        ${c.interactions.length ? `<div class="tl">${c.interactions.map((i) => `<div class="ev"><span class="dot">${KINDS[i.kind][0]}</span>
+          <div class="h"><b>${KINDS[i.kind][1]}</b><span>${esc(fmtDT(i.at))}</span><span class="acts"><button class="sm" data-ev-edit="${i.id}">✏️</button><button class="sm danger" data-ev-del="${i.id}">✕</button></span></div>
+          ${i.note ? `<div class="n">${esc(i.note)}</div>` : ''}</div>`).join('')}</div>` : '<div class="muted" style="padding:4px 0">Aucun échange enregistré.</div>'}
+      </div></div>
+    </div>`
+  $('#dEdit').onclick = () => openEditor(c)
+  $('#dDel').onclick = () => deleteContact(c)
+  $('#dFav').onclick = async () => { if (await act('contact.favorite', { id: c.id, favorite: !c.favorite })) { c.favorite = !c.favorite; renderDetail(); reload() } }
+  $('#dVcf').onclick = async () => { const r = await act('vcard.export', { ids: [c.id], version: '3.0' }); if (r) download(safeName(c.name) + '.vcf', r.text, 'text/vcard') }
+  $$('#detail [data-copy]').forEach((b) => (b.onclick = () => copy(b.dataset.copy)))
+  $$('#detail .chip[data-tag]').forEach((b) => (b.onclick = () => { state.filter = { view: 'all', tag: b.dataset.tag }; reload() }))
+  $$('#detail [data-quick]').forEach((b) => (b.onclick = () => { $('#fuDue').value = addDays(Number(b.dataset.quick)); $('#fuTitle').focus() }))
+  const addFu = async () => { const r = await act('followup.save', { contact_id: c.id, followup: { due: $('#fuDue').value, title: $('#fuTitle').value } }, 'Relance ajoutée'); setContact(r) }
+  $('#fuAdd').onclick = addFu
+  $('#fuTitle').addEventListener('keydown', (e) => { if (e.key === 'Enter') addFu() })
+  $$('#detail [data-fu-toggle]').forEach((b) => (b.onchange = async () => setContact(await act('followup.toggle', { id: Number(b.dataset.fuToggle), done: b.checked, log: b.checked }, b.checked ? 'Relance faite (ajoutée à l’historique)' : null))))
+  $$('#detail [data-fu-snooze]').forEach((b) => (b.onclick = async () => { if (await act('followup.snooze', { id: Number(b.dataset.fuSnooze), days: Number(b.dataset.days) })) openContact(c.id).then(reload) }))
+  $$('#detail [data-fu-del]').forEach((b) => (b.onclick = async () => { if (confirm('Supprimer cette relance ?')) setContact(await act('followup.delete', { id: Number(b.dataset.fuDel) })) }))
+  $$('#detail [data-fu-edit]').forEach((b) => (b.onclick = () => editFollowup(c.followups.find((f) => f.id === Number(b.dataset.fuEdit)))))
+  $('#evAdd').onclick = async () => {
+    const r = await act('interaction.save', { contact_id: c.id, interaction: { kind: $('#evKind').value, at: $('#evAt').value, note: $('#evNote').value } }, 'Échange ajouté')
+    setContact(r)
+  }
+  $('#evNote').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.ctrlKey) $('#evAdd').click() })
+  $$('#detail [data-ev-del]').forEach((b) => (b.onclick = async () => { if (confirm('Supprimer cet échange ?')) setContact(await act('interaction.delete', { id: Number(b.dataset.evDel) })) }))
+  $$('#detail [data-ev-edit]').forEach((b) => (b.onclick = () => editInteraction(c.interactions.find((i) => i.id === Number(b.dataset.evEdit)))))
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copié') }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select()
+    let ok = false; try { ok = document.execCommand('copy') } catch {} ta.remove(); toast(ok ? 'Copié' : 'Copie impossible', !ok)
+  }
+}
+
+async function deleteContact(c) {
+  if (!confirm(`Supprimer « ${c.name} » ainsi que son historique et ses relances ?`)) return
+  if (await act('contact.delete', { id: c.id }, 'Contact supprimé')) { state.sel = null; state.contact = null; reload() }
+}
+
+// ── Dialogs ──────────────────────────────────────────────────────────────────
+function dialog(html, cls = '') {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${cls}">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') ov.remove() })
+  return ov
+}
+function ask(title, label, value = '') {
+  return new Promise((resolve) => {
+    const ov = dialog(`<h3>${esc(title)}</h3><div class="content one"><div class="field"><label>${esc(label)}</label><input id="askV" value="${esc(value)}"></div></div>
+      <div class="foot"><span class="spacer"></span><button id="askNo">Annuler</button><button class="primary" id="askOk">OK</button></div>`, 'small')
+    let settled = false
+    const done = (v) => { if (settled) return; settled = true; ov.remove(); resolve(v) }
+    $('#askNo', ov).onclick = () => done(null)
+    $('#askOk', ov).onclick = () => done($('#askV', ov).value)
+    $('#askV', ov).addEventListener('keydown', (e) => { if (e.key === 'Enter') done($('#askV', ov).value) })
+    new MutationObserver((_, obs) => { if (!ov.isConnected) { obs.disconnect(); done(null) } }).observe(document.body, { childList: true })
+    setTimeout(() => { $('#askV', ov).focus(); $('#askV', ov).select() }, 0)
+  })
+}
+
+function editFollowup(f) {
+  const ov = dialog(`<h3>Modifier la relance</h3><div class="content one">
+    <div class="field"><label>Échéance</label><input type="date" id="fD" value="${f.due}"></div>
+    <div class="field"><label>Intitulé</label><input id="fT" value="${esc(f.title)}" maxlength="300"></div></div>
+    <div class="foot"><span class="spacer"></span><button id="fNo">Annuler</button><button class="primary" id="fOk">Enregistrer</button></div>`, 'small')
+  $('#fNo', ov).onclick = () => ov.remove()
+  $('#fOk', ov).onclick = async () => { const r = await act('followup.save', { id: f.id, followup: { due: $('#fD', ov).value, title: $('#fT', ov).value } }); if (r) { ov.remove(); setContact(r) } }
+}
+function editInteraction(i) {
+  const ov = dialog(`<h3>Modifier l’échange</h3><div class="content one">
+    <div class="field"><label>Type</label><select id="iK">${Object.entries(KINDS).map(([k, [ic, l]]) => `<option value="${k}" ${k === i.kind ? 'selected' : ''}>${ic} ${l}</option>`).join('')}</select></div>
+    <div class="field"><label>Date</label><input type="datetime-local" id="iA" value="${i.at}"></div>
+    <div class="field"><label>Note</label><textarea id="iN" maxlength="20000">${esc(i.note)}</textarea></div></div>
+    <div class="foot"><span class="spacer"></span><button id="iNo">Annuler</button><button class="primary" id="iOk">Enregistrer</button></div>`, 'small')
+  $('#iNo', ov).onclick = () => ov.remove()
+  $('#iOk', ov).onclick = async () => { const r = await act('interaction.save', { id: i.id, interaction: { kind: $('#iK', ov).value, at: $('#iA', ov).value, note: $('#iN', ov).value } }); if (r) { ov.remove(); setContact(r) } }
+}
+
+function resizePhoto(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const S = 192, side = Math.min(img.width, img.height)
+      const cv = document.createElement('canvas'); cv.width = cv.height = S
+      cv.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S)
+      URL.revokeObjectURL(img.src)
+      resolve(cv.toDataURL('image/jpeg', 0.85))
+    }
+    img.onerror = () => reject(new Error('Image illisible'))
+    img.src = URL.createObjectURL(file)
+  })
+}
+
+function openEditor(contact) {
+  const c = contact ? JSON.parse(JSON.stringify(contact)) : { first_name: '', last_name: '', company: '', job_title: '', emails: [{ type: 'work', value: '' }],
+    phones: [{ type: 'mobile', value: '' }], address: {}, birthday: '', website: '', notes: '', tags: state.filter.tag ? [state.filter.tag] : [], photo: null, favorite: false }
+  const a = c.address || {}
+  const ov = dialog(`<h3>${contact ? 'Modifier le contact' : 'Nouveau contact'}</h3>
+    <div class="content">
+      <div class="field full"><div class="photo-edit"><div id="pAv"></div><div style="display:flex;gap:6px;flex-direction:column">
+        <div style="display:flex;gap:6px"><button id="pPick">Choisir une photo…</button><button id="pDel" class="ghost danger">Retirer</button></div>
+        <span class="note">Recadrée en carré 192 px.</span></div><input type="file" id="pFile" accept="image/*" class="hidden"></div></div>
+      <div class="field"><label>Prénom</label><input id="cFirst" maxlength="100" value="${esc(c.first_name)}"></div>
+      <div class="field"><label>Nom</label><input id="cLast" maxlength="100" value="${esc(c.last_name)}"></div>
+      <div class="field"><label>Société</label><input id="cCompany" maxlength="200" value="${esc(c.company)}"></div>
+      <div class="field"><label>Fonction</label><input id="cJob" maxlength="200" value="${esc(c.job_title)}"></div>
+      <div class="field full"><label>E-mails</label><div class="multi" id="mEmails"></div><div><button class="sm ghost" id="addEmail">＋ E-mail</button></div></div>
+      <div class="field full"><label>Téléphones</label><div class="multi" id="mPhones"></div><div><button class="sm ghost" id="addPhone">＋ Téléphone</button></div></div>
+      <div class="sectlbl">Adresse</div>
+      <div class="field full"><label>Rue</label><input id="aStreet" maxlength="300" value="${esc(a.street)}"></div>
+      <div class="field"><label>Code postal</label><input id="aPostal" maxlength="20" value="${esc(a.postal_code)}"></div>
+      <div class="field"><label>Ville</label><input id="aCity" maxlength="100" value="${esc(a.city)}"></div>
+      <div class="field"><label>Région</label><input id="aRegion" maxlength="100" value="${esc(a.region)}"></div>
+      <div class="field"><label>Pays</label><input id="aCountry" maxlength="100" value="${esc(a.country)}"></div>
+      <div class="sectlbl">Autres informations</div>
+      <div class="field"><label>Anniversaire (JJ/MM/AAAA ou JJ/MM)</label><input id="cBday" value="${esc(bdayToInput(c.birthday))}" placeholder="14/07/1985"></div>
+      <div class="field"><label>Site web</label><input id="cWeb" maxlength="500" value="${esc(c.website)}"></div>
+      <div class="field full"><label>Tags (séparés par des virgules)</label><input id="cTags" value="${esc(c.tags.join(', '))}" list="tagList">
+        <datalist id="tagList">${Object.keys((state.list && state.list.tags) || {}).map((t) => `<option value="${esc(t)}">`).join('')}</datalist></div>
+      <div class="field full"><label>Notes</label><textarea id="cNotes" maxlength="50000">${esc(c.notes)}</textarea></div>
+      <label class="field row full"><input type="checkbox" id="cFav" ${c.favorite ? 'checked' : ''}> Favori</label>
+    </div>
+    <div class="foot"><span class="note">Ctrl+Entrée pour enregistrer</span><span class="spacer"></span><button id="cNo">Annuler</button><button class="primary" id="cOk">Enregistrer</button></div>`)
+  const renderAv = () => { $('#pAv', ov).innerHTML = avatar({ photo: c.photo, name: `${$('#cFirst', ov).value} ${$('#cLast', ov).value}`.trim() || $('#cCompany', ov).value || '?' }) }
+  const multi = (box, items, types, ph) => {
+    const draw = () => {
+      $(box, ov).innerHTML = items.map((it, i) => `<div class="r"><select data-i="${i}">${Object.entries(types).map(([k, l]) => `<option value="${k}" ${it.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <input data-i="${i}" value="${esc(it.value)}" placeholder="${ph}" maxlength="200"><button class="icon ghost" data-del="${i}" title="Retirer">✕</button></div>`).join('')
+      $$(`${box} select`, ov).forEach((s) => (s.onchange = () => (items[s.dataset.i].type = s.value)))
+      $$(`${box} input`, ov).forEach((s) => (s.oninput = () => (items[s.dataset.i].value = s.value)))
+      $$(`${box} [data-del]`, ov).forEach((b) => (b.onclick = () => { items.splice(Number(b.dataset.del), 1); draw() }))
+    }
+    draw(); return draw
+  }
+  const drawE = multi('#mEmails', c.emails, EMAIL_T, 'nom@exemple.fr')
+  const drawP = multi('#mPhones', c.phones, PHONE_T, '06 12 34 56 78')
+  $('#addEmail', ov).onclick = () => { c.emails.push({ type: 'work', value: '' }); drawE(); $$('#mEmails input', ov).pop().focus() }
+  $('#addPhone', ov).onclick = () => { c.phones.push({ type: 'mobile', value: '' }); drawP(); $$('#mPhones input', ov).pop().focus() }
+  renderAv()
+  for (const id of ['#cFirst', '#cLast', '#cCompany']) $(id, ov).addEventListener('input', renderAv)
+  $('#pPick', ov).onclick = () => $('#pFile', ov).click()
+  $('#pDel', ov).onclick = () => { c.photo = null; renderAv() }
+  $('#pFile', ov).onchange = async (e) => { const f = e.target.files[0]; if (!f) return; try { c.photo = await resizePhoto(f); renderAv() } catch (err) { toast(err.message, true) } }
+  $('#cNo', ov).onclick = () => ov.remove()
+  const save = async () => {
+    const data = { first_name: $('#cFirst', ov).value, last_name: $('#cLast', ov).value, company: $('#cCompany', ov).value, job_title: $('#cJob', ov).value,
+      emails: c.emails, phones: c.phones, birthday: bdayFromInput($('#cBday', ov).value), website: $('#cWeb', ov).value, notes: $('#cNotes', ov).value,
+      address: { street: $('#aStreet', ov).value, postal_code: $('#aPostal', ov).value, city: $('#aCity', ov).value, region: $('#aRegion', ov).value, country: $('#aCountry', ov).value },
+      tags: $('#cTags', ov).value.split(',').map((t) => t.trim()).filter(Boolean), photo: c.photo, favorite: $('#cFav', ov).checked }
+    const r = await act('contact.save', { id: contact ? contact.id : null, contact: data }, contact ? 'Contact enregistré' : 'Contact ajouté')
+    if (r) { ov.remove(); setContact(r) }
+  }
+  $('#cOk', ov).onclick = save
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.ctrlKey) save() })
+  setTimeout(() => $('#cFirst', ov).focus(), 0)
+}
+
+// ── Follow-ups page ──────────────────────────────────────────────────────────
+async function renderFollowups() {
+  const r = await act('followups.list', { scope: state.fuDone ? 'done' : 'todo' }); if (!r) return
+  const today = r.today
+  const row = (f) => `<div class="frow${f.done ? ' done' : ''}"><input type="checkbox" data-t="${f.id}" ${f.done ? 'checked' : ''}>${avatar(f)}
+    <div class="ttl">${esc(f.title)}<div class="who" data-c="${f.contact_id}">${esc(f.name)}${f.company && f.company !== f.name ? ' · ' + esc(f.company) : ''}</div></div>
+    <span class="due${f.overdue ? ' late' : ''}">${f.done ? 'faite le ' + esc(fmtDay((f.done_at || '').slice(0, 10))) : esc(relDay(f.due)) + ' · ' + esc(fmtDay(f.due))}</span>
+    ${f.done ? '' : `<button class="sm" data-s="${f.id}" data-days="1">+1 j</button><button class="sm" data-s="${f.id}" data-days="7">+7 j</button>`}</div>`
+  let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><b style="font-size:15px">${state.fuDone ? 'Relances faites' : 'Relances à faire'}</b><span class="spacer"></span>
+    <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="fuShowDone" ${state.fuDone ? 'checked' : ''}> Afficher les relances faites</label></div>`
+  if (!r.items.length) html += `<div class="empty">${state.fuDone ? 'Aucune relance faite.' : 'Rien à faire 🎉<br>Ajoutez des relances depuis la fiche d’un contact.'}</div>`
+  else if (state.fuDone) html += r.items.map(row).join('')
+  else {
+    const groups = [['late', '⚠ En retard', r.items.filter((f) => f.due < today)], ['', "Aujourd'hui", r.items.filter((f) => f.due === today)],
+      ['', '7 prochains jours', r.items.filter((f) => f.due > today && f.due <= addDays(7))], ['', 'Plus tard', r.items.filter((f) => f.due > addDays(7))]]
+    for (const [cls, title, items] of groups) if (items.length) html += `<h3 class="${cls}">${title} <span class="muted">(${items.length})</span></h3>` + items.map(row).join('')
+  }
+  $('#fuPage').innerHTML = html
+  $('#fuShowDone').onchange = (e) => { state.fuDone = e.target.checked; renderFollowups() }
+  $$('#fuPage [data-t]').forEach((b) => (b.onchange = async () => { if (await act('followup.toggle', { id: Number(b.dataset.t), done: b.checked, log: b.checked }, b.checked ? 'Relance faite' : 'Relance rouverte')) { renderFollowups(); refreshCounts() } }))
+  $$('#fuPage [data-s]').forEach((b) => (b.onclick = async () => { if (await act('followup.snooze', { id: Number(b.dataset.s), days: Number(b.dataset.days) }, 'Relance reportée')) { renderFollowups(); refreshCounts() } }))
+  $$('#fuPage [data-c]').forEach((b) => (b.onclick = () => openContact(Number(b.dataset.c))))
+}
+async function refreshCounts() { const r = await act('contacts.list', { q: '__none__' }); if (r) { $('#lateCnt').textContent = r.followups.overdue; $('#lateCnt').classList.toggle('hidden', !r.followups.overdue) } }
+
+// ── Duplicates page ──────────────────────────────────────────────────────────
+async function renderDupes() {
+  $('#dupPage').innerHTML = '<div class="empty">Recherche des doublons…</div>'
+  const r = await act('duplicates.find', {}, null, { timeout: 60000 }); if (!r) return
+  if (!r.groups.length) { $('#dupPage').innerHTML = '<div class="empty">Aucun doublon détecté 👍<br><span style="font-size:12px">Comparaison des e-mails, téléphones et noms.</span></div>'; return }
+  $('#dupPage').innerHTML = `<div style="margin-bottom:12px"><b style="font-size:15px">${r.groups.length} groupe(s) de doublons possibles</b>
+    <div class="note" style="margin-top:4px">Choisissez la fiche à conserver : les autres fiches cochées y sont fusionnées (coordonnées, tags, notes, historique et relances), puis supprimées.</div></div>` +
+    r.groups.map((g, gi) => `<div class="dgroup" data-g="${gi}"><div class="why">Même ${g.reasons.map(esc).join(', ')}</div><div class="dcards">
+      ${g.contacts.map((c, i) => `<div class="dcard${i === 0 ? ' keep' : ''}" data-id="${c.id}"><div class="top">${avatar(c)}<div><b>${esc(c.name)}</b><div class="muted" style="font-size:12px">${esc(c.company)}</div></div></div>
+        <div class="lines">${[...c.emails, ...c.phones].map(esc).join('<br>') || '<span class="muted">—</span>'}</div>
+        <label><input type="radio" name="keep${gi}" value="${c.id}" ${i === 0 ? 'checked' : ''}> Conserver cette fiche</label>
+        <label><input type="checkbox" class="mrg" value="${c.id}" ${i === 0 ? 'disabled' : 'checked'}> Fusionner</label></div>`).join('')}
+      </div><div style="margin-top:10px;display:flex;gap:6px"><button class="primary" data-merge="${gi}">Fusionner</button><button class="ghost" data-skip="${gi}">Ignorer</button></div></div>`).join('')
+  $$('#dupPage .dgroup').forEach((g) => {
+    $$('input[type=radio]', g).forEach((rd) => (rd.onchange = () => {
+      $$('.dcard', g).forEach((card) => {
+        const keep = card.dataset.id === rd.value
+        card.classList.toggle('keep', keep)
+        const cb = $('.mrg', card); cb.disabled = keep; if (keep) cb.checked = false; else if (!cb.checked) cb.checked = true
+      })
+    }))
+    $('[data-skip]', g).onclick = () => g.remove()
+    $('[data-merge]', g).onclick = async () => {
+      const keep = Number($('input[type=radio]:checked', g).value)
+      const merge = $$('.mrg:checked', g).map((cb) => Number(cb.value)).filter((id) => id !== keep)
+      if (!merge.length) { toast('Cochez au moins une fiche à fusionner', true); return }
+      if (!confirm(`Fusionner ${merge.length} fiche(s) dans la fiche conservée ? Cette action est irréversible.`)) return
+      if (await act('contacts.merge', { keep_id: keep, merge_ids: merge }, 'Fiches fusionnées')) renderDupes()
+    }
+  })
+}
+
+// ── Import / export ──────────────────────────────────────────────────────────
+function download(name, content, type) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type }))
+  a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+const safeName = (s) => String(s).replace(/[\\/:*?"<>|]+/g, '_').trim() || 'contact'
+async function importFiles(files) {
+  let total = 0, errs = 0
+  for (const f of files) {
+    if (f.size > 50e6) { toast(`${f.name} : fichier trop volumineux`, true); continue }
+    const text = await f.text()
+    const isVcf = /\.(vcf|vcard)$/i.test(f.name) || /BEGIN:VCARD/i.test(text.slice(0, 2000))
+    const r = await act(isVcf ? 'vcard.import' : 'csv.import', { text }, null, { timeout: 300000 })
+    if (r) { total += r.imported; errs += r.error_count }
+  }
+  toast(`${total} contact(s) importé(s)${errs ? ` · ${errs} fiche(s) ignorée(s)` : ''}`, false)
+  reload()
+}
+async function seed() { if (await act('contacts.seed', {}, 'Contacts d’exemple ajoutés')) reload() }
+
+$('#btnMenu').onclick = (e) => { e.stopPropagation(); $('#menuList').classList.toggle('hidden') }
+document.addEventListener('click', () => $('#menuList').classList.add('hidden'))
+$('#menuList').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return
+  $('#menuList').classList.add('hidden')
+  const a = b.dataset.act, day = todayIso()
+  if (a === 'import') $('#importFile').click()
+  else if (a === 'vcf3' || a === 'vcf4') {
+    const r = await act('vcard.export', { version: a === 'vcf4' ? '4.0' : '3.0' }, null, { timeout: 120000 })
+    if (r) { download(`contacts-${day}.vcf`, r.text, 'text/vcard'); toast(`${r.count} contact(s) exporté(s)`) }
+  } else if (a === 'csv') {
+    const r = await act('csv.export', {}, null, { timeout: 120000 })
+    if (r) { download(`contacts-${day}.csv`, r.text, 'text/csv;charset=utf-8'); toast(`${r.count} contact(s) exporté(s)`) }
+  } else if (a === 'seed') seed()
+})
+$('#importFile').onchange = (e) => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) importFiles(fs) }
+$('#btnNew').onclick = () => openEditor(null)
+$('#q').addEventListener('input', debounce(() => { state.q = $('#q').value; if (state.tab !== 'contacts') setTab('contacts'); else reload() }, 150))
+$('#q').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { $('#q').value = ''; state.q = ''; reload() }
+  if (e.key === 'Enter' && state.list && state.list.items[0]) openContact(state.list.items[0].id)
+})
+document.addEventListener('keydown', (e) => {
+  if (document.querySelector('.overlay')) return
+  const k = e.key.toLowerCase()
+  if (e.ctrlKey && k === 'n') { e.preventDefault(); openEditor(null) }
+  else if (e.ctrlKey && k === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select() }
+  else if (state.tab === 'contacts' && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && state.list && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
+    const items = state.list.items, i = items.findIndex((x) => x.id === state.sel)
+    const next = items[Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]
+    if (next) { e.preventDefault(); openContact(next.id).then(() => { const n = $(`.item[data-id="${next.id}"]`); if (n) n.scrollIntoView({ block: 'nearest' }) }) }
+  }
+})
+
+reload()
+</script>
+</body>
+</html>

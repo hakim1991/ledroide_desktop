@@ -1,0 +1,32 @@
+{
+  "id": "env-editor",
+  "name": "Fichiers .env",
+  "version": "1.0.0",
+  "description": "Éditeur de fichiers .env de vos projets : liste des .env*, édition clé/valeur avec commentaires préservés, valeurs secrètes masquées, comparaison de plusieurs fichiers (.env vs .env.example), ajout des clés manquantes, détection des doublons et erreurs de syntaxe, copies de sécurité avant chaque enregistrement.",
+  "category": "Développement",
+  "tags": [
+    "env",
+    "dotenv",
+    "configuration",
+    "variables",
+    "comparaison"
+  ],
+  "icon": "🧾",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

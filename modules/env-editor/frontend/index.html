@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fichiers .env</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.sm { padding: 2px 7px; font-size: 11.5px; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); border-color: var(--border); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .mono { font-family: var(--mono); }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 4px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+
+  main { flex: 1; min-height: 0; display: flex; }
+  #side { width: 270px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; padding: 8px 6px; }
+  .folder { margin-bottom: 6px; }
+  .fhead { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .fhead:hover { background: var(--surface2); }
+  .fhead .nm { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fhead .acts { display: flex; gap: 2px; opacity: 0; }
+  .fhead:hover .acts { opacity: 1; }
+  .fhead .acts button { padding: 1px 6px; font-size: 11px; }
+  .fpath { font-size: 11px; color: var(--muted); padding: 0 8px 4px 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+  .file { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 28px; border-radius: 6px; cursor: pointer; font-family: var(--mono); font-size: 12.5px; }
+  .file:hover { background: var(--surface2); }
+  .file.on { background: rgba(99,102,241,.18); color: #fff; }
+  .file .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file .n { color: var(--muted); font-size: 11px; font-family: system-ui, sans-serif; }
+  .file input[type=checkbox] { margin: 0; }
+  .nofiles { padding: 4px 8px 6px 28px; color: var(--muted); font-size: 12px; }
+  .side-empty { padding: 30px 14px; text-align: center; color: var(--muted); line-height: 1.6; }
+
+  #content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .toolbar { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--bg); min-width: 0; }
+  .toolbar > * { flex-shrink: 0; }
+  .toolbar.sub { padding: 5px 12px; background: var(--surface); }
+  .toolbar .stats { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .toolbar .path { font-family: var(--mono); font-size: 12.5px; color: #c4c4cc; margin-right: 6px; max-width: 360px; min-width: 40px; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolbar .dirty { color: var(--warn); font-size: 12px; }
+  .toolbar label { display: flex; align-items: center; gap: 5px; cursor: pointer; color: #c4c4cc; }
+  #filter { width: 140px; }
+  table.kv td.cm input::placeholder { color: transparent; }
+  table.kv tr:hover td.cm input::placeholder, table.kv td.cm input:focus::placeholder { color: #52525b; }
+  #editor { flex: 1; overflow: auto; }
+  table.kv { width: 100%; border-collapse: collapse; }
+  table.kv td { border-bottom: 1px solid var(--line); padding: 3px 6px; vertical-align: middle; }
+  table.kv tr:hover td { background: #141418; }
+  table.kv td.ln { width: 44px; color: #52525b; text-align: right; font-family: var(--mono); font-size: 11.5px; user-select: none; }
+  table.kv td.key { width: 28%; }
+  table.kv td.eq { width: 14px; color: var(--muted); font-family: var(--mono); text-align: center; padding: 0; }
+  table.kv td.cm { width: 22%; }
+  table.kv td.act { width: 74px; text-align: right; white-space: nowrap; }
+  table.kv input { width: 100%; font-family: var(--mono); font-size: 12.5px; padding: 4px 7px; background: transparent; border-color: transparent; }
+  table.kv input:hover { border-color: var(--border); }
+  table.kv input:focus { background: var(--surface2); border-color: var(--accent); }
+  table.kv td.cm input { color: #8b8b94; font-style: italic; }
+  table.kv .valwrap { display: flex; gap: 4px; align-items: center; }
+  table.kv .valwrap input { flex: 1; }
+  table.kv .eye { padding: 1px 6px; font-size: 12px; background: transparent; border-color: transparent; }
+  table.kv .eye:hover { border-color: var(--border); }
+  table.kv tr.comment input { color: #8b8b94; font-style: italic; }
+  table.kv tr.blank td { height: 10px; padding: 0 6px; }
+  table.kv tr.invalid td { background: rgba(239,68,68,.06); }
+  table.kv tr.invalid input { color: #fca5a5; }
+  table.kv tr.dup .key input { color: #fcd34d; }
+  table.kv tr.flash td { background: rgba(99,102,241,.2); }
+  table.kv td.act button { opacity: 0; padding: 1px 6px; font-size: 11px; }
+  table.kv tr:hover td.act button { opacity: 1; }
+  .multi { font-size: 10.5px; color: var(--muted); margin-left: 4px; }
+  .badge { font-size: 10px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.sec { color: #fcd34d; border-color: rgba(245,158,11,.35); }
+  #raw { flex: 1; width: 100%; resize: none; border: none; border-radius: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; padding: 12px 16px; background: var(--bg); }
+  #issues { border-top: 1px solid var(--border); max-height: 150px; overflow-y: auto; background: var(--surface); flex-shrink: 0; }
+  .issue { display: flex; gap: 8px; padding: 4px 12px; cursor: pointer; font-size: 12px; align-items: baseline; }
+  .issue:hover { background: var(--surface2); }
+  .issue .lv { width: 14px; text-align: center; }
+  .issue .l { color: var(--muted); font-family: var(--mono); width: 60px; flex-shrink: 0; }
+  .welcome { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 26px 30px; text-align: center; max-width: 470px; line-height: 1.55; }
+  .card h2 { font-size: 17px; margin-bottom: 8px; }
+  .card p { color: var(--muted); margin-bottom: 14px; }
+
+  /* Compare */
+  #compare { flex: 1; overflow: auto; }
+  table.cmp { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+  table.cmp th, table.cmp td { border-bottom: 1px solid var(--line); padding: 5px 10px; text-align: left; vertical-align: top; }
+  table.cmp th { position: sticky; top: 0; background: var(--surface); z-index: 2; font-weight: 500; border-bottom: 1px solid var(--border); }
+  table.cmp th .fn { font-family: var(--mono); font-size: 12.5px; }
+  table.cmp th .sum { font-size: 11.5px; color: var(--muted); font-weight: 400; margin-top: 3px; line-height: 1.5; }
+  table.cmp th.ref { background: #1c1c2a; }
+  table.cmp td.k { font-family: var(--mono); font-size: 12.5px; position: sticky; left: 0; background: var(--bg); z-index: 1; white-space: nowrap; }
+  table.cmp td.v { font-family: var(--mono); font-size: 12px; max-width: 320px; word-break: break-all; }
+  table.cmp td.v.missing { color: #fca5a5; background: rgba(239,68,68,.07); font-family: system-ui, sans-serif; font-style: italic; }
+  table.cmp td.v.diff { color: #fde68a; }
+  table.cmp td.v.same { color: #a1a1aa; }
+  table.cmp td.v.masked { cursor: pointer; }
+  .st { font-size: 10.5px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
+  .st.missing { background: rgba(239,68,68,.15); color: #fca5a5; }
+  .st.different { background: rgba(245,158,11,.15); color: #fde68a; }
+  .st.same { background: rgba(34,197,94,.12); color: #86efac; }
+  .st.empty { background: var(--surface2); color: var(--muted); }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(620px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.small { width: min(440px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .note { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  .blist { border: 1px solid var(--border); border-radius: 8px; height: 300px; overflow-y: auto; background: var(--bg); }
+  .bitem { padding: 6px 10px; cursor: pointer; display: flex; gap: 8px; border-bottom: 1px solid var(--line); }
+  .bitem:hover { background: var(--surface2); }
+  .crow { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; }
+  .crow:hover { background: var(--surface2); }
+  .crow .mono { flex: 1; font-size: 12.5px; }
+  .bk { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  .bk .d { flex: 1; }
+  pre.preview { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-family: var(--mono); font-size: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">🧾 Fichiers .env</span>
+  <button class="primary" id="btnAddFolder">＋ Dossier de projet</button>
+  <button id="btnRefresh" title="Actualiser la liste">↻</button>
+  <span class="spacer"></span>
+  <button id="btnCompare" title="Comparer plusieurs fichiers">⇄ Comparer…</button>
+</header>
+<main>
+  <nav id="side"></nav>
+  <section id="content"></section>
+</main>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'env-editor'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const SECRET_RE = /(SECRET|PASSW|PWD|PASSPHRASE|TOKEN|API_?KEY|APIKEY|PRIVATE|CREDENTIAL|AUTH|SALT|SIGNING|ACCESS_?KEY|CLIENT_?KEY|_KEY$|^KEY$|DSN|CONN(ECTION)?_?STR|COOKIE|SESSION|WEBHOOK|ENCRYPT)/i
+const URL_CRED_RE = /^[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/i
+const isSecret = (k, v) => SECRET_RE.test(k || '') || URL_CRED_RE.test(v || '')
+
+const state = { folders: [], collapsed: new Set(JSON.parse(localGet('env-collapsed') || '[]')), file: null, items: [], issues: [], dirty: false,
+  mode: 'table', reveal: new Set(), revealAll: false, filter: '', view: 'welcome', cmp: null, cmpReveal: false }
+
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+async function act(action, payload, okMsg, opts) {
+  try { const r = await call(action, payload, opts); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+function dialog(html, cls = '') {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${cls}">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') ov.remove() })
+  return ov
+}
+const fmtTime = (s) => new Date(s * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+const allFiles = () => state.folders.flatMap((f) => f.files.map((x) => ({ ...x, folder: f.name, folder_id: f.id })))
+function confirmDiscard() { return !state.dirty || confirm('Des modifications ne sont pas enregistrées. Les abandonner ?') }
+
+// ── Sidebar ──────────────────────────────────────────────────────────────────
+async function loadFolders() {
+  const r = await act('folders.list', {}, null, { timeout: 60000 }); if (!r) return
+  state.folders = r.folders
+  renderSide()
+  if (state.view === 'welcome') renderWelcome()
+}
+function renderSide() {
+  if (!state.folders.length) {
+    $('#side').innerHTML = `<div class="side-empty">Aucun dossier de projet.<br>Ajoutez un dossier : ses fichiers <span class="mono">.env*</span> apparaîtront ici.</div>`
+    return
+  }
+  $('#side').innerHTML = state.folders.map((f) => {
+    const closed = state.collapsed.has(f.id)
+    return `<div class="folder"><div class="fhead" data-fold="${f.id}" title="${esc(f.path)}"><span>${closed ? '▸' : '▾'}</span><span>📁</span><span class="nm">${esc(f.name)}</span>
+      <span class="acts"><button class="ghost" data-new="${f.id}" title="Nouveau fichier .env">＋</button><button class="ghost danger" data-rm="${f.id}" title="Retirer de la liste">✕</button></span></div>
+      ${closed ? '' : `<div class="fpath">${esc(f.path)}</div>
+      ${!f.exists ? '<div class="nofiles" style="color:#fca5a5">Dossier introuvable</div>' : f.files.length ? f.files.map((x) => `<div class="file${state.file && state.file.path === x.path ? ' on' : ''}" data-path="${esc(x.path)}" title="${esc(x.path)}">
+        <span class="nm">${esc(x.rel)}</span><span class="n">${x.size < 1024 ? x.size + ' o' : (x.size / 1024).toFixed(1) + ' Ko'}</span></div>`).join('') : '<div class="nofiles">Aucun fichier .env</div>'}
+      ${f.truncated ? '<div class="nofiles">Liste tronquée (500 fichiers)</div>' : ''}`}</div>`
+  }).join('')
+}
+$('#side').addEventListener('click', async (e) => {
+  const nb = e.target.closest('[data-new]'); if (nb) { e.stopPropagation(); newFile(Number(nb.dataset.new)); return }
+  const rb = e.target.closest('[data-rm]')
+  if (rb) {
+    e.stopPropagation()
+    const f = state.folders.find((x) => x.id === Number(rb.dataset.rm))
+    if (!confirm(`Retirer « ${f.name} » de la liste ? (aucun fichier n'est supprimé)`)) return
+    if (await act('folder.remove', { id: f.id })) { if (state.file && state.file.folder_id === f.id) closeFile(); loadFolders() }
+    return
+  }
+  const fh = e.target.closest('[data-fold]')
+  if (fh) { const id = Number(fh.dataset.fold); state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id); localSet('env-collapsed', JSON.stringify([...state.collapsed])); renderSide(); return }
+  const fi = e.target.closest('.file'); if (fi) openFile(fi.dataset.path)
+})
+
+// ── Folder picker ────────────────────────────────────────────────────────────
+function openFolderPicker() {
+  const ov = dialog(`<h3>Ajouter un dossier de projet</h3><div class="content">
+    <div class="field"><label>Chemin du dossier</label><div style="display:flex;gap:6px"><input id="bPath" class="mono" style="flex:1" placeholder="C:\\projets\\mon-app"><button id="bGo">Aller</button></div></div>
+    <div style="display:flex;gap:6px"><button class="sm" id="bUp">⬆ Dossier parent</button><button class="sm" id="bHome">🏠 Dossier personnel</button><button class="sm" id="bDrives">💽 Lecteurs</button><span class="spacer"></span><span class="note" id="bInfo"></span></div>
+    <div class="blist" id="bList"></div>
+    <div class="note">Seuls les fichiers dont le nom commence par <span class="mono">.env</span> seront lus ou modifiés, jusqu'à 4 niveaux de sous-dossiers (node_modules, .git, venv… ignorés).</div>
+    </div><div class="foot"><span class="spacer"></span><button id="bNo">Annuler</button><button class="primary" id="bOk">Ajouter ce dossier</button></div>`)
+  let cur = { path: '', parent: null, home: '' }
+  const go = async (path) => {
+    const r = await act('fs.browse', { path }); if (!r) return
+    cur = r; $('#bPath', ov).value = r.path
+    $('#bInfo', ov).textContent = r.path ? (r.has_env ? '✓ contient des fichiers .env' : '') : ''
+    $('#bList', ov).innerHTML = r.dirs.map((d) => `<div class="bitem" data-p="${esc(d.path)}">📁 <span>${esc(d.name)}</span></div>`).join('') || '<div class="note" style="padding:10px">Aucun sous-dossier</div>'
+    $('#bOk', ov).disabled = !r.path
+  }
+  $('#bList', ov).addEventListener('click', (e) => { const b = e.target.closest('.bitem'); if (b) go(b.dataset.p) })
+  $('#bGo', ov).onclick = () => go($('#bPath', ov).value.trim())
+  $('#bPath', ov).addEventListener('keydown', (e) => { if (e.key === 'Enter') go($('#bPath', ov).value.trim()) })
+  $('#bUp', ov).onclick = () => go(cur.parent || '')
+  $('#bHome', ov).onclick = () => go(cur.home)
+  $('#bDrives', ov).onclick = () => go('')
+  $('#bNo', ov).onclick = () => ov.remove()
+  $('#bOk', ov).onclick = async () => {
+    const r = await act('folder.add', { path: $('#bPath', ov).value.trim() }, 'Dossier ajouté')
+    if (r) { ov.remove(); state.collapsed.delete(r.id); await loadFolders() }
+  }
+  go(localGet('env-last-browse') || '').then(() => { if (!cur.path) go(cur.home) })
+  ov.addEventListener('click', () => { if (cur.path) localSet('env-last-browse', cur.path) })
+}
+
+// ── Editor ───────────────────────────────────────────────────────────────────
+function closeFile() { state.file = null; state.items = []; state.dirty = false; state.view = 'welcome'; renderSide(); renderWelcome() }
+function renderWelcome() {
+  if (state.view !== 'welcome') return
+  const n = allFiles().length
+  $('#content').innerHTML = `<div class="welcome"><div class="card">
+    <h2>${state.folders.length ? 'Choisissez un fichier' : 'Gérez les fichiers .env de vos projets'}</h2>
+    <p>${state.folders.length ? `${n} fichier(s) .env trouvé(s). Sélectionnez-en un à gauche pour l’éditer, ou comparez-en plusieurs (ex. <span class="mono">.env</span> et <span class="mono">.env.example</span>).`
+      : 'Ajoutez un dossier de projet : le module liste ses fichiers .env*, permet de les éditer (commentaires préservés, secrets masqués), de les comparer et d’ajouter les clés manquantes. Une copie de sécurité est faite avant chaque enregistrement.'}</p>
+    <div style="display:flex;gap:8px;justify-content:center">${state.folders.length ? `<button id="wCmp" ${n < 2 ? 'disabled' : ''}>⇄ Comparer des fichiers</button>` : ''}<button class="primary" id="wAdd">＋ Dossier de projet</button></div></div></div>`
+  $('#wAdd').onclick = openFolderPicker
+  const c = $('#wCmp'); if (c) c.onclick = openCompareDialog
+}
+
+async function openFile(path, force = false) {
+  if (!force && state.file && state.file.path === path && state.view === 'editor') return
+  if (!confirmDiscard()) return
+  const r = await act('file.read', { path }); if (!r) return
+  setFile(r)
+}
+function setFile(r) {
+  state.file = r; state.items = r.items.map((i) => ({ ...i })); state.issues = r.issues; state.dirty = false
+  state.reveal = new Set(); state.view = 'editor'
+  renderSide(); renderEditor()
+}
+function markDirty() { if (!state.dirty) { state.dirty = true; const d = $('#dirtyLbl'); if (d) d.classList.remove('hidden') } }
+
+function renderEditor() {
+  const f = state.file
+  const errs = state.issues.filter((i) => i.level === 'error').length, warns = state.issues.filter((i) => i.level === 'warning').length
+  $('#content').innerHTML = `<div class="toolbar">
+      <span class="path" title="${esc(f.path)}">${esc(f.folder)} / ${esc(f.rel)}</span>
+      <span class="dirty ${state.dirty ? '' : 'hidden'}" id="dirtyLbl">● modifié</span>
+      <span class="stats" title="${f.entries} variable(s), ${errs} erreur(s), ${warns} avertissement(s)">${f.entries} var.${errs ? ` · <span style="color:#fca5a5">⛔ ${errs}</span>` : ''}${warns ? ` · <span style="color:#fcd34d">⚠ ${warns}</span>` : ''}</span>
+      <span class="spacer"></span>
+      <div class="seg"><button data-mode="table" class="${state.mode === 'table' ? 'on' : ''}">Tableau</button><button data-mode="text" class="${state.mode === 'text' ? 'on' : ''}">Texte</button></div>
+      <button id="bkBtn" title="Copies de sécurité">🕘</button>
+      <button id="reloadBtn" title="Recharger depuis le disque">↺</button>
+      <button class="primary" id="saveBtn" title="Enregistrer (Ctrl+S)">Enregistrer</button>
+    </div>
+    ${state.mode === 'table' ? `<div class="toolbar sub">
+      <input id="filter" type="search" placeholder="Filtrer les clés…" value="${esc(state.filter)}" >
+      <label title="Afficher toutes les valeurs secrètes"><input type="checkbox" id="revealAll" ${state.revealAll ? 'checked' : ''} > Secrets</label>
+      <button id="addVar" >＋ Variable</button>
+      <button id="addCom" title="Ajouter une ligne de commentaire">＋ Commentaire</button>
+      <span class="spacer"></span><span class="stats">Clic sur 👁 pour révéler une valeur secrète</span></div>` : ''}
+    ${state.mode === 'table' ? '<div id="editor"></div>' : `<textarea id="raw" spellcheck="false"></textarea>`}
+    <div id="issues" class="${state.issues.length ? '' : 'hidden'}"></div>`
+  $$('.seg button').forEach((b) => (b.onclick = () => switchMode(b.dataset.mode)))
+  if (state.mode === 'table') {
+    $('#filter').addEventListener('input', () => { state.filter = $('#filter').value; renderTable() })
+    $('#revealAll').onchange = (e) => { state.revealAll = e.target.checked; renderTable() }
+    $('#addVar').onclick = () => addRow({ kind: 'entry_new', key: '', value: '', comment: '', dirty: true })
+    $('#addCom').onclick = () => addRow({ kind: 'comment', text: '', dirty: true })
+  }
+  $('#saveBtn').onclick = save
+  $('#reloadBtn').onclick = () => { if (confirmDiscard()) { state.dirty = false; openFile(f.path, true) } }
+  $('#bkBtn').onclick = openBackups
+  if (state.mode === 'table') renderTable()
+  else {
+    call('serialize', { items: state.items }).then((r) => { $('#raw').value = r.text }).catch((e) => toast(e.message, true))
+    $('#raw').addEventListener('input', markDirty)
+  }
+  renderIssues()
+}
+
+function renderIssues() {
+  const box = $('#issues'); if (!box) return
+  box.classList.toggle('hidden', !state.issues.length)
+  const ic = { error: '⛔', warning: '⚠️', info: 'ℹ️' }
+  box.innerHTML = state.issues.map((i) => `<div class="issue" data-n="${i.n}"><span class="lv">${ic[i.level]}</span><span class="l">ligne ${i.n}</span><span>${esc(i.message)}</span></div>`).join('')
+  $$('.issue', box).forEach((d) => (d.onclick = () => {
+    const tr = $(`#editor tr[data-n="${d.dataset.n}"]`)
+    if (tr) { tr.scrollIntoView({ block: 'center' }); tr.classList.add('flash'); setTimeout(() => tr.classList.remove('flash'), 900); const inp = $('input', tr); if (inp) inp.focus() }
+    else if ($('#raw')) { const ta = $('#raw'); const lines = ta.value.split('\n'); const pos = lines.slice(0, Number(d.dataset.n) - 1).join('\n').length + 1; ta.focus(); ta.setSelectionRange(pos, pos) }
+  }))
+}
+
+function rowSecret(it) { return (it.kind === 'entry' || it.kind === 'entry_new') && isSecret(it.key, it.value) }
+function renderTable() {
+  const ed = $('#editor'); if (!ed) return
+  const q = state.filter.trim().toLowerCase()
+  const dups = new Set(state.issues.filter((i) => i.message.includes('double')).map((i) => i.n))
+  const rows = state.items.map((it, idx) => {
+    const isEntry = it.kind === 'entry' || it.kind === 'entry_new'
+    if (q && !(isEntry && it.key.toLowerCase().includes(q))) return ''
+    const ln = it.n ? it.n : '+'
+    if (it.kind === 'blank') return `<tr class="blank" data-i="${idx}" data-n="${it.n || ''}"><td class="ln">${ln}</td><td colspan="4"></td><td class="act"><button class="ghost" data-del="${idx}" title="Supprimer la ligne vide">✕</button></td></tr>`
+    if (it.kind === 'comment') return `<tr class="comment" data-i="${idx}" data-n="${it.n || ''}"><td class="ln">${ln}</td><td colspan="4"><input data-f="text" data-i="${idx}" value="${esc('# ' + (it.text ?? ''))}" placeholder="# commentaire"></td>
+      <td class="act"><button class="ghost" data-del="${idx}" title="Supprimer">✕</button></td></tr>`
+    if (it.kind === 'invalid') return `<tr class="invalid" data-i="${idx}" data-n="${it.n || ''}"><td class="ln">${ln}</td><td colspan="4"><input data-f="raw" data-i="${idx}" value="${esc(it.raw)}" title="${esc(it.error)}"></td>
+      <td class="act"><button class="ghost" data-del="${idx}" title="Supprimer">✕</button></td></tr>`
+    const sec = rowSecret(it), shown = !sec || state.revealAll || state.reveal.has(idx), multi = String(it.value).includes('\n')
+    return `<tr class="${dups.has(it.n) ? 'dup' : ''}" data-i="${idx}" data-n="${it.n || ''}"><td class="ln">${ln}</td>
+      <td class="key"><input data-f="key" data-i="${idx}" value="${esc(it.key)}" placeholder="NOM_DE_CLE" spellcheck="false"></td><td class="eq">=</td>
+      <td><div class="valwrap"><input data-f="value" data-i="${idx}" type="${shown ? 'text' : 'password'}" value="${esc(multi ? String(it.value).replace(/\n/g, '\\n') : it.value)}" ${multi ? 'data-multi="1" title="Valeur multiligne (\\n = retour à la ligne)"' : ''} spellcheck="false" autocomplete="off">
+        ${sec ? `<button class="eye" data-eye="${idx}" title="${shown ? 'Masquer' : 'Révéler'}">${shown ? '🙈' : '👁'}</button>` : ''}${it.export ? '<span class="badge">export</span>' : ''}${multi ? '<span class="multi">multiligne</span>' : ''}</div></td>
+      <td class="cm"><input data-f="comment" data-i="${idx}" value="${esc(it.comment || '')}" placeholder="# commentaire"></td>
+      <td class="act"><button class="ghost" data-copy="${idx}" title="Copier la valeur">⧉</button><button class="ghost" data-del="${idx}" title="Supprimer">✕</button></td></tr>`
+  }).join('')
+  ed.innerHTML = `<table class="kv"><tbody>${rows || '<tr><td class="muted" style="padding:20px">Aucune variable.</td></tr>'}</tbody></table>`
+  $$('input[data-f]', ed).forEach((inp) => inp.addEventListener('input', () => {
+    const it = state.items[Number(inp.dataset.i)], f = inp.dataset.f
+    if (f === 'text') it.text = inp.value.replace(/^#\s?/, '')
+    else if (f === 'value') it.value = inp.dataset.multi ? inp.value.replace(/\\n/g, '\n') : inp.value
+    else it[f] = inp.value
+    it.dirty = true; markDirty()
+  }))
+  $$('[data-eye]', ed).forEach((b) => (b.onclick = () => { const i = Number(b.dataset.eye); state.reveal.has(i) ? state.reveal.delete(i) : state.reveal.add(i); renderTable() }))
+  $$('[data-del]', ed).forEach((b) => (b.onclick = () => { state.items.splice(Number(b.dataset.del), 1); state.reveal = new Set(); markDirty(); renderTable() }))
+  $$('[data-copy]', ed).forEach((b) => (b.onclick = () => copy(state.items[Number(b.dataset.copy)].value)))
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('Valeur copiée') }
+  catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy') } catch {} ta.remove(); toast(ok ? 'Valeur copiée' : 'Copie impossible', !ok) }
+}
+function addRow(item) {
+  state.filter = ''; $('#filter').value = ''
+  state.items.push(item); markDirty(); renderTable()
+  const inputs = $$('#editor tr:last-child input'); if (inputs[0]) { inputs[0].focus(); inputs[0].scrollIntoView({ block: 'nearest' }) }
+}
+
+async function switchMode(mode) {
+  if (mode === state.mode) return
+  if (mode === 'text') {
+    state.mode = 'text'; renderEditor()
+  } else {
+    const r = await act('parse', { text: $('#raw').value }); if (!r) return
+    state.items = r.items.map((i) => ({ ...i, dirty: false })); state.issues = r.issues
+    state.mode = 'table'; renderEditor()
+  }
+}
+
+async function save() {
+  if (!state.file) return
+  const payload = { path: state.file.path, hash: state.file.hash }
+  if (state.mode === 'text') payload.text = $('#raw').value
+  else payload.items = state.items
+  let r
+  try { r = await call('file.save', payload) }
+  catch (e) {
+    if (e.code === 'CONFLICT') {
+      if (!confirm('Le fichier a été modifié sur le disque depuis son ouverture (par un autre programme).\nÉcraser quand même ? (une copie de sécurité de la version actuelle sera faite)')) return
+      r = await act('file.save', { ...payload, force: true }); if (!r) return
+    } else { toast(e.message, true); return }
+  }
+  const mode = state.mode
+  setFile(r); state.mode = mode; renderEditor()
+  toast(r.unchanged ? 'Aucune modification' : 'Enregistré (copie de sécurité créée)')
+  loadFolders()
+}
+
+async function openBackups() {
+  const f = state.file
+  const r = await act('backups.list', { path: f.path }); if (!r) return
+  const ov = dialog(`<h3>Copies de sécurité — ${esc(f.rel)}</h3><div class="content">
+    <div class="note">Une copie est faite avant chaque enregistrement (30 dernières conservées), dans le dossier de données du module.</div>
+    <div>${r.backups.map((b) => `<div class="bk"><span class="d">${esc(new Date(b.date).toLocaleString('fr-FR'))}</span><span class="muted">${b.size} o</span>
+      <button class="sm" data-pv="${b.id}">Aperçu</button><button class="sm" data-rs="${b.id}">Restaurer</button></div>`).join('') || '<div class="muted">Aucune copie de sécurité pour ce fichier.</div>'}</div>
+    <pre class="preview hidden" id="pv"></pre></div><div class="foot"><span class="spacer"></span><button id="bkClose">Fermer</button></div>`)
+  $('#bkClose', ov).onclick = () => ov.remove()
+  $$('[data-pv]', ov).forEach((b) => (b.onclick = async () => {
+    const p = await act('backup.read', { path: f.path, id: b.dataset.pv }); if (!p) return
+    const lines = p.items.map((i) => i.kind === 'entry' ? `${i.key}=${i.secret ? '••••••' : i.value.replace(/\n/g, '\\n')}${i.comment ? ' # ' + i.comment : ''}` : i.raw)
+    $('#pv', ov).textContent = lines.join('\n'); $('#pv', ov).classList.remove('hidden')
+  }))
+  $$('[data-rs]', ov).forEach((b) => (b.onclick = async () => {
+    if (!confirm('Restaurer cette version ? Le contenu actuel sera lui-même sauvegardé avant.')) return
+    const v = await act('backup.restore', { path: f.path, id: b.dataset.rs }, 'Version restaurée'); if (!v) return
+    ov.remove(); state.dirty = false; setFile(v); loadFolders()
+  }))
+}
+
+async function newFile(folderId) {
+  const folder = state.folders.find((f) => f.id === folderId)
+  const files = folder.files
+  const ov = dialog(`<h3>Nouveau fichier dans « ${esc(folder.name)} »</h3><div class="content">
+    <div class="field"><label>Nom du fichier</label><input id="nName" class="mono" value="${files.some((x) => x.name === '.env') ? '.env.local' : '.env'}"></div>
+    <div class="field"><label>Sous-dossier (facultatif, relatif au projet)</label><input id="nSub" class="mono" placeholder="ex. backend"></div>
+    <div class="field"><label>Contenu initial</label><select id="nFrom"><option value="">Fichier vide</option>${files.map((x) => `<option value="${esc(x.path)}" ${x.name === '.env.example' ? 'selected' : ''}>Copie de ${esc(x.rel)}</option>`).join('')}</select></div>
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="nBlank" checked> Vider les valeurs secrètes de la copie</label>
+    </div><div class="foot"><span class="spacer"></span><button id="nNo">Annuler</button><button class="primary" id="nOk">Créer</button></div>`, 'small')
+  $('#nNo', ov).onclick = () => ov.remove()
+  $('#nOk', ov).onclick = async () => {
+    if (!confirmDiscard()) return
+    const r = await act('file.create', { folder_id: folderId, name: $('#nName', ov).value.trim(), subdir: $('#nSub', ov).value.trim(), copy_from: $('#nFrom', ov).value || null, blank_values: $('#nBlank', ov).checked }, 'Fichier créé')
+    if (r) { ov.remove(); state.dirty = false; await loadFolders(); setFile(r) }
+  }
+}
+
+// ── Compare ──────────────────────────────────────────────────────────────────
+function openCompareDialog() {
+  const files = allFiles()
+  if (files.length < 2) { toast('Il faut au moins deux fichiers .env', true); return }
+  const pre = new Set()
+  if (state.file) {
+    pre.add(state.file.path)
+    const sib = files.find((x) => x.folder_id === state.file.folder_id && x.path !== state.file.path && /example|sample|template|dist/i.test(x.name) && x.path.slice(0, -x.name.length) === state.file.path.slice(0, -state.file.path.split(/[\\/]/).pop().length))
+    if (sib) pre.add(sib.path)
+  }
+  const ov = dialog(`<h3>Comparer des fichiers</h3><div class="content">
+    <div class="note">Cochez de 2 à 8 fichiers. La référence (ex. <span class="mono">.env.example</span>) sert à calculer les clés manquantes, en trop ou différentes.</div>
+    <div>${files.map((x, i) => `<div class="crow"><input type="checkbox" data-c="${i}" ${pre.has(x.path) ? 'checked' : ''}><span class="mono">${esc(x.folder)} / ${esc(x.rel)}</span>
+      <label class="muted" style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="radio" name="ref" value="${i}" ${/example|sample|template/i.test(x.name) && pre.has(x.path) ? 'checked' : ''}> référence</label></div>`).join('')}</div>
+    </div><div class="foot"><span class="spacer"></span><button id="cNo">Annuler</button><button class="primary" id="cOk">Comparer</button></div>`)
+  $('#cNo', ov).onclick = () => ov.remove()
+  $('#cOk', ov).onclick = async () => {
+    const idx = $$('[data-c]:checked', ov).map((c) => Number(c.dataset.c))
+    if (idx.length < 2 || idx.length > 8) { toast('Cochez entre 2 et 8 fichiers', true); return }
+    const refSel = $('input[name=ref]:checked', ov)
+    let ref = refSel ? idx.indexOf(Number(refSel.value)) : 0
+    if (ref < 0) ref = 0
+    if (!confirmDiscard()) return
+    ov.remove()
+    state.cmpPaths = idx.map((i) => files[i].path); state.cmpRef = ref
+    runCompare()
+  }
+}
+async function runCompare() {
+  const r = await act('compare', { paths: state.cmpPaths, reference: state.cmpRef }); if (!r) return
+  state.cmp = r; state.view = 'compare'; state.dirty = false; state.file = null; renderSide(); renderCompare()
+}
+function renderCompare() {
+  const c = state.cmp, ref = c.reference
+  const counts = { missing: 0, different: 0, same: 0, empty: 0 }
+  c.rows.forEach((r) => counts[r.status]++)
+  const only = state.cmpOnly || 'all'
+  const rows = c.rows.filter((r) => only === 'all' || (only === 'issues' ? r.status === 'missing' || r.status === 'different' : r.status === only))
+  const cell = (r, v, i) => {
+    if (v === null) return `<td class="v missing">absente</td>`
+    const cls = r.status === 'different' && v !== r.values[ref] ? 'diff' : 'same'
+    const masked = r.secret && !state.cmpReveal && v !== ''
+    return `<td class="v ${cls}${masked ? ' masked' : ''}" ${masked ? 'title="Cocher « Secrets » pour révéler"' : ''}>${v === '' ? '<span class="muted">(vide)</span>' : masked ? '••••••••' : esc(v)}</td>`
+  }
+  $('#content').innerHTML = `<div class="toolbar"><b>Comparaison</b><span class="stats">${c.rows.length} clé(s) · ${counts.missing} manquante(s) · ${counts.different} différente(s)</span>
+      <span class="spacer"></span>
+      <select id="cmpOnly"><option value="all">Toutes</option><option value="issues">Écarts uniquement</option><option value="missing">Manquantes</option><option value="different">Différentes</option><option value="same">Identiques</option></select>
+      <label><input type="checkbox" id="cmpReveal" ${state.cmpReveal ? 'checked' : ''}> Secrets</label>
+      <button id="cmpAgain" title="Recomparer">↻</button><button id="cmpEdit">Fichiers…</button><button id="cmpClose" title="Fermer la comparaison">✕</button></div>
+    <div id="compare"><table class="cmp"><thead><tr><th>Clé</th><th>État</th>${c.files.map((f, i) => {
+      const s = c.summary[i]
+      return `<th class="${i === ref ? 'ref' : ''}"><div class="fn">${esc(f.rel)} ${i === ref ? '<span class="badge">référence</span>' : ''}</div><div class="sum">${esc(f.folder)} · ${s.count} clé(s)${f.issues ? ` · <span style="color:#fca5a5">${f.issues} problème(s)</span>` : ''}
+        ${i !== ref ? `<br>${s.missing.length} manquante(s) · ${s.extra.length} en trop · ${s.different.length} différente(s)` : ''}</div>
+        <div style="margin-top:5px;display:flex;gap:4px">${i !== ref && s.missing.length ? `<button class="sm primary" data-add="${i}">＋ Ajouter les ${s.missing.length} clé(s) manquante(s)</button>` : ''}<button class="sm" data-open="${i}">Ouvrir</button></div></th>`
+    }).join('')}</tr></thead><tbody>${rows.map((r) => `<tr><td class="k">${esc(r.key)}${r.secret ? ' <span class="badge sec">secret</span>' : ''}</td>
+      <td><span class="st ${r.status}">${{ missing: 'manquante', different: 'différente', same: 'identique', empty: 'vide' }[r.status]}</span></td>${r.values.map((v, i) => cell(r, v, i)).join('')}</tr>`).join('') || `<tr><td colspan="${c.files.length + 2}" class="muted" style="padding:20px">Aucune clé dans ce filtre.</td></tr>`}</tbody></table></div>`
+  $('#cmpOnly').value = only
+  $('#cmpOnly').onchange = (e) => { state.cmpOnly = e.target.value; renderCompare() }
+  $('#cmpReveal').onchange = (e) => { state.cmpReveal = e.target.checked; renderCompare() }
+  $('#cmpAgain').onclick = runCompare
+  $('#cmpEdit').onclick = openCompareDialog
+  $('#cmpClose').onclick = () => { state.view = 'welcome'; state.cmp = null; renderWelcome() }
+  $$('[data-open]').forEach((b) => (b.onclick = () => openFile(c.files[Number(b.dataset.open)].path, true)))
+  $$('[data-add]').forEach((b) => (b.onclick = () => addMissing(Number(b.dataset.add))))
+}
+function addMissing(i) {
+  const c = state.cmp, f = c.files[i], refF = c.files[c.reference], keys = c.summary[i].missing
+  const refVals = Object.fromEntries(c.rows.map((r) => [r.key, r.values[c.reference]]))
+  const ov = dialog(`<h3>Ajouter ${keys.length} clé(s) à ${esc(f.rel)}</h3><div class="content">
+    <div class="field"><label>Valeurs</label><select id="aMode"><option value="ref">Reprendre les valeurs de ${esc(refF.rel)}</option><option value="empty">Valeurs vides</option></select></div>
+    <div class="note">Les clés sont ajoutées à la fin du fichier sous un commentaire. Une copie de sécurité est faite avant.</div>
+    <div style="max-height:240px;overflow:auto">${keys.map((k) => `<label class="crow"><input type="checkbox" data-k="${esc(k)}" checked><span class="mono">${esc(k)}</span></label>`).join('')}</div>
+    </div><div class="foot"><span class="spacer"></span><button id="aNo">Annuler</button><button class="primary" id="aOk">Ajouter</button></div>`, 'small')
+  $('#aNo', ov).onclick = () => ov.remove()
+  $('#aOk', ov).onclick = async () => {
+    const mode = $('#aMode', ov).value
+    const sel = $$('[data-k]:checked', ov).map((cb) => cb.dataset.k)
+    if (!sel.length) { toast('Aucune clé sélectionnée', true); return }
+    const r = await act('keys.add', { path: f.path, hash: f.hash, comment: `Ajouté depuis ${refF.rel}`, keys: sel.map((k) => ({ key: k, value: mode === 'ref' ? refVals[k] || '' : '' })) })
+    if (!r) return
+    ov.remove(); toast(`${r.added} clé(s) ajoutée(s)`); runCompare(); loadFolders()
+  }
+}
+
+// ── Global ───────────────────────────────────────────────────────────────────
+$('#btnAddFolder').onclick = openFolderPicker
+$('#btnRefresh').onclick = loadFolders
+$('#btnCompare').onclick = openCompareDialog
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key.toLowerCase() === 's' && state.view === 'editor') { e.preventDefault(); save() }
+})
+
+renderWelcome()
+loadFolders()
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+{
+  "id": "file-translator",
+  "name": "Traducteur de fichiers",
+  "version": "1.0.0",
+  "description": "Traduit des fichiers avec l'API Claude en préservant leur format : sous-titres SRT/VTT (minutages intacts), Markdown (code et liens intacts), texte, Word .docx (mise en forme conservée) et fichiers JSON i18n (clés et placeholders intacts). Glossaire imposé, ton, progression par lots, annulation, reprise après erreur, aperçu côte à côte et téléchargement.",
+  "category": "Productivité",
+  "tags": [
+    "ia",
+    "claude",
+    "traduction",
+    "sous-titres",
+    "srt",
+    "docx",
+    "i18n"
+  ],
+  "icon": "🌍",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "anthropic>=2,<3"
+    ],
+    "modules": []
+  },
+  "env": [
+    {
+      "key": "ANTHROPIC_API_KEY",
+      "description": "Clé d'API Anthropic (console.anthropic.com)",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "config_schema": {
+    "default_model": {
+      "type": "string",
+      "title": "Modèle par défaut",
+      "default": "claude-opus-5-5",
+      "enum": [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5"
+      ]
+    },
+    "effort": {
+      "type": "string",
+      "title": "Effort de réflexion",
+      "default": "low",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "batch_chars": {
+      "type": "integer",
+      "title": "Taille d'un lot (caractères source)",
+      "default": 6000,
+      "minimum": 1000,
+      "maximum": 40000
+    },
+    "concurrency": {
+      "type": "integer",
+      "title": "Lots traduits en parallèle",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 8
+    }
+  }
+}

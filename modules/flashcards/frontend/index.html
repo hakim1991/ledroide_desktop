@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cartes de révision</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --new: #60a5fa; --learn: #f97316; --rev: #22c55e;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .small { font-size: 11.5px; }
+  .kbd { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; padding: 0 4px; border: 1px solid #3f3f46; border-radius: 3px; color: var(--muted); }
+  .c-new { color: var(--new); } .c-learn { color: var(--learn); } .c-rev { color: var(--rev); }
+
+  header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; flex-wrap: wrap; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 8px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: rgba(99,102,241,.22); color: var(--text); }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border);
+               border-radius: 8px; padding: 4px; z-index: 50; min-width: 220px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+  #view { flex: 1; overflow: auto; padding: 16px; }
+  .decks { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+  .deck { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; border-top: 3px solid var(--c);
+          display: flex; flex-direction: column; gap: 10px; }
+  .deck h3 { font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  .deck h3 > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .deck .desc { color: var(--muted); font-size: 12px; line-height: 1.4; max-height: 34px; overflow: hidden; }
+  .counts { display: flex; gap: 14px; }
+  .counts div { display: flex; flex-direction: column; }
+  .counts b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .counts span { font-size: 11px; color: var(--muted); }
+  .deck .actions { display: flex; gap: 6px; }
+  .deck .meta { font-size: 11.5px; color: var(--muted); }
+  .bar3 { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--surface2); }
+  .bar3 i { display: block; height: 100%; }
+
+  #study { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .sbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .sbar .cnt { display: flex; gap: 10px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .sbar .cnt span.cur { text-decoration: underline; text-underline-offset: 4px; }
+  .stage { flex: 1; overflow-y: auto; display: flex; justify-content: center; padding: 28px 16px; }
+  .fcard { width: min(760px, 100%); align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+           padding: 30px 34px; min-height: 260px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  .face { font-size: 22px; line-height: 1.5; text-align: center; overflow-wrap: anywhere; }
+  .face img { max-width: 100%; max-height: 360px; border-radius: 8px; vertical-align: middle; }
+  .face ul, .face ol { text-align: left; display: inline-block; margin-left: 1.2em; }
+  .face code, .editor code { font-family: ui-monospace, Consolas, monospace; background: var(--surface2); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  .face pre, .editor pre { text-align: left; background: var(--surface2); padding: 10px; border-radius: 8px; font-size: 14px; overflow-x: auto; }
+  .face blockquote { border-left: 3px solid var(--border); padding-left: 10px; color: #a1a1aa; text-align: left; }
+  .face mark, .editor mark { background: rgba(250,204,21,.3); color: inherit; padding: 0 2px; border-radius: 3px; }
+  .sepline { border: none; border-top: 1px dashed #3f3f46; margin: 22px 0; }
+  .tags { text-align: center; margin-top: 18px; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--surface2); color: var(--muted); margin: 2px; }
+  .typebox { margin-top: 22px; display: flex; gap: 8px; }
+  .typebox input { flex: 1; font-size: 17px; padding: 9px 12px; }
+  .diff { margin-top: 18px; text-align: center; font-size: 18px; font-family: ui-monospace, Consolas, monospace; line-height: 1.6; }
+  .diff .ok { color: #4ade80; } .diff .bad { color: #f87171; text-decoration: line-through; } .diff .miss { color: #fcd34d; text-decoration: underline; }
+  .diff .verdict { font-family: system-ui, sans-serif; font-size: 13px; margin-bottom: 6px; }
+  .answers { display: flex; justify-content: center; gap: 10px; padding: 14px; border-top: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .answers button { min-width: 128px; padding: 8px 14px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 600; }
+  .answers button small { font-weight: 400; color: var(--muted); font-size: 11px; }
+  .answers .r1 { border-color: rgba(239,68,68,.55); } .answers .r1:hover:not(:disabled) { background: rgba(239,68,68,.15); }
+  .answers .r2 { border-color: rgba(249,115,22,.5); } .answers .r2:hover:not(:disabled) { background: rgba(249,115,22,.13); }
+  .answers .r3 { border-color: rgba(34,197,94,.5); } .answers .r3:hover:not(:disabled) { background: rgba(34,197,94,.13); }
+  .answers .r4 { border-color: rgba(56,189,248,.5); } .answers .r4:hover:not(:disabled) { background: rgba(56,189,248,.13); }
+  .answers .show { min-width: 280px; }
+  .answers .sugg { box-shadow: 0 0 0 2px #e4e4e7; }
+  .done { text-align: center; align-self: center; max-width: 460px; }
+  .done .big { font-size: 46px; margin-bottom: 10px; }
+  .done h2 { font-size: 19px; margin-bottom: 6px; }
+  .done p { color: var(--muted); line-height: 1.5; margin-bottom: 14px; }
+
+  .toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .toolbar input[type=search] { width: 240px; }
+  table.cards { width: 100%; border-collapse: collapse; }
+  table.cards th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 500;
+                   padding: 6px 8px; border-bottom: 1px solid var(--border); position: sticky; top: -16px; background: var(--bg); }
+  table.cards td { padding: 6px 8px; border-bottom: 1px solid var(--line); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.cards tr { cursor: pointer; }
+  table.cards tr:hover td { background: #16161a; }
+  table.cards tr.sel td { background: rgba(99,102,241,.12); }
+  table.cards tr.susp td { opacity: .5; }
+  .st { font-size: 11px; padding: 1px 7px; border-radius: 10px; }
+  .st.new { background: rgba(96,165,250,.15); color: var(--new); }
+  .st.learning, .st.relearning { background: rgba(249,115,22,.15); color: #fdba74; }
+  .st.review { background: rgba(34,197,94,.13); color: #86efac; }
+  .bulk { display: flex; gap: 6px; align-items: center; padding: 6px 10px; margin-bottom: 8px; background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.35); border-radius: 8px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; }
+  .kpi .l { font-size: 11.5px; color: var(--muted); }
+  .kpi .v { font-size: 21px; font-weight: 650; margin-top: 3px; }
+  .kpi .s { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .panel h3 { font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .panel h3 .muted { font-weight: 400; font-size: 11.5px; }
+  svg text { fill: #a1a1aa; font-size: 10px; font-family: inherit; }
+  svg .grid { stroke: #26262b; }
+  .legend { display: flex; gap: 12px; font-size: 11px; color: var(--muted); }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+  #empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; text-align: center; max-width: 440px; }
+  .card h2 { font-size: 17px; margin-bottom: 6px; }
+  .card p { color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+  .card .actions { display: flex; gap: 8px; justify-content: center; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(560px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog.large { width: min(820px, calc(100vw - 32px)); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; min-height: 0; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field > label { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .field.row { flex-direction: row; align-items: center; gap: 8px; }
+  .field textarea { min-height: 54px; resize: vertical; }
+  .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sw { width: 22px; height: 22px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; }
+  .sw.on { border-color: #fff; }
+  .rte { border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); }
+  .rte:focus-within { border-color: var(--accent); }
+  .rte .tb { display: flex; gap: 2px; padding: 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .rte .tb button { padding: 2px 8px; border: none; background: transparent; color: #a1a1aa; min-width: 28px; }
+  .rte .tb button:hover { background: #2a2a30; color: var(--text); }
+  .editor { min-height: 92px; max-height: 260px; overflow-y: auto; padding: 9px 11px; outline: none; font-size: 15px; line-height: 1.5; }
+  .editor img { max-width: 100%; max-height: 200px; border-radius: 6px; }
+  .editor:empty::before { content: attr(data-ph); color: #52525b; }
+  .editor ul, .editor ol { margin-left: 1.4em; }
+  .maptable { overflow: auto; max-height: 220px; border: 1px solid var(--border); border-radius: 8px; }
+  .maptable table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+  .maptable th, .maptable td { padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+  .maptable th { background: var(--surface2); color: var(--muted); font-weight: 500; position: sticky; top: 0; }
+  .maptable th.m { color: var(--accent-h); }
+  .maptable tr.skip td { opacity: .35; }
+
+  #tip { position: fixed; z-index: 80; background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
+         font-size: 12px; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.5); line-height: 1.45; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  body.studying #toast { bottom: 96px; }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+
+<header id="mainHeader">
+  <span class="title">🗂️ Cartes de révision</span>
+  <div class="seg" id="tabs"><button data-tab="decks">Paquets</button><button data-tab="stats">Statistiques</button></div>
+  <span class="spacer"></span>
+  <button class="primary" id="btnNewDeck">＋ Paquet</button>
+  <div class="menu">
+    <button class="icon" id="btnMenu" title="Plus d'actions">⋯</button>
+    <div class="menu-list hidden" id="menuList">
+      <button data-act="import">⬆️ Importer CSV / TSV…</button>
+      <button data-act="help">❔ Algorithme et raccourcis</button>
+      <hr>
+      <button data-act="demo">🧪 Ajouter des paquets d'exemple</button>
+    </div>
+  </div>
+</header>
+<div id="view"></div>
+<div id="study" class="hidden"></div>
+<div id="empty" class="hidden">
+  <div class="card">
+    <h2>Mémorisez durablement</h2>
+    <p>Créez un paquet, ajoutez des cartes recto / verso, puis révisez un peu chaque jour : la répétition espacée vous les présente juste avant que vous ne les oubliiez.</p>
+    <div class="actions"><button class="primary" id="emptyAdd">＋ Créer un paquet</button><button id="emptyDemo">🧪 Exemples</button></div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".csv,.tsv,.txt" class="hidden" />
+<input type="file" id="imgInput" accept="image/*" class="hidden" />
+<div id="tip" class="hidden"></div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'flashcards'
+const call = (action, payload = {}, timeout = 30000) => window.ledroide.call(MODULE_ID, action, payload, { timeout })
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const COLORS = ['#6366f1', '#38bdf8', '#22c55e', '#10b981', '#eab308', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#14b8a6', '#64748b']
+const STATE_LBL = { new: 'Nouvelle', learning: 'En apprentissage', relearning: 'Réapprentissage', review: 'À réviser' }
+const RATINGS = [['1', 'Encore'], ['2', 'Difficile'], ['3', 'Bien'], ['4', 'Facile']]
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+const pad = (n) => String(n).padStart(2, '0')
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
+const fmtDay = (s) => s ? new Date(s.slice(0, 10) + 'T00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'
+const fmtIvl = (d) => !d ? '—' : d < 31 ? Math.round(d) + ' j' : d < 365 ? (d / 30.4).toFixed(1).replace('.', ',') + ' mois' : (d / 365).toFixed(1).replace('.', ',') + ' an(s)'
+
+const state = { decks: [], tab: 'decks', study: null, browse: null, statsDeck: '' }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+async function act(action, payload, okMsg, timeout) {
+  try { const r = await call(action, payload, timeout); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+
+async function loadDecks() {
+  const r = await act('decks.list')
+  if (!r) return
+  state.decks = r.decks
+  render()
+}
+function render() {
+  const studying = !!state.study
+  document.body.classList.toggle('studying', studying)
+  $('#study').classList.toggle('hidden', !studying)
+  $('#mainHeader').classList.toggle('hidden', studying)
+  const empty = !state.decks.length && !studying
+  $('#empty').classList.toggle('hidden', !empty)
+  $('#view').classList.toggle('hidden', studying || empty)
+  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === (state.browse ? 'decks' : state.tab)))
+  if (studying || empty) return
+  if (state.browse) renderBrowse()
+  else if (state.tab === 'stats') renderStats()
+  else renderDecks()
+}
+$('#tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (!b) return; state.tab = b.dataset.tab; state.browse = null; render() }
+$('#btnNewDeck').onclick = () => openDeckDialog()
+$('#emptyAdd').onclick = () => openDeckDialog()
+$('#emptyDemo').onclick = () => demo()
+$('#btnMenu').onclick = (e) => { e.stopPropagation(); $('#menuList').classList.toggle('hidden') }
+document.addEventListener('click', () => $('#menuList').classList.add('hidden'))
+$('#menuList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]'); if (!b) return
+  $('#menuList').classList.add('hidden')
+  if (b.dataset.act === 'import') pickImport(null)
+  if (b.dataset.act === 'help') openHelp()
+  if (b.dataset.act === 'demo') demo()
+})
+async function demo() { if (await act('demo.seed', {}, 'Paquets d\'exemple ajoutés')) loadDecks() }
+
+// ── Decks ─────────────────────────────────────────────────────────────────────
+
+function renderDecks() {
+  const v = $('#view')
+  const tot = state.decks.reduce((a, d) => ({ n: a.n + d.counts.new, l: a.l + d.counts.learning, r: a.r + d.counts.review, done: a.done + d.counts.done_today }), { n: 0, l: 0, r: 0, done: 0 })
+  v.innerHTML = `
+    <div class="small muted" style="margin-bottom:12px">Aujourd'hui : <b class="c-new">${tot.n}</b> nouvelle(s) · <b class="c-learn">${tot.l}</b> en apprentissage · <b class="c-rev">${tot.r}</b> à réviser · ${tot.done} révision(s) faite(s)</div>
+    <div class="decks">${state.decks.map((d) => {
+      const c = d.counts, due = c.new + c.learning + c.review
+      const learned = c.total - c.new_total
+      return `<div class="deck" style="--c:${d.color}">
+        <h3><span title="${esc(d.name)}">${esc(d.name)}</span>${d.type_answer ? '<span class="tag" title="Mode saisie de la réponse">⌨</span>' : ''}
+          <div class="menu"><button class="ghost icon" data-dmenu="${d.id}">⋯</button></div></h3>
+        ${d.description ? `<div class="desc">${esc(d.description)}</div>` : ''}
+        <div class="counts"><div><b class="c-new">${c.new}</b><span>nouvelles</span></div><div><b class="c-learn">${c.learning}</b><span>en cours</span></div><div><b class="c-rev">${c.review}</b><span>à réviser</span></div></div>
+        <div class="bar3" title="${c.mature} mûre(s) · ${learned - c.mature} jeune(s) · ${c.new_total} jamais vue(s)">
+          <i style="width:${c.total ? c.mature / c.total * 100 : 0}%;background:#16a34a"></i><i style="width:${c.total ? (learned - c.mature) / c.total * 100 : 0}%;background:#86efac"></i></div>
+        <div class="meta">${c.total} carte(s)${c.suspended ? ` · ${c.suspended} suspendue(s)` : ''} · ${d.new_per_day} nouvelles / jour</div>
+        <div class="actions"><button class="primary" data-study="${d.id}" ${due ? '' : 'disabled'} style="flex:1">${due ? '▶ Réviser (' + due + ')' : '✓ À jour'}</button>
+          <button data-add="${d.id}" title="Ajouter une carte">＋ Carte</button><button data-browse="${d.id}" title="Parcourir les cartes">☰</button></div>
+      </div>`
+    }).join('')}</div>`
+  v.onclick = (e) => {
+    const s = e.target.closest('[data-study]'), a = e.target.closest('[data-add]'), b = e.target.closest('[data-browse]'), m = e.target.closest('[data-dmenu]')
+    if (s) startStudy(+s.dataset.study)
+    if (a) openCardDialog(null, +a.dataset.add)
+    if (b) { state.browse = { deck: +b.dataset.browse, search: '', filter: '', sort: 'created', sel: new Set() }; render() }
+    if (m) { e.stopPropagation(); deckMenu(m, state.decks.find((d) => d.id === +m.dataset.dmenu)) }
+  }
+}
+
+function deckMenu(btn, d) {
+  $$('.deck .menu-list').forEach((x) => x.remove())
+  const list = document.createElement('div')
+  list.className = 'menu-list'
+  list.innerHTML = `<button data-x="edit">✏️ Options du paquet…</button><button data-x="browse">☰ Parcourir les cartes</button>
+    <button data-x="import">⬆️ Importer CSV / TSV…</button><button data-x="export">⬇️ Exporter…</button>
+    <button data-x="ahead" ${d.counts.total ? '' : 'disabled'}>⏩ Réviser en avance (apprentissage)</button><hr><button data-x="del" class="danger">🗑 Supprimer le paquet</button>`
+  btn.parentElement.appendChild(list)
+  const close = () => { list.remove(); document.removeEventListener('click', close) }
+  setTimeout(() => document.addEventListener('click', close), 0)
+  list.onclick = async (e) => {
+    const x = e.target.closest('[data-x]')?.dataset.x; if (!x) return
+    close()
+    if (x === 'edit') openDeckDialog(d)
+    if (x === 'browse') { state.browse = { deck: d.id, search: '', filter: '', sort: 'created', sel: new Set() }; render() }
+    if (x === 'import') pickImport(d.id)
+    if (x === 'export') openExport(d)
+    if (x === 'ahead') startStudy(d.id, true)
+    if (x === 'del') {
+      if (!confirm(`Supprimer le paquet « ${d.name} », ses ${d.counts.total} carte(s) et leur historique ?`)) return
+      if (await act('deck.delete', { id: d.id }, 'Paquet supprimé')) loadDecks()
+    }
+  }
+}
+
+function dialog(html, cls = '') {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog ${cls}">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); ov.remove() } })
+  return ov
+}
+
+function openDeckDialog(d) {
+  let color = d?.color || COLORS[state.decks.length % COLORS.length]
+  const ov = dialog(`<h3>${d ? 'Options du paquet' : 'Nouveau paquet'}</h3>
+    <div class="content">
+      <div class="field full"><label>Nom</label><input id="dName" maxlength="100" value="${esc(d?.name)}" placeholder="Ex. Vocabulaire espagnol"></div>
+      <div class="field full"><label>Description</label><textarea id="dDesc" maxlength="2000">${esc(d?.description)}</textarea></div>
+      <div class="field"><label>Nouvelles cartes par jour</label><input type="number" id="dNew" min="0" max="9999" value="${d?.new_per_day ?? 20}"></div>
+      <div class="field"><label>Révisions max. par jour</label><input type="number" id="dMax" min="0" max="99999" value="${d?.max_reviews ?? 200}"></div>
+      <div class="field row full"><input type="checkbox" id="dType" ${d?.type_answer ? 'checked' : ''}><label for="dType">Mode « saisie de la réponse » par défaut (taper le verso avant de le voir)</label></div>
+      <div class="field full"><label>Couleur</label><div class="swatches" id="dColors">${COLORS.map((c) => `<div class="sw ${c === color ? 'on' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')}</div></div>
+    </div>
+    <div class="foot"><span class="spacer"></span><button id="dCancel">Annuler</button><button class="primary" id="dSave">${d ? 'Enregistrer' : 'Créer'}</button></div>`)
+  const q = (s) => $(s, ov)
+  q('#dColors').onclick = (e) => { const s = e.target.closest('.sw'); if (!s) return; color = s.dataset.c; $$('.sw', ov).forEach((x) => x.classList.toggle('on', x === s)) }
+  q('#dCancel').onclick = () => ov.remove()
+  const save = async () => {
+    const r = await act('deck.save', { id: d?.id, deck: { name: q('#dName').value, description: q('#dDesc').value, color,
+      new_per_day: +q('#dNew').value || 0, max_reviews: +q('#dMax').value || 0, type_answer: q('#dType').checked } }, d ? 'Paquet enregistré' : 'Paquet créé')
+    if (r) { ov.remove(); loadDecks() }
+  }
+  q('#dSave').onclick = save
+  q('#dName').onkeydown = (e) => { if (e.key === 'Enter') save() }
+  setTimeout(() => q('#dName').focus(), 0)
+}
+
+// ── Card editor ───────────────────────────────────────────────────────────────
+
+function rte(id, html, ph) {
+  return `<div class="rte"><div class="tb" data-for="${id}">
+    <button data-cmd="bold" title="Gras (Ctrl+B)"><b>G</b></button><button data-cmd="italic" title="Italique (Ctrl+I)"><i>I</i></button>
+    <button data-cmd="underline" title="Souligné (Ctrl+U)"><u>S</u></button><button data-cmd="strikeThrough" title="Barré"><s>B</s></button>
+    <button data-cmd="insertUnorderedList" title="Liste à puces">•</button><button data-cmd="insertOrderedList" title="Liste numérotée">1.</button>
+    <button data-cmd="code" title="Code">&lt;/&gt;</button><button data-cmd="mark" title="Surligner">🖍</button>
+    <button data-cmd="image" title="Insérer une image (ou collez-la avec Ctrl+V)">🖼</button><button data-cmd="removeFormat" title="Effacer la mise en forme">⌫</button>
+  </div><div class="editor" contenteditable="true" id="${id}" data-ph="${esc(ph)}">${html || ''}</div></div>`
+}
+
+function resizeImage(file, max = 1000) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height))
+      const cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k)
+      const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0, cv.width, cv.height)
+      URL.revokeObjectURL(img.src)
+      const png = file.type === 'image/png' || file.type === 'image/gif'
+      const out = png ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.85)
+      resolve(png && out.length > 900000 ? cv.toDataURL('image/jpeg', 0.85) : out)
+    }
+    img.onerror = () => reject(new Error('Image illisible'))
+    img.src = URL.createObjectURL(file)
+  })
+}
+
+let lastEditor = null
+function bindEditors(root) {
+  $$('.editor', root).forEach((ed) => {
+    ed.addEventListener('focus', () => (lastEditor = ed))
+    ed.addEventListener('paste', async (e) => {
+      const items = [...(e.clipboardData?.items || [])]
+      const img = items.find((i) => i.type.startsWith('image/'))
+      e.preventDefault()
+      if (img) {
+        try { const url = await resizeImage(img.getAsFile()); ed.focus(); document.execCommand('insertHTML', false, `<img src="${url}">`) }
+        catch (err) { toast(err.message, true) }
+        return
+      }
+      document.execCommand('insertText', false, e.clipboardData.getData('text/plain'))
+    })
+    ed.addEventListener('drop', async (e) => {
+      const f = [...(e.dataTransfer?.files || [])].find((x) => x.type.startsWith('image/'))
+      if (!f) return
+      e.preventDefault()
+      const url = await resizeImage(f); ed.focus(); document.execCommand('insertHTML', false, `<img src="${url}">`)
+    })
+  })
+  $$('.tb', root).forEach((tb) => tb.addEventListener('mousedown', (e) => {
+    const b = e.target.closest('[data-cmd]'); if (!b) return
+    e.preventDefault()
+    const ed = $('#' + tb.dataset.for, root); ed.focus(); lastEditor = ed
+    const cmd = b.dataset.cmd
+    if (cmd === 'image') { $('#imgInput').click(); return }
+    if (cmd === 'code' || cmd === 'mark') {
+      const sel = getSelection(); if (!sel.rangeCount || sel.isCollapsed) return
+      document.execCommand('insertHTML', false, `<${cmd}>${esc(sel.toString())}</${cmd}>`); return
+    }
+    document.execCommand(cmd, false, null)
+  }))
+}
+$('#imgInput').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''
+  if (!f || !lastEditor) return
+  try { const url = await resizeImage(f); lastEditor.focus(); document.execCommand('insertHTML', false, `<img src="${url}">`) }
+  catch (err) { toast(err.message, true) }
+})
+
+async function openCardDialog(cardId, deckId, onDone) {
+  let card = null
+  if (cardId) { const r = await act('card.get', { id: cardId }); if (!r) return; card = r.card; deckId = card.deck_id }
+  const ov = dialog(`<h3>${card ? 'Modifier la carte' : 'Nouvelle carte'}</h3>
+    <div class="content">
+      <div class="field full"><label>Paquet</label><select id="cDeck">${state.decks.map((d) => `<option value="${d.id}" ${d.id === deckId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="field full"><label>Recto (question)</label>${rte('cFront', card?.front, 'Question… (Ctrl+V pour coller une image)')}</div>
+      <div class="field full"><label>Verso (réponse)</label>${rte('cBack', card?.back, 'Réponse…')}</div>
+      <div class="field full"><label>Étiquettes (séparées par des espaces)</label><input id="cTags" maxlength="500" value="${esc(card?.tags)}"></div>
+      ${card ? `<div class="field full small muted">${STATE_LBL[card.state]} · ${card.reps} révision(s) · ${card.lapses} oubli(s) · intervalle ${fmtIvl(card.ivl)} · facilité ${Math.round(card.ease * 100)} %${card.due && card.state !== 'new' ? ' · prochaine le ' + fmtDay(card.due) : ''}</div>` : ''}
+    </div>
+    <div class="foot">${card ? '<button class="danger" id="cDel">Supprimer</button>' : '<span class="small muted">Ctrl+Entrée : ajouter</span>'}<span class="spacer"></span>
+      <button id="cCancel">${card ? 'Annuler' : 'Fermer'}</button><button class="primary" id="cSave">${card ? 'Enregistrer' : 'Ajouter'}</button></div>`, 'large')
+  const q = (s) => $(s, ov)
+  bindEditors(ov)
+  q('#cCancel').onclick = () => ov.remove()
+  let added = 0
+  const save = async () => {
+    const r = await act('card.save', { id: card?.id, card: { deck_id: +q('#cDeck').value, front: q('#cFront').innerHTML, back: q('#cBack').innerHTML, tags: q('#cTags').value } }, null, 60000)
+    if (!r) return
+    if (card) { toast('Carte enregistrée'); ov.remove(); onDone?.(r.card) ; return }
+    added++
+    toast(`Carte ajoutée (${added})`)
+    q('#cFront').innerHTML = ''; q('#cBack').innerHTML = ''; q('#cFront').focus()
+    q('#cCancel').textContent = 'Terminer'
+    onDone?.(r.card)
+  }
+  q('#cSave').onclick = save
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save() } })
+  if (card) q('#cDel').onclick = async () => {
+    if (!confirm('Supprimer cette carte et son historique ?')) return
+    if (await act('cards.delete', { id: card.id }, 'Carte supprimée')) { ov.remove(); onDone?.(null) }
+  }
+  const obs = new MutationObserver(() => { if (!ov.isConnected) { obs.disconnect(); if (!state.study) refreshAfterEdit() } })
+  obs.observe(document.body, { childList: true })
+  setTimeout(() => q('#cFront').focus(), 0)
+}
+function refreshAfterEdit() { if (state.browse) loadBrowse(); else loadDecks() }
+
+// ── Study ─────────────────────────────────────────────────────────────────────
+
+async function startStudy(deckId, ahead = false) {
+  const deck = state.decks.find((d) => d.id === deckId)
+  state.study = { deck, typing: !!deck?.type_answer, shown: false, card: null, counts: deck?.counts, started: 0, done: 0, ahead }
+  render()
+  const r = await act('study.next', { deck_id: deckId, learn_ahead: ahead })
+  if (r) showNext(r)
+}
+function stopStudy() { state.study = null; clearTimeout(waitTimer); loadDecks() }
+
+let waitTimer
+function showNext(r) {
+  const s = state.study; if (!s) return
+  s.card = r.card; s.previews = r.previews; s.counts = r.counts; s.shown = false; s.typed = null; s.started = Date.now(); s.wait = r.wait_until
+  drawStudy()
+}
+
+function drawStudy() {
+  const s = state.study, root = $('#study'), c = s.counts || {}
+  const cur = s.card ? (s.card.state === 'new' ? 'n' : s.card.state === 'review' ? 'r' : 'l') : ''
+  root.innerHTML = `<div class="sbar"><button class="ghost" id="sBack" title="Retour aux paquets (Échap)">‹ Paquets</button><b>${esc(s.deck?.name)}</b>
+    <div class="cnt"><span class="c-new ${cur === 'n' ? 'cur' : ''}" title="Nouvelles">${c.new ?? 0}</span><span class="c-learn ${cur === 'l' ? 'cur' : ''}" title="En apprentissage">${c.learning ?? 0}</span><span class="c-rev ${cur === 'r' ? 'cur' : ''}" title="À réviser">${c.review ?? 0}</span></div>
+    <span class="spacer"></span>
+    <label class="small muted" title="Taper la réponse avant de retourner la carte"><input type="checkbox" id="sType" ${s.typing ? 'checked' : ''}> Saisie de la réponse</label>
+    <button class="ghost" id="sUndo" title="Annuler la dernière réponse (Ctrl+Z)">↶ Annuler</button>
+    <button class="ghost" id="sEdit" ${s.card ? '' : 'disabled'} title="Modifier la carte (E)">✎ Modifier</button></div>
+    <div class="stage" id="stage"></div><div class="answers" id="answers"></div>`
+  $('#sBack').onclick = stopStudy
+  $('#sType').onchange = (e) => { s.typing = e.target.checked; drawStudy() }
+  $('#sUndo').onclick = undo
+  $('#sEdit').onclick = editCurrent
+  const stage = $('#stage'), ans = $('#answers')
+  if (!s.card) {
+    const waitMin = s.wait ? Math.max(1, Math.round((new Date(s.wait.replace(' ', 'T')) - Date.now()) / 60000)) : 0
+    stage.innerHTML = `<div class="done"><div class="big">${s.wait ? '⏳' : '🎉'}</div><h2>${s.wait ? 'Pause' : 'Félicitations !'}</h2>
+      <p>${s.wait ? `Les cartes en cours d'apprentissage reviennent dans ${waitMin} min. Revenez plus tard ou continuez en avance.`
+        : `Vous avez terminé ce paquet pour aujourd'hui${s.done ? ` (${s.done} réponse(s) dans cette session)` : ''}.`}</p>
+      <div style="display:flex;gap:8px;justify-content:center">${s.wait ? '<button id="sAhead">⏩ Continuer en avance</button>' : ''}<button class="primary" id="sHome">Retour aux paquets</button></div></div>`
+    $('#sHome').onclick = stopStudy
+    const ah = $('#sAhead'); if (ah) ah.onclick = async () => { const r = await act('study.next', { deck_id: s.deck.id, learn_ahead: true }); if (r) showNext(r) }
+    ans.classList.add('hidden')
+    clearTimeout(waitTimer)
+    if (s.wait) waitTimer = setTimeout(async () => { if (state.study === s && !s.card) { const r = await act('study.next', { deck_id: s.deck.id }); if (r) showNext(r) } }, Math.min(waitMin * 60000, 60000))
+    return
+  }
+  const card = s.card
+  stage.innerHTML = `<div class="fcard"><div class="face" id="fFront">${card.front}</div>
+    ${s.typing && !s.shown ? `<div class="typebox"><input id="typeIn" placeholder="Tapez votre réponse puis Entrée" autocomplete="off" spellcheck="false"><button id="typeOk">Vérifier</button></div>` : ''}
+    ${s.shown ? `${s.typed != null ? diffHtml(s.typed, card.back_text) : ''}<hr class="sepline"><div class="face" id="fBack">${card.back}</div>` : ''}
+    ${card.tags ? `<div class="tags">${card.tags.split(' ').map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}</div>`
+  ans.classList.remove('hidden')
+  if (!s.shown) {
+    ans.innerHTML = `<button class="primary show" id="sShow">Afficher la réponse <small style="color:#c7d2fe">${s.typing ? 'Entrée' : 'Espace'}</small></button>`
+    $('#sShow').onclick = reveal
+    if (s.typing) { const ti = $('#typeIn'); ti.focus(); ti.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); reveal() } }; $('#typeOk').onclick = reveal }
+  } else {
+    const sugg = s.typed != null ? (s.correct ? '3' : '1') : ''
+    ans.innerHTML = RATINGS.map(([k, l]) => `<button class="r${k} ${sugg === k ? 'sugg' : ''}" data-rate="${k}">${l}<small>${s.previews?.[k] || ''} · <span class="kbd">${k}</span></small></button>`).join('')
+    ans.onclick = (e) => { const b = e.target.closest('[data-rate]'); if (b) answer(+b.dataset.rate) }
+  }
+}
+
+function reveal() {
+  const s = state.study; if (!s?.card || s.shown) return
+  if (s.typing) { const v = $('#typeIn')?.value ?? ''; s.typed = v; s.correct = norm(v) === norm(s.card.back_text) }
+  s.shown = true
+  drawStudy()
+}
+
+const norm = (t) => String(t || '').normalize('NFC').toLowerCase().replace(/\s+/g, ' ').replace(/[.!?;:]+$/, '').trim()
+function diffHtml(typed, expected) {
+  const a = norm(typed), b = norm(expected)
+  if (!a) return `<div class="diff"><div class="verdict muted">Aucune réponse saisie</div></div>`
+  if (a === b) return `<div class="diff"><div class="verdict" style="color:#4ade80">✓ Bonne réponse</div><span class="ok">${esc(typed)}</span></div>`
+  if (a.length > 300 || b.length > 300) return `<div class="diff"><div class="verdict" style="color:#f87171">✗ Réponse différente</div><span class="bad">${esc(typed)}</span></div>`
+  const n = a.length, m = b.length
+  const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1))
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1])
+  let i = 0, j = 0, out = ''
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) { out += `<span class="ok">${esc(a[i])}</span>`; i++; j++ }
+    else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { out += `<span class="miss">${esc(b[j])}</span>`; j++ }
+    else { out += `<span class="bad">${esc(a[i])}</span>`; i++ }
+  }
+  return `<div class="diff"><div class="verdict" style="color:#f87171">✗ Pas tout à fait — <span class="ok">correct</span> · <span class="bad">en trop</span> · <span class="miss">manquant</span></div>${out}</div>`
+}
+
+let answering = false
+async function answer(rating) {
+  const s = state.study; if (!s?.card || !s.shown || answering) return
+  answering = true
+  const r = await act('study.answer', { card_id: s.card.id, rating, elapsed_ms: Date.now() - s.started })
+  answering = false
+  if (!r) return
+  s.done++
+  showNext(r)
+}
+async function undo() {
+  const s = state.study; if (!s) return
+  const r = await act('study.undo', { deck_id: s.deck.id }, 'Dernière réponse annulée')
+  if (r) { s.done = Math.max(0, s.done - 1); showNext(r) }
+}
+function editCurrent() {
+  const s = state.study; if (!s?.card) return
+  openCardDialog(s.card.id, null, async (c) => {
+    if (!c) { const r = await act('study.next', { deck_id: s.deck.id }); if (r) showNext(r); return }
+    const g = await act('card.get', { id: c.id }); if (g) { s.card = { ...s.card, ...g.card }; drawStudy() }
+  })
+}
+
+document.addEventListener('keydown', (e) => {
+  const s = state.study
+  if (!s || $('.overlay')) return
+  if (e.key === 'Escape') { e.preventDefault(); stopStudy(); return }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return }
+  if (document.activeElement?.id === 'typeIn') return
+  if (!s.card) return
+  if (!s.shown && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); reveal(); return }
+  if (s.shown && /^[1-4]$/.test(e.key)) { e.preventDefault(); answer(+e.key); return }
+  if (s.shown && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); answer(s.typed != null ? (s.correct ? 3 : 1) : 3); return }
+  if (e.key === 'e' || e.key === 'E') { e.preventDefault(); editCurrent() }
+})
+
+// ── Browse ────────────────────────────────────────────────────────────────────
+
+async function renderBrowse() {
+  const b = state.browse, d = state.decks.find((x) => x.id === b.deck)
+  if (!d) { state.browse = null; return render() }
+  const v = $('#view')
+  v.onclick = null
+  v.innerHTML = `
+    <div class="toolbar"><button class="ghost" id="bBack">‹ Paquets</button><b style="font-size:14px">${esc(d.name)}</b><span class="spacer"></span>
+      <input type="search" id="bSearch" placeholder="Rechercher…" value="${esc(b.search)}">
+      <select id="bFilter"><option value="">Toutes</option>${[['new', 'Nouvelles'], ['learning', 'En apprentissage'], ['review', 'En révision'], ['due', 'Dues aujourd\'hui'], ['suspended', 'Suspendues']].map(([k, l]) => `<option value="${k}" ${b.filter === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select id="bSort">${[['created', 'Plus récentes'], ['due', 'Échéance'], ['ease', 'Les plus difficiles'], ['lapses', 'Plus d\'oublis']].map(([k, l]) => `<option value="${k}" ${b.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button class="primary" id="bAdd">＋ Carte</button></div>
+    <div id="bBulk" class="bulk hidden"></div>
+    <table class="cards"><thead><tr><th style="width:26px"><input type="checkbox" id="bAll"></th><th>Recto</th><th>Verso</th><th>État</th><th>Échéance</th><th>Intervalle</th><th>Facilité</th><th>Oublis</th></tr></thead><tbody id="bBody"></tbody></table>
+    <div class="small muted" id="bInfo" style="padding:10px 8px"></div>`
+  $('#bBack').onclick = () => { state.browse = null; loadDecks() }
+  $('#bAdd').onclick = () => openCardDialog(null, d.id)
+  let t
+  $('#bSearch').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { b.search = e.target.value; loadBrowse() }, 250) }
+  $('#bFilter').onchange = (e) => { b.filter = e.target.value; loadBrowse() }
+  $('#bSort').onchange = (e) => { b.sort = e.target.value; loadBrowse() }
+  $('#bAll').onchange = (e) => { b.sel = new Set(e.target.checked ? b.cards.map((c) => c.id) : []); drawBrowse() }
+  $('#bBody').onclick = (e) => {
+    const cb = e.target.closest('input[data-sel]')
+    if (cb) { cb.checked ? b.sel.add(+cb.dataset.sel) : b.sel.delete(+cb.dataset.sel); cb.closest('tr').classList.toggle('sel', cb.checked); drawBulk(); return }
+    const tr = e.target.closest('tr[data-id]'); if (tr) openCardDialog(+tr.dataset.id)
+  }
+  loadBrowse()
+}
+async function loadBrowse() {
+  const b = state.browse; if (!b) return
+  const r = await act('cards.list', { deck_id: b.deck, search: b.search, state: b.filter, sort: b.sort, limit: 1000 })
+  if (!r || state.browse !== b) return
+  b.cards = r.cards; b.total = r.total
+  b.sel = new Set([...b.sel].filter((id) => r.cards.some((c) => c.id === id)))
+  drawBrowse()
+}
+function drawBrowse() {
+  const b = state.browse, body = $('#bBody'); if (!body) return
+  const today = todayIso()
+  body.innerHTML = b.cards.map((c) => `<tr data-id="${c.id}" class="${b.sel.has(c.id) ? 'sel' : ''} ${c.suspended ? 'susp' : ''}">
+    <td><input type="checkbox" data-sel="${c.id}" ${b.sel.has(c.id) ? 'checked' : ''}></td><td title="${esc(c.front_text)}">${esc(c.front_text)}</td><td class="muted" title="${esc(c.back_text)}">${esc(c.back_text)}</td>
+    <td><span class="st ${c.state}">${c.suspended ? 'Suspendue' : STATE_LBL[c.state]}</span></td>
+    <td class="${c.state !== 'new' && c.due && c.due.slice(0, 10) <= today ? 'c-learn' : 'muted'}">${c.state === 'new' ? '—' : fmtDay(c.due)}</td>
+    <td>${c.state === 'review' ? fmtIvl(c.ivl) : '—'}</td><td>${c.reps ? Math.round(c.ease * 100) + ' %' : '—'}</td><td>${c.lapses || ''}</td></tr>`).join('')
+    || `<tr><td colspan="8" class="muted" style="text-align:center;padding:24px;cursor:default">Aucune carte.</td></tr>`
+  $('#bInfo').textContent = `${b.total} carte(s)${b.total > b.cards.length ? ` · ${b.cards.length} affichées` : ''}`
+  drawBulk()
+}
+function drawBulk() {
+  const b = state.browse, el = $('#bBulk'), n = b.sel.size
+  el.classList.toggle('hidden', !n); if (!n) return
+  const others = state.decks.filter((d) => d.id !== b.deck)
+  el.innerHTML = `<b>${n}</b> sélectionnée(s)<span class="spacer"></span>
+    <button data-b="suspend">⏸ Suspendre</button><button data-b="unsuspend">▶ Réactiver</button><button data-b="reset" title="Repasser en « nouvelle »">↺ Réinitialiser</button>
+    ${others.length ? `<select id="bMove"><option value="">Déplacer vers…</option>${others.map((d) => `<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select>` : ''}
+    <button class="danger" data-b="delete">🗑 Supprimer</button>`
+  const ids = [...b.sel]
+  el.onclick = async (e) => {
+    const x = e.target.closest('[data-b]')?.dataset.b; if (!x) return
+    if (x === 'delete' && !confirm(`Supprimer ${n} carte(s) et leur historique ?`)) return
+    if (x === 'reset' && !confirm(`Réinitialiser ${n} carte(s) ? Leur progression sera perdue.`)) return
+    const action = { suspend: 'cards.suspend', unsuspend: 'cards.suspend', reset: 'cards.reset', delete: 'cards.delete' }[x]
+    if (await act(action, { ids, suspended: x === 'suspend' }, 'Fait')) { if (x === 'delete') b.sel.clear(); loadBrowse() }
+  }
+  const mv = $('#bMove')
+  if (mv) mv.onchange = async () => { if (mv.value && await act('cards.move', { ids, deck_id: +mv.value }, 'Cartes déplacées')) { b.sel.clear(); loadBrowse() } }
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+const tip = $('#tip')
+function bindTips(root) {
+  root.addEventListener('mousemove', (e) => {
+    const el = e.target.closest('[data-tip]')
+    if (!el) { tip.classList.add('hidden'); return }
+    tip.innerHTML = el.dataset.tip; tip.classList.remove('hidden')
+    const r = tip.getBoundingClientRect()
+    tip.style.left = Math.min(innerWidth - r.width - 6, e.clientX + 12) + 'px'; tip.style.top = Math.min(innerHeight - r.height - 6, e.clientY + 14) + 'px'
+  })
+  root.addEventListener('mouseleave', () => tip.classList.add('hidden'))
+}
+function niceMax(v) { if (v <= 20) return Math.max(4, Math.ceil(v / 4) * 4); const mag = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 4, 8, 10].map((k) => k * mag).find((x) => x >= v) }
+function bars(items, width, stacks, labelFn, tipFn) {
+  const W = Math.max(300, width), H = 190, L = 36, R = 8, T = 10, B = 22
+  const max = niceMax(Math.max(1, ...items.map((it) => stacks.reduce((s, [k]) => s + (it[k] || 0), 0))))
+  const y = (v) => T + (1 - v / max) * (H - T - B)
+  const gw = (W - L - R) / items.length, bw = Math.max(2, Math.min(22, gw * 0.7))
+  let svg = `<svg width="${W}" height="${H}">`
+  for (let k = 0; k <= 4; k++) { const v = max * k / 4; svg += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 5}" y="${y(v) + 3.5}" text-anchor="end">${Math.round(v)}</text>` }
+  items.forEach((it, i) => {
+    const x = L + gw * i + (gw - bw) / 2
+    let acc = 0, rects = ''
+    for (const [k, color] of stacks) { const v = it[k] || 0; if (!v) continue; rects += `<rect x="${x}" y="${y(acc + v)}" width="${bw}" height="${y(acc) - y(acc + v)}" fill="${color}"/>`; acc += v }
+    svg += `<g data-tip="${esc(tipFn(it))}"><rect x="${L + gw * i}" y="${T}" width="${gw}" height="${H - T - B}" fill="transparent"/>${rects}</g>`
+    const lbl = labelFn(it, i); if (lbl) svg += `<text x="${x + bw / 2}" y="${H - 7}" text-anchor="middle">${lbl}</text>`
+  })
+  return svg + '</svg>'
+}
+async function renderStats() {
+  const v = $('#view')
+  v.onclick = null
+  const r = await act('stats', { deck_id: state.statsDeck ? +state.statsDeck : null, days: 30 })
+  if (!r || state.tab !== 'stats' || state.browse) return
+  const s = r.states, today = r.series[r.series.length - 1]
+  const week = r.series.slice(-7).reduce((a, x) => a + x.n, 0)
+  const tomorrow = r.forecast[1]?.n ?? 0
+  v.innerHTML = `
+    <div class="toolbar"><select id="stDeck"><option value="">Tous les paquets</option>${state.decks.map((d) => `<option value="${d.id}" ${String(d.id) === state.statsDeck ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Aujourd'hui</div><div class="v">${today.n}</div><div class="s">révision(s) · ${today.minutes} min</div></div>
+      <div class="kpi"><div class="l">7 derniers jours</div><div class="v">${week}</div><div class="s">${Math.round(week / 7)} / jour en moyenne</div></div>
+      <div class="kpi"><div class="l">Série</div><div class="v">${r.streak} 🔥</div><div class="s">jour(s) consécutif(s) de révision</div></div>
+      <div class="kpi"><div class="l">Rétention (30 j)</div><div class="v">${r.retention == null ? '—' : Math.round(r.retention * 100) + ' %'}</div><div class="s">${r.retention_n} révision(s) · cartes mûres : ${r.mature_retention == null ? '—' : Math.round(r.mature_retention * 100) + ' %'}</div></div>
+      <div class="kpi"><div class="l">Demain</div><div class="v">${tomorrow}</div><div class="s">carte(s) à réviser prévue(s)</div></div>
+      <div class="kpi"><div class="l">Cartes</div><div class="v">${s.total}</div><div class="s"><span class="c-new">${s.new} nouv.</span> · <span class="c-learn">${s.learning} appr.</span> · ${s.young} jeunes · ${s.mature} mûres${r.avg_ease ? ' · facilité moy. ' + Math.round(r.avg_ease * 100) + ' %' : ''}</div></div>
+    </div>
+    <div class="panel"><h3>Révisions par jour <span class="muted">30 derniers jours</span><span class="spacer"></span>
+      <span class="legend"><span><i style="background:#ef4444"></i>Encore</span><span><i style="background:#f97316"></i>Difficile</span><span><i style="background:#22c55e"></i>Bien</span><span><i style="background:#38bdf8"></i>Facile</span></span></h3><div id="chRev"></div></div>
+    <div class="panel"><h3>Prévision <span class="muted">cartes dues sur 30 jours (retards inclus aujourd'hui)</span></h3><div id="chFc"></div></div>
+    <div class="panel"><h3>Répartition des cartes</h3>
+      <div class="bar3" style="height:14px;border-radius:7px">${[['new', '#60a5fa'], ['learning', '#f97316'], ['young', '#86efac'], ['mature', '#16a34a']].map(([k, c]) => `<i style="width:${s.total ? s[k] / s.total * 100 : 0}%;background:${c}" title="${k}"></i>`).join('')}</div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:#60a5fa"></i>Nouvelles ${s.new}</span><span><i style="background:#f97316"></i>En apprentissage ${s.learning}</span><span><i style="background:#86efac"></i>Jeunes (&lt; 21 j) ${s.young}</span><span><i style="background:#16a34a"></i>Mûres (≥ 21 j) ${s.mature}</span>${s.suspended ? `<span>Suspendues ${s.suspended}</span>` : ''}</div></div>`
+  $('#stDeck').onchange = (e) => { state.statsDeck = e.target.value; renderStats() }
+  const w = $('#chRev').clientWidth
+  const lbl = (it, i) => (i % 5 === 0 || i === 29 ? new Date(it.day + 'T00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'numeric' }) : '')
+  $('#chRev').innerHTML = bars(r.series, w, [['again', '#ef4444'], ['hard', '#f97316'], ['good', '#22c55e'], ['easy', '#38bdf8']], lbl,
+    (it) => `<b>${fmtDay(it.day)}</b><br>${it.n} révision(s) dont ${it.new} nouvelle(s)<br>Encore ${it.again} · Difficile ${it.hard} · Bien ${it.good} · Facile ${it.easy}<br>${it.minutes} min`)
+  $('#chFc').innerHTML = bars(r.forecast, w, [['n', '#818cf8']], lbl, (it) => `<b>${fmtDay(it.day)}</b><br>${it.n} carte(s)`)
+  bindTips(v)
+}
+
+// ── Import / export ───────────────────────────────────────────────────────────
+
+let importDeck = null
+function pickImport(deckId) {
+  if (!state.decks.length) { toast('Créez d\'abord un paquet', true); return }
+  importDeck = deckId; $('#fileInput').click()
+}
+$('#fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; e.target.value = ''
+  if (!file) return
+  if (file.size > 10 * 1024 * 1024) { toast('Fichier trop volumineux (10 Mo max.)', true); return }
+  const buf = await file.arrayBuffer()
+  let text
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf) } catch { text = new TextDecoder('windows-1252').decode(buf) }
+  openImport(file.name, text)
+})
+
+async function openImport(name, text, sep) {
+  const pv = await act('import.preview', { text, separator: sep }, null, 60000)
+  if (!pv) return
+  $$('.overlay.imp').forEach((o) => o.remove())
+  const cfg = { sep: pv.separator, header: false, front: 0, back: 1, tags: pv.columns > 2 ? 2 : '', html: false, dup: true }
+  const first = pv.rows[0] || []
+  cfg.header = first.some((c) => /^(recto|verso|front|back|question|r[ée]ponse|tags?|[ée]tiquettes?)$/i.test(c.trim()))
+  const ov = dialog(`<h3>Importer « ${esc(name)} »</h3>
+    <div class="content">
+      <div class="field"><label>Paquet de destination</label><select id="iDeck">${state.decks.map((d) => `<option value="${d.id}" ${d.id === importDeck ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Séparateur</label><select id="iSep">${[['tab', 'Tabulation (TSV)'], [';', 'Point-virgule ;'], [',', 'Virgule ,'], ['|', 'Barre |']].map(([k, l]) => `<option value="${k}" ${k === pv.separator ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label>Colonne recto</label><select id="iF"></select></div>
+      <div class="field"><label>Colonne verso</label><select id="iB"></select></div>
+      <div class="field"><label>Colonne étiquettes</label><select id="iT"></select></div>
+      <div class="field" style="justify-content:flex-end;gap:6px">
+        <label style="color:var(--text)"><input type="checkbox" id="iH" ${cfg.header ? 'checked' : ''}> 1re ligne = en-têtes</label>
+        <label style="color:var(--text)"><input type="checkbox" id="iHtml"> Le texte contient du HTML</label>
+        <label style="color:var(--text)"><input type="checkbox" id="iDup" checked> Ignorer les recto déjà présents</label></div>
+      <div class="field full"><div class="maptable" id="iTable"></div><div class="small muted" style="margin-top:4px">${pv.row_count} ligne(s) · aperçu des 15 premières</div></div>
+    </div>
+    <div class="foot"><span class="spacer"></span><button id="iCancel">Annuler</button><button class="primary" id="iGo">Importer</button></div>`, 'large imp')
+  ov.classList.add('imp')
+  const q = (s) => $(s, ov)
+  const opts = (sel, none) => (none ? '<option value="">— Aucune —</option>' : '') + Array.from({ length: pv.columns }, (_, i) => `<option value="${i}" ${String(sel) === String(i) ? 'selected' : ''}>Colonne ${i + 1}${cfg.header && first[i] ? ' — ' + esc(first[i].slice(0, 20)) : ''}</option>`).join('')
+  const draw = () => {
+    q('#iF').innerHTML = opts(cfg.front); q('#iB').innerHTML = opts(cfg.back); q('#iT').innerHTML = opts(cfg.tags, true)
+    const role = { [cfg.front]: 'Recto', [cfg.back]: 'Verso' }; if (cfg.tags !== '') role[cfg.tags] = 'Étiquettes'
+    q('#iTable').innerHTML = `<table><thead><tr>${Array.from({ length: pv.columns }, (_, i) => `<th class="${role[i] ? 'm' : ''}">${i + 1}${role[i] ? ' · ' + role[i] : ''}</th>`).join('')}</tr></thead>
+      <tbody>${pv.rows.map((r, ri) => `<tr class="${cfg.header && ri === 0 ? 'skip' : ''}">${Array.from({ length: pv.columns }, (_, i) => `<td>${esc(r[i] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+  }
+  draw()
+  q('#iF').onchange = (e) => { cfg.front = +e.target.value; draw() }
+  q('#iB').onchange = (e) => { cfg.back = +e.target.value; draw() }
+  q('#iT').onchange = (e) => { cfg.tags = e.target.value === '' ? '' : +e.target.value; draw() }
+  q('#iH').onchange = (e) => { cfg.header = e.target.checked; draw() }
+  q('#iSep').onchange = (e) => { ov.remove(); openImport(name, text, e.target.value) }
+  q('#iCancel').onclick = () => ov.remove()
+  q('#iGo').onclick = async () => {
+    q('#iGo').disabled = true
+    const r = await act('import.commit', { text, separator: cfg.sep, deck_id: +q('#iDeck').value, has_header: cfg.header, front_col: cfg.front, back_col: cfg.back,
+      tags_col: cfg.tags, html: q('#iHtml').checked, skip_duplicates: q('#iDup').checked }, null, 120000)
+    q('#iGo').disabled = false
+    if (!r) return
+    toast(`${r.added} carte(s) importée(s)${r.duplicates ? ` · ${r.duplicates} doublon(s) ignoré(s)` : ''}${r.invalid ? ` · ${r.invalid} ligne(s) invalide(s)` : ''}`)
+    ov.remove(); refreshAfterEdit()
+  }
+}
+
+function download(name, content, type) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type }))
+  a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+function openExport(d) {
+  const ov = dialog(`<h3>Exporter « ${esc(d.name)} »</h3>
+    <div class="content">
+      <div class="field"><label>Format</label><select id="eSep"><option value="tab">TSV (tabulation)</option><option value=";">CSV (point-virgule, Excel)</option><option value=",">CSV (virgule)</option></select></div>
+      <div class="field"><label>Contenu</label><select id="eHtml"><option value="">Texte brut (images → [image])</option><option value="1">HTML (mise en forme et images)</option></select></div>
+      <div class="field row full"><input type="checkbox" id="eHead" checked><label for="eHead">Ligne d'en-têtes (Recto, Verso, Étiquettes)</label></div>
+      <div class="field full small muted">Le fichier exporté peut être réimporté ici ou dans d'autres logiciels de cartes (colonnes recto / verso / étiquettes). L'historique de révision n'est pas exporté.</div>
+    </div>
+    <div class="foot"><span class="spacer"></span><button id="eCancel">Annuler</button><button class="primary" id="eGo">Exporter</button></div>`)
+  const q = (s) => $(s, ov)
+  q('#eCancel').onclick = () => ov.remove()
+  q('#eGo').onclick = async () => {
+    const sep = q('#eSep').value
+    const r = await act('export', { deck_id: d.id, separator: sep, html: !!q('#eHtml').value, header: q('#eHead').checked }, null, 60000)
+    if (!r) return
+    const ext = sep === 'tab' ? 'tsv' : 'csv'
+    download(`${d.name.replace(/[\\/:*?"<>|]+/g, '_')}.${ext}`, '﻿' + r.text, ext === 'tsv' ? 'text/tab-separated-values' : 'text/csv')
+    toast(`${r.count} carte(s) exportée(s)`); ov.remove()
+  }
+}
+
+function openHelp() {
+  const ov = dialog(`<h3>Algorithme et raccourcis</h3>
+    <div class="content" style="display:block;line-height:1.55;color:#c4c4cc">
+      <p style="margin-bottom:8px"><b>Répétition espacée — SM-2 (variante proche d'Anki).</b> Chaque carte a un <i>intervalle</i> et une <i>facilité</i> (250 % au départ).</p>
+      <ul style="margin:0 0 10px 18px">
+        <li><b>Nouvelle carte</b> : étapes d'apprentissage de 1 min puis 10 min. « Bien » passe à l'étape suivante, puis la carte est révisée le lendemain ; « Facile » l'envoie directement à 4 jours ; « Encore » recommence à 1 min.</li>
+        <li><b>Révision</b> : « Bien » multiplie l'intervalle par la facilité (avec un bonus si la carte était en retard) ; « Difficile » ×1,2 et facilité −15 points ; « Facile » × facilité × 1,3 et facilité +15 points.</li>
+        <li><b>Oubli (« Encore »)</b> : facilité −20 points (minimum 130 %), intervalle divisé par 2, et réapprentissage de 10 min avant de repartir.</li>
+        <li>Un léger aléa (±5 %) est appliqué aux intervalles d'au moins 7 jours pour étaler la charge. Une carte est « mûre » à partir de 21 jours d'intervalle.</li>
+        <li>Chaque jour : d'abord les cartes en apprentissage, puis les révisions dues, puis les nouvelles, dans la limite fixée par paquet.</li>
+      </ul>
+      <p><b>Raccourcis en révision</b> : <span class="kbd">Espace</span>/<span class="kbd">Entrée</span> retourner la carte (puis « Bien »), <span class="kbd">1</span> Encore, <span class="kbd">2</span> Difficile, <span class="kbd">3</span> Bien, <span class="kbd">4</span> Facile,
+        <span class="kbd">E</span> modifier, <span class="kbd">Ctrl+Z</span> annuler la dernière réponse, <span class="kbd">Échap</span> quitter. En mode saisie, <span class="kbd">Entrée</span> vérifie la réponse (comparaison sans tenir compte de la casse).</p>
+    </div>
+    <div class="foot"><span class="spacer"></span><button class="primary" id="hOk">OK</button></div>`)
+  $('#hOk', ov).onclick = () => ov.remove()
+}
+
+loadDecks()
+</script>
+</body>
+</html>

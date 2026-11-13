@@ -1,0 +1,32 @@
+{
+  "id": "log-viewer",
+  "name": "Visionneuse de journaux",
+  "version": "1.0.0",
+  "description": "Ouverture de gros fichiers de log (lecture par blocs), suivi en direct avec gestion de la rotation, coloration par niveau, filtres (niveau, texte, regex, période), surlignage, signets, onglets et export.",
+  "category": "Développement",
+  "tags": [
+    "logs",
+    "journaux",
+    "tail",
+    "debug",
+    "fichiers"
+  ],
+  "icon": "📜",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

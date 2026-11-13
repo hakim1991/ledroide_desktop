@@ -1,0 +1,31 @@
+{
+  "id": "flashcards",
+  "name": "Cartes de révision",
+  "version": "1.0.0",
+  "description": "Cartes de révision à répétition espacée (SM-2) : paquets, cartes recto/verso avec mise en forme et images collées, session de révision avec raccourcis clavier, mode saisie de la réponse, statistiques (révisions, rétention, prévisions), import/export CSV/TSV.",
+  "category": "Productivité",
+  "tags": [
+    "révision",
+    "mémorisation",
+    "flashcards",
+    "apprentissage",
+    "srs"
+  ],
+  "icon": "🗂️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

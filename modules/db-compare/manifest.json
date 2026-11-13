@@ -1,0 +1,36 @@
+{
+  "id": "db-compare",
+  "name": "Comparateur de bases",
+  "version": "1.0.0",
+  "description": "Compare deux bases SQLite ou PostgreSQL : schéma (tables, colonnes, types, clés, index) et données d'une table par clé primaire, puis génère le script SQL de migration dans le dialecte cible. Lecture seule : aucune écriture dans les bases comparées.",
+  "category": "Développement",
+  "tags": [
+    "base de données",
+    "sqlite",
+    "postgresql",
+    "sql",
+    "migration",
+    "diff"
+  ],
+  "icon": "🗄️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "filesystem",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "psycopg[binary]>=3,<4"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

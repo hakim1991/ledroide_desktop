@@ -1,0 +1,82 @@
+{
+  "id": "doc-summarizer",
+  "name": "Résumeur de documents",
+  "version": "1.0.0",
+  "description": "Résume des documents avec l'API Claude : PDF, Word (.docx), texte/Markdown, page web ou texte collé. Résumé court/moyen/détaillé, points clés, plan et questions-réponses sur le document, dans la langue choisie. Documents longs découpés automatiquement (résumé hiérarchique), historique et export Markdown.",
+  "category": "Productivité",
+  "tags": [
+    "ia",
+    "claude",
+    "résumé",
+    "pdf",
+    "docx",
+    "web",
+    "lecture"
+  ],
+  "icon": "📰",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "anthropic>=2,<3",
+      "pypdf>=5,<7"
+    ],
+    "modules": []
+  },
+  "env": [
+    {
+      "key": "ANTHROPIC_API_KEY",
+      "description": "Clé d'API Anthropic (console.anthropic.com)",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "config_schema": {
+    "default_model": {
+      "type": "string",
+      "title": "Modèle par défaut",
+      "default": "claude-opus-5-5",
+      "enum": [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5"
+      ]
+    },
+    "max_tokens": {
+      "type": "integer",
+      "title": "Longueur maximale d'une réponse (max_tokens)",
+      "default": 32000,
+      "minimum": 1024,
+      "maximum": 128000
+    },
+    "effort": {
+      "type": "string",
+      "title": "Effort de réflexion",
+      "default": "medium",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "direct_max_tokens": {
+      "type": "integer",
+      "title": "Taille maximale envoyée d'un bloc (tokens estimés) avant découpage",
+      "default": 150000,
+      "minimum": 20000,
+      "maximum": 800000
+    }
+  }
+}

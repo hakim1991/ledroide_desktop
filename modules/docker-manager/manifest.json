@@ -1,0 +1,31 @@
+{
+  "id": "docker-manager",
+  "name": "Docker",
+  "version": "1.0.0",
+  "description": "Gestion de Docker via le CLI : conteneurs (démarrer, arrêter, journaux en direct, statistiques, inspection), images (pull avec progression), volumes, réseaux, projets Compose et nettoyage.",
+  "category": "Développement",
+  "tags": [
+    "docker",
+    "conteneurs",
+    "images",
+    "compose",
+    "devops"
+  ],
+  "icon": "🐳",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "process"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "config_schema": {}
+}

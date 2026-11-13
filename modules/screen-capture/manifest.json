@@ -1,0 +1,38 @@
+{
+  "id": "screen-capture",
+  "name": "Capture d'écran",
+  "version": "1.0.0",
+  "description": "Captures d'écran (tous les écrans, un écran ou une zone) avec retardateur, éditeur d'annotations (flèches, rectangles, texte, surligneur, flou/pixellisation, recadrage), copie dans le presse-papiers, enregistrement PNG/JPG, historique avec miniatures ; enregistrement vidéo de l'écran en MP4 et export GIF.",
+  "category": "Images & médias",
+  "tags": [
+    "capture",
+    "écran",
+    "screenshot",
+    "annotation",
+    "vidéo",
+    "gif"
+  ],
+  "icon": "📸",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "filesystem",
+    "process"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "mss>=9,<11",
+      "Pillow>=11,<13",
+      "imageio-ffmpeg>=0.5,<1"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

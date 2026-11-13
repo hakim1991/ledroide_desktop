@@ -1,0 +1,34 @@
+{
+  "id": "password-vault",
+  "name": "Coffre de mots de passe",
+  "version": "1.0.0",
+  "description": "Gestionnaire de mots de passe chiffré (AES-256-GCM, clé dérivée par scrypt) : entrées avec dossiers, tags et favoris, générateur et phrases de passe, robustesse, codes TOTP, copie avec effacement automatique, import CSV Chrome/Firefox/Bitwarden et export chiffré. Verrouillage automatique.",
+  "category": "Sécurité",
+  "tags": [
+    "mot de passe",
+    "coffre",
+    "chiffrement",
+    "totp",
+    "2fa",
+    "générateur"
+  ],
+  "icon": "🔐",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem"
+  ],
+  "database": {
+    "type": "none"
+  },
+  "dependencies": {
+    "python": [
+      "cryptography>=42,<51"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

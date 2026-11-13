@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Visionneuse de journaux</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --lv-error: #f87171; --lv-warn: #fbbf24; --lv-info: #60a5fa; --lv-debug: #71717a;
+    --row: 19px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 4px 9px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.icon { padding: 4px 7px; min-width: 28px; }
+  button.tog.on { background: rgba(99,102,241,.22); border-color: var(--accent); color: #fff; }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 4px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input.bad { border-color: var(--err); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  input[type=datetime-local] { color-scheme: dark; padding: 3px 6px; }
+  label.chk { display: inline-flex; align-items: center; gap: 5px; color: #a1a1aa; cursor: pointer; }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+  .sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+
+  header { display: flex; align-items: flex-end; gap: 6px; padding: 6px 10px 0; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; padding-bottom: 8px; margin-right: 6px; }
+  #tabs { display: flex; gap: 2px; overflow-x: auto; flex: 1; min-width: 0; }
+  #tabs::-webkit-scrollbar { height: 4px; }
+  .tab { display: flex; align-items: center; gap: 6px; padding: 6px 8px 7px 12px; border: 1px solid transparent; border-bottom: none;
+         border-radius: 8px 8px 0 0; color: #a1a1aa; cursor: pointer; max-width: 230px; flex-shrink: 0; }
+  .tab:hover { background: var(--surface2); }
+  .tab.on { background: var(--bg); border-color: var(--border); color: var(--text); margin-bottom: -1px; }
+  .tab .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab .x { border: none; background: transparent; padding: 0 4px; color: var(--muted); border-radius: 4px; }
+  .tab .x:hover { color: var(--text); background: #3f3f46; }
+  .tab .live { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: pulse 1.2s infinite; flex-shrink: 0; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  #btnOpen { margin-bottom: 6px; }
+
+  #welcome { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 40px 20px; }
+  .wcard { width: min(720px, 100%); display: flex; flex-direction: column; gap: 14px; }
+  .wcard h2 { font-size: 18px; }
+  .wcard p { color: #a1a1aa; line-height: 1.5; }
+  .openrow { display: flex; gap: 8px; }
+  .openrow input { flex: 1; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .panel h4 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 10px 12px 6px; font-weight: 500; }
+  .rlist .r { display: flex; align-items: center; gap: 10px; padding: 7px 12px; cursor: pointer; border-top: 1px solid var(--line); }
+  .rlist .r:hover { background: var(--surface2); }
+  .rlist .r .p { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rlist .r .p small { color: var(--muted); margin-left: 6px; }
+  .rlist .r.missing .p { color: var(--muted); text-decoration: line-through; }
+  .rlist .empty { padding: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+
+  #viewer { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; background: var(--bg); }
+  .lvchip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface2);
+            cursor: pointer; font-size: 12px; user-select: none; color: #a1a1aa; }
+  .lvchip .d { width: 8px; height: 8px; border-radius: 50%; }
+  .lvchip b { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .lvchip.on { color: var(--text); border-color: #52525b; }
+  .lvchip:not(.on) { opacity: .45; }
+  #fText { width: 220px; }
+  input[type=datetime-local] { width: 182px; }
+  .hl-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border-radius: 999px; font-size: 12px; color: #111; font-weight: 500; }
+  .hl-chip button { border: none; background: transparent; padding: 0 4px; color: #111; }
+  #hlInput { width: 140px; }
+  #gotoInput { width: 90px; }
+  #findInput { width: 160px; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+               z-index: 50; min-width: 260px; max-height: 380px; overflow: auto; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  .menu-list .bm { display: block; }
+  .menu-list .bm small { display: block; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 360px; font-family: ui-monospace, Consolas, monospace; }
+  .menu-list .empty { padding: 8px 10px; color: var(--muted); }
+
+  #progress { height: 2px; background: transparent; flex-shrink: 0; }
+  #progress > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  #scroll { flex: 1; min-height: 0; overflow: auto; position: relative; background: #0c0c0f; outline: none; }
+  #spacer { width: 1px; }
+  #rows { position: absolute; left: 0; top: 0; min-width: 100%; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; }
+  .ln { height: var(--row); line-height: var(--row); white-space: pre; display: flex; border-left: 3px solid transparent; cursor: text; }
+  .ln:hover { background: #15151a; }
+  .ln .g { position: sticky; left: 0; flex-shrink: 0; width: var(--gw, 64px); text-align: right; padding-right: 10px; color: #52525b; background: #111114;
+           user-select: none; cursor: pointer; border-right: 1px solid var(--line); }
+  .ln .g:hover { color: var(--text); }
+  .ln .t { padding: 0 10px; }
+  .ln.lv4 { border-left-color: var(--lv-error); } .ln.lv4 .t { color: #fca5a5; }
+  .ln.lv3 { border-left-color: var(--lv-warn); } .ln.lv3 .t { color: #fde68a; }
+  .ln.lv2 { border-left-color: rgba(96,165,250,.55); }
+  .ln.lv1 .t { color: #8b8b95; }
+  .ln .kw4 { color: #fff; background: rgba(239,68,68,.55); border-radius: 3px; padding: 0 2px; font-weight: 600; }
+  .ln .kw3 { color: #111; background: var(--lv-warn); border-radius: 3px; padding: 0 2px; font-weight: 600; }
+  .ln .kw2 { color: var(--lv-info); font-weight: 600; }
+  .ln .kw1 { color: #a1a1aa; font-weight: 600; }
+  .ln .ts { color: #7dd3fc; opacity: .8; }
+  .ln.sel { background: rgba(99,102,241,.22) !important; }
+  .ln.cur { box-shadow: inset 0 0 0 1px var(--accent); }
+  .ln.bm .g { color: #fbbf24; }
+  .ln.bm .g::before { content: '★ '; }
+  .ln.pending .t { color: #3f3f46; }
+  .ln .more { color: var(--muted); font-style: italic; }
+  mark { border-radius: 2px; color: #111; padding: 0 1px; }
+  mark.f { background: rgba(250,204,21,.85); }
+  #emptyView { position: absolute; inset: 40px 0 auto; text-align: center; color: var(--muted); pointer-events: none; }
+
+  #detail { border-top: 1px solid var(--border); background: var(--surface); max-height: 30%; min-height: 0; display: flex; flex-direction: column; flex-shrink: 0; }
+  #detail .dh { display: flex; align-items: center; gap: 8px; padding: 4px 10px; color: var(--muted); font-size: 12px; }
+  #detail pre { flex: 1; overflow: auto; padding: 4px 12px 10px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; user-select: text; line-height: 1.5; }
+  #status { display: flex; align-items: center; gap: 14px; padding: 4px 10px; border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 12px; flex-shrink: 0; white-space: nowrap; overflow: hidden; }
+  #status .path { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  #status .warn { color: var(--warn); }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(640px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); margin-top: 12px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .crumbs { display: flex; gap: 6px; align-items: center; }
+  .crumbs input { flex: 1; }
+  .flist { border: 1px solid var(--border); border-radius: 8px; height: 340px; overflow: auto; background: var(--bg); }
+  .flist .it { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .flist .it:hover { background: var(--surface2); }
+  .flist .it .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .flist .it small { color: var(--muted); }
+  .flist .it.log .n { color: #93c5fd; }
+  .progressbar { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .progressbar > div { height: 100%; background: var(--accent); width: 0; }
+
+  #toast { position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">📜 Journaux</span>
+  <div id="tabs"></div>
+  <button id="btnOpen" title="Ouvrir un fichier (Ctrl+O)">＋ Ouvrir</button>
+</header>
+
+<div id="welcome">
+  <div class="wcard">
+    <h2>Ouvrir un fichier de journal</h2>
+    <p>Lecture par blocs : les fichiers de plusieurs gigaoctets s'ouvrent instantanément. Suivi en direct, coloration par niveau, filtres, surlignage et signets.</p>
+    <div class="openrow">
+      <input id="wPath" class="mono" placeholder="C:\chemin\vers\application.log" />
+      <button class="primary" id="wOpen">Ouvrir</button>
+      <button id="wBrowse">📁 Parcourir…</button>
+    </div>
+    <div class="panel">
+      <h4>Fichiers récents</h4>
+      <div class="rlist" id="recentList"></div>
+    </div>
+    <div class="openrow">
+      <button id="wDemo">🧪 Ouvrir un journal d'exemple</button>
+      <button id="wDemoLive" title="Ajoute des lignes au journal d'exemple pendant 10 minutes">⏵ Exemple en direct</button>
+    </div>
+  </div>
+</div>
+
+<div id="viewer" class="hidden">
+  <div class="bar">
+    <span id="lvChips"></span>
+    <span class="sep"></span>
+    <input type="search" id="fText" placeholder="Filtrer : texte…" title="Entrée pour appliquer" />
+    <button class="icon tog" id="fRegex" title="Expression régulière">.*</button>
+    <button class="icon tog" id="fCase" title="Respecter la casse">Aa</button>
+    <button class="icon tog" id="fInvert" title="Exclure les lignes correspondantes">¬</button>
+    <span class="sep"></span>
+    <div class="menu">
+      <button id="btnPeriod" title="Filtrer par plage de temps">🕒 Période</button>
+      <div class="menu-list hidden" id="periodBox" style="padding:10px;display:flex;flex-direction:column;gap:8px">
+        <div class="field"><label>Du</label><input type="datetime-local" id="fFrom" step="1" /></div>
+        <div class="field"><label>Au</label><input type="datetime-local" id="fTo" step="1" /></div>
+        <span class="muted" style="font-size:11.5px">Les lignes sans horodatage héritent de celui de la ligne précédente.</span>
+      </div>
+    </div>
+    <button class="icon" id="fClear" title="Effacer tous les filtres">✕</button>
+  </div>
+  <div class="bar">
+    <input id="hlInput" placeholder="＋ Surligner…" title="Entrée pour ajouter un terme surligné" />
+    <span id="hlChips"></span>
+    <span class="spacer"></span>
+    <input type="search" id="findInput" placeholder="Rechercher (Ctrl+F)" />
+    <button class="icon" id="findPrev" title="Précédent (Maj+F3)">↑</button>
+    <button class="icon" id="findNext" title="Suivant (F3)">↓</button>
+    <span class="sep"></span>
+    <input id="gotoInput" placeholder="Ligne n°" title="Aller à la ligne (Ctrl+G)" />
+    <div class="menu">
+      <button id="btnBm" title="Signets (Ctrl+B pour basculer)">★ Signets</button>
+      <div class="menu-list hidden" id="bmList"></div>
+    </div>
+    <button class="tog" id="btnFollow" title="Suivre les nouvelles lignes (tail -f)">⏵ Suivre</button>
+    <select id="encSel" title="Encodage">
+      <option value="">Encodage auto</option>
+      <option value="utf-8">UTF-8</option><option value="latin-1">Latin-1</option><option value="cp1252">Windows-1252</option>
+      <option value="utf-16-le">UTF-16 LE</option><option value="utf-16-be">UTF-16 BE</option>
+    </select>
+    <div class="menu">
+      <button id="btnExport" title="Exporter">⬇ Exporter</button>
+      <div class="menu-list hidden" id="exportList">
+        <button data-x="download">⬇ Télécharger la vue (filtrée)</button>
+        <button data-x="save">💾 Enregistrer la vue vers un fichier…</button>
+        <hr>
+        <button data-x="copy">📋 Copier les lignes sélectionnées</button>
+        <button data-x="save-sel">💾 Enregistrer la sélection…</button>
+      </div>
+    </div>
+  </div>
+  <div id="progress"><div></div></div>
+  <div id="scroll" tabindex="0">
+    <div id="spacer"></div>
+    <div id="rows"></div>
+    <div id="emptyView" class="hidden"></div>
+  </div>
+  <div id="detail" class="hidden">
+    <div class="dh"><span id="detailTitle"></span><span class="spacer"></span><button class="icon" id="detailCopy" title="Copier">📋</button><button class="icon" id="detailClose" title="Fermer">✕</button></div>
+    <pre id="detailText"></pre>
+  </div>
+  <div id="status">
+    <span class="path mono" id="stPath"></span>
+    <span id="stFormat"></span>
+    <span id="stEnc"></span>
+    <span id="stSize"></span>
+    <span id="stLines"></span>
+    <span id="stSel"></span>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'log-viewer'
+const call = (action, payload = {}, timeout = 60000) => window.ledroide.call(MODULE_ID, action, payload, { timeout })
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const ROW = 19
+const MAXH = 8000000
+const LV = [
+  { lv: 4, key: 'error', label: 'ERREUR', color: 'var(--lv-error)' },
+  { lv: 3, key: 'warn', label: 'AVERT.', color: 'var(--lv-warn)' },
+  { lv: 2, key: 'info', label: 'INFO', color: 'var(--lv-info)' },
+  { lv: 1, key: 'debug', label: 'DEBUG', color: 'var(--lv-debug)' },
+  { lv: 0, key: 'none', label: 'Autres', color: '#3f3f46' },
+]
+const HL_COLORS = ['#fde047', '#86efac', '#93c5fd', '#f9a8d4', '#fdba74', '#c4b5fd', '#5eead4']
+const KW_RE = /\b(FATAL|CRITICAL|CRIT|SEVERE|PANIC|EMERG|ALERT|ERROR|ERR|WARNING|WARN|INFO|NOTICE|DEBUG|TRACE|VERBOSE)\b|\[(error|warn|warning|info|notice|debug|crit|alert|emerg)\]/
+const KW_LV = { fatal: 4, critical: 4, crit: 4, severe: 4, panic: 4, emerg: 4, alert: 4, error: 4, err: 4, warning: 3, warn: 3, info: 2, notice: 2, debug: 1, trace: 1, verbose: 1 }
+const TS_RE = /^\s*\[?(\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?|[A-Z][a-z]{2}\s+\d{1,2} \d{2}:\d{2}:\d{2}|\d{2}\/\d{2}\/\d{4}[ ,]+\d{2}:\d{2}(?::\d{2})?)\]?/
+
+const state = { tabs: [], active: null, highlights: [], recent: [] }
+const tab = () => state.tabs.find((t) => t.uid === state.active)
+
+let toastTimer = null
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+async function act(action, payload, okMsg, timeout) {
+  try { const r = await call(action, payload, timeout); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+function fmtBytes(n) {
+  if (!n) return '0 o'
+  const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
+  return (i === 0 ? n.toFixed(0) : n.toFixed(1)).replace('.', ',') + ' ' + u[i]
+}
+const fmtN = (n) => Number(n).toLocaleString('fr-FR')
+
+// ── Préférences ──────────────────────────────────────────────────────────────
+
+let prefTimer = null
+function savePrefs() {
+  clearTimeout(prefTimer)
+  prefTimer = setTimeout(() => call('prefs.set', {
+    tabs: JSON.stringify(state.tabs.map((t) => ({ path: t.info.path, encoding: t.encoding || '', follow: !!t.info.follow }))),
+    active: tab()?.info.path || '',
+    highlights: JSON.stringify(state.highlights),
+  }).catch(() => {}), 400)
+}
+
+// ── Onglets ──────────────────────────────────────────────────────────────────
+
+let uidSeq = 0
+function newTab(info, encoding) {
+  return {
+    uid: ++uidSeq, info, encoding: encoding || '', cache: new Map(), filtered: false,
+    filter: { levels: [4, 3, 2, 1, 0], text: '', regex: false, case: false, invert: false, from: '', to: '' },
+    scrollTop: 0, sel: null, cur: null, bookmarks: [], bmSet: new Set(), progress: null,
+    stick: false, find: '',
+  }
+}
+
+async function openPath(path, opts = {}) {
+  path = String(path || '').trim().replace(/^"|"$/g, '')
+  if (!path) return
+  const existing = state.tabs.find((t) => t.info.path.toLowerCase() === path.toLowerCase())
+  if (existing && !opts.force) { activate(existing.uid); return existing }
+  const r = await act('open', { path, encoding: opts.encoding || null, follow: !!opts.follow })
+  if (!r) return null
+  const t = newTab(r, opts.encoding)
+  t.stick = !!opts.follow
+  state.tabs.push(t)
+  loadBookmarks(t)
+  activate(t.uid)
+  savePrefs()
+  return t
+}
+
+function renderTabs() {
+  $('#tabs').innerHTML = state.tabs.map((t) => `<div class="tab ${t.uid === state.active ? 'on' : ''}" data-uid="${t.uid}" title="${esc(t.info.path)}">
+    ${t.info.follow ? '<span class="live" title="Suivi en direct"></span>' : ''}<span class="nm">${esc(t.info.name)}</span>
+    <button class="x" data-close="${t.uid}" title="Fermer (clic molette)">✕</button></div>`).join('')
+}
+$('#tabs').addEventListener('click', (e) => {
+  const x = e.target.closest('[data-close]')
+  if (x) { closeTab(Number(x.dataset.close)); return }
+  const t = e.target.closest('.tab'); if (t) activate(Number(t.dataset.uid))
+})
+$('#tabs').addEventListener('auxclick', (e) => { const t = e.target.closest('.tab'); if (t && e.button === 1) closeTab(Number(t.dataset.uid)) })
+
+function activate(uid) {
+  const prev = tab()
+  if (prev) prev.scrollTop = $('#scroll').scrollTop
+  state.active = uid
+  const t = tab()
+  renderTabs()
+  $('#welcome').classList.toggle('hidden', !!t)
+  $('#viewer').classList.toggle('hidden', !t)
+  if (!t) { loadRecent(); return }
+  syncToolbar(t)
+  layout(true)
+  $('#scroll').scrollTop = t.scrollTop
+  render()
+  renderDetail()
+  savePrefs()
+}
+
+async function closeTab(uid) {
+  const i = state.tabs.findIndex((t) => t.uid === uid); if (i < 0) return
+  const t = state.tabs[i]
+  call('close', { id: t.info.id }).catch(() => {})
+  state.tabs.splice(i, 1)
+  if (state.active === uid) state.active = (state.tabs[i] || state.tabs[i - 1])?.uid ?? null
+  activate(state.active)
+  savePrefs()
+}
+
+// ── Accueil / ouverture ──────────────────────────────────────────────────────
+
+async function loadRecent() {
+  const r = await act('recent'); if (!r) return
+  state.recent = r.recent
+  $('#recentList').innerHTML = r.recent.length ? r.recent.map((x) => `<div class="r ${x.exists ? '' : 'missing'}" data-p="${esc(x.path)}" data-enc="${esc(x.encoding)}">
+      <span>📄</span><span class="p mono">${esc(x.path)}${x.exists ? `<small>${fmtBytes(x.size)}</small>` : '<small>introuvable</small>'}</span>
+      <button class="icon" data-rm title="Retirer de la liste">✕</button></div>`).join('')
+    : '<div class="empty">Aucun fichier récent.</div>'
+}
+$('#recentList').addEventListener('click', async (e) => {
+  const r = e.target.closest('.r'); if (!r) return
+  if (e.target.closest('[data-rm]')) { await act('recent.remove', { path: r.dataset.p }); loadRecent(); return }
+  openPath(r.dataset.p, { encoding: r.dataset.enc || null })
+})
+$('#wOpen').addEventListener('click', () => openPath($('#wPath').value))
+$('#wPath').addEventListener('keydown', (e) => { if (e.key === 'Enter') openPath($('#wPath').value) })
+$('#wBrowse').addEventListener('click', () => browseDialog($('#wPath').value))
+$('#btnOpen').addEventListener('click', () => browseDialog(tab() ? tab().info.path.replace(/[\\/][^\\/]*$/, '') : ''))
+$('#wDemo').addEventListener('click', async () => {
+  const r = await act('demo', { lines: 50000 }, null, 120000); if (r) openPath(r.path, { force: true })
+})
+let demoLive = false
+$('#wDemoLive').addEventListener('click', async () => {
+  demoLive = !demoLive
+  const r = await act('demo.live', { on: demoLive }, demoLive ? 'Écriture de lignes en direct pendant 10 min' : 'Écriture arrêtée')
+  $('#wDemoLive').textContent = demoLive ? '⏹ Arrêter l’exemple en direct' : '⏵ Exemple en direct'
+  if (r?.path) openPath(r.path, { follow: true })
+})
+
+function dialog(html) {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') ov.remove() })
+  return ov
+}
+
+const LOG_EXT = /\.(log|txt|out|err|trace|json|jsonl|csv)(\.\d+)?$/i
+async function browseDialog(start) {
+  const ov = dialog(`<h3>Ouvrir un fichier</h3><div class="content">
+    <div class="crumbs"><button class="icon" id="bUp" title="Dossier parent">⬆</button><input id="bPath" class="mono" placeholder="Dossier ou fichier" /><button id="bGo">Aller</button></div>
+    <label class="chk"><input type="checkbox" id="bAll" /> Afficher tous les fichiers</label>
+    <div class="flist" id="bList"></div></div>
+    <div class="foot"><label class="chk"><input type="checkbox" id="bFollow" /> Suivre en direct</label><span class="spacer"></span><button id="bCancel">Annuler</button></div>`)
+  let cur = null
+  const go = async (path) => {
+    const r = await act('browse', { path }); if (!r) return
+    cur = r; $('#bPath', ov).value = r.path
+    const all = $('#bAll', ov).checked
+    const files = r.files.filter((f) => all || LOG_EXT.test(f.name))
+    $('#bList', ov).innerHTML = r.dirs.map((d) => `<div class="it" data-dir="${esc(d.path)}"><span>📁</span><span class="n">${esc(d.name)}</span></div>`).join('') +
+      files.map((f) => `<div class="it ${LOG_EXT.test(f.name) ? 'log' : ''}" data-file="${esc(f.path)}"><span>📄</span><span class="n">${esc(f.name)}</span><small>${fmtBytes(f.size)}</small><small>${new Date(f.mtime * 1000).toLocaleString('fr-FR')}</small></div>`).join('') ||
+      `<div class="it"><span class="n muted">Dossier vide${r.files.length ? ' (activez « Afficher tous les fichiers »)' : ''}</span></div>`
+  }
+  $('#bList', ov).addEventListener('click', async (e) => {
+    const it = e.target.closest('.it'); if (!it) return
+    if (it.dataset.dir) go(it.dataset.dir)
+    else if (it.dataset.file) { ov.remove(); openPath(it.dataset.file, { follow: $('#bFollow', ov).checked }) }
+  })
+  $('#bGo', ov).onclick = async () => {
+    const p = $('#bPath', ov).value.trim()
+    if (LOG_EXT.test(p) || /\.\w+$/.test(p)) { const ok = await openPath(p, { follow: $('#bFollow', ov).checked }); if (ok) ov.remove(); return }
+    go(p)
+  }
+  $('#bPath', ov).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#bGo', ov).click() })
+  $('#bUp', ov).onclick = () => cur && go(cur.parent ?? '')
+  $('#bAll', ov).onchange = () => cur && go(cur.path)
+  $('#bCancel', ov).onclick = () => ov.remove()
+  await go(start || '')
+  if (start && !cur?.path) go('')
+}
+
+// ── Barre d'outils ───────────────────────────────────────────────────────────
+
+function syncToolbar(t) {
+  const f = t.filter
+  $('#lvChips').innerHTML = LV.map((l) => `<span class="lvchip ${f.levels.includes(l.lv) ? 'on' : ''}" data-lv="${l.lv}" title="Clic : basculer · Double-clic : seulement ce niveau">
+    <span class="d" style="background:${l.color}"></span>${l.label} <b>${fmtN(t.info.levels?.[l.key] ?? 0)}</b></span>`).join('')
+  $('#fText').value = f.text
+  $('#fRegex').classList.toggle('on', f.regex); $('#fCase').classList.toggle('on', f.case); $('#fInvert').classList.toggle('on', f.invert)
+  $('#fFrom').value = f.from; $('#fTo').value = f.to
+  $('#btnPeriod').classList.toggle('on', !!(f.from || f.to)); $('#btnPeriod').classList.add('tog')
+  $('#btnFollow').classList.toggle('on', !!t.info.follow)
+  $('#encSel').value = t.encoding || ''
+  $('#findInput').value = t.find
+  renderHighlights()
+  renderStatus()
+}
+function updateCounts(t) {
+  for (const l of LV) { const c = $(`.lvchip[data-lv="${l.lv}"] b`); if (c) c.textContent = fmtN(t.info.levels?.[l.key] ?? 0) }
+}
+
+let lvClickTimer = null
+$('#lvChips').addEventListener('click', (e) => {
+  const c = e.target.closest('.lvchip'); if (!c) return
+  clearTimeout(lvClickTimer)
+  lvClickTimer = setTimeout(() => {
+    const t = tab(); const lv = Number(c.dataset.lv)
+    const s = new Set(t.filter.levels); s.has(lv) ? s.delete(lv) : s.add(lv)
+    t.filter.levels = [...s]; syncToolbar(t); applyFilter()
+  }, 220)
+})
+$('#lvChips').addEventListener('dblclick', (e) => {
+  const c = e.target.closest('.lvchip'); if (!c) return
+  clearTimeout(lvClickTimer)
+  const t = tab(); t.filter.levels = [Number(c.dataset.lv)]; syncToolbar(t); applyFilter()
+})
+let fTimer = null
+$('#fText').addEventListener('input', () => { clearTimeout(fTimer); fTimer = setTimeout(() => { tab().filter.text = $('#fText').value; applyFilter() }, 450) })
+$('#fText').addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(fTimer); tab().filter.text = $('#fText').value; applyFilter() } })
+for (const [id, key] of [['#fRegex', 'regex'], ['#fCase', 'case'], ['#fInvert', 'invert']]) {
+  $(id).addEventListener('click', () => { const t = tab(); t.filter[key] = !t.filter[key]; $(id).classList.toggle('on', t.filter[key]); if (t.filter.text) applyFilter() })
+}
+$('#fFrom').addEventListener('change', () => { tab().filter.from = $('#fFrom').value; syncToolbar(tab()); applyFilter() })
+$('#fTo').addEventListener('change', () => { tab().filter.to = $('#fTo').value; syncToolbar(tab()); applyFilter() })
+$('#fClear').addEventListener('click', () => {
+  const t = tab(); t.filter = { levels: [4, 3, 2, 1, 0], text: '', regex: false, case: false, invert: false, from: '', to: '' }
+  syncToolbar(t); applyFilter()
+})
+
+function filterPayload(f) {
+  return {
+    levels: f.levels.length === 5 ? [] : f.levels,
+    text: f.text, regex: f.regex, case: f.case, invert: f.invert, from: f.from || null, to: f.to || null,
+  }
+}
+async function applyFilter() {
+  const t = tab(); if (!t) return
+  const f = t.filter
+  if (!f.levels.length) { toast('Sélectionnez au moins un niveau', true); f.levels = [4, 3, 2, 1, 0]; syncToolbar(t) }
+  if (f.regex && f.text) { try { new RegExp(f.text) } catch { $('#fText').classList.add('bad'); return } }
+  $('#fText').classList.remove('bad')
+  const anchor = currentLineNumber(t)
+  const r = await act('filter', { id: t.info.id, filter: filterPayload(f) })
+  if (!r) { $('#fText').classList.add('bad'); return }
+  t.info = r
+  t.filtered = r.filtered !== null
+  t.cache.clear(); t.sel = null; t.cur = null; renderDetail()
+  t.pendingAnchor = anchor
+  if (!r.filter_running) { finishFilter(t); return }
+  setProgress(t, 0); layout(); render()
+  const gen = (t.filterGen = (t.filterGen || 0) + 1)
+  while (gen === t.filterGen && t.progress != null) {
+    await new Promise((res) => setTimeout(res, 400))
+    if (gen !== t.filterGen || t.progress == null) break
+    try { const i = await call('info', { id: t.info.id }); if (!i.filter_running && gen === t.filterGen) { t.info = i; finishFilter(t) } } catch { break }
+  }
+}
+function finishFilter(t) {
+  t.progress = null
+  t.filtered = t.info.filtered !== null
+  t.cache.clear()
+  if (t === tab()) {
+    setProgress(t, null); layout()
+    if (t.pendingAnchor != null) { const a = t.pendingAnchor; t.pendingAnchor = null; gotoLine(a, false) }
+    else render()
+  }
+}
+
+// ── Surlignage ───────────────────────────────────────────────────────────────
+
+function renderHighlights() {
+  $('#hlChips').innerHTML = state.highlights.map((h, i) => `<span class="hl-chip" style="background:${h.color}" title="Clic : occurrence suivante">${esc(h.term)}<button data-rm="${i}">✕</button></span>`).join(' ')
+}
+$('#hlInput').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return
+  const term = $('#hlInput').value.trim(); if (!term) return
+  if (!state.highlights.some((h) => h.term === term)) {
+    const used = new Set(state.highlights.map((h) => h.color))
+    state.highlights.push({ term, color: HL_COLORS.find((c) => !used.has(c)) || HL_COLORS[state.highlights.length % HL_COLORS.length] })
+  }
+  $('#hlInput').value = ''; renderHighlights(); render(); savePrefs()
+})
+$('#hlChips').addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-rm]')
+  if (rm) { state.highlights.splice(Number(rm.dataset.rm), 1); renderHighlights(); render(); savePrefs(); return }
+  const chip = e.target.closest('.hl-chip'); if (!chip) return
+  const h = state.highlights[[...$$('.hl-chip')].indexOf(chip)]
+  if (h) { tab().find = h.term; $('#findInput').value = h.term; findNext(1) }
+})
+
+function highlightHtml(text, lv) {
+  const ranges = []
+  const add = (s, e, cls, style) => { if (e > s) ranges.push({ s, e, cls, style }) }
+  const t = tab()
+  const lower = text.toLowerCase()
+  const addTerm = (term, cls, style) => {
+    const q = term.toLowerCase(); if (!q) return
+    let i = 0, guard = 0
+    while ((i = lower.indexOf(q, i)) >= 0 && guard++ < 200) { add(i, i + q.length, cls, style); i += q.length }
+  }
+  if (t?.find) addTerm(t.find, 'f', '')
+  for (const h of state.highlights) addTerm(h.term, '', `background:${h.color}`)
+  if (t?.filter.text && !t.filter.invert) {
+    if (t.filter.regex) {
+      try {
+        const re = new RegExp(t.filter.text, t.filter.case ? 'g' : 'gi'); let m, guard = 0
+        while ((m = re.exec(text)) && guard++ < 200) { if (!m[0].length) { re.lastIndex++; continue } add(m.index, m.index + m[0].length, 'f', '') }
+      } catch {}
+    } else addTerm(t.filter.text, 'f', '')
+  }
+  const ts = TS_RE.exec(text)
+  if (ts) add(ts.index, ts.index + ts[0].length, 'ts', '', true)
+  const kw = KW_RE.exec(text.slice(0, 200))
+  if (kw) add(kw.index, kw.index + kw[0].length, 'kw' + (KW_LV[(kw[1] || kw[2]).toLowerCase()] || lv), '')
+  ranges.sort((a, b) => a.s - b.s || (a.cls.startsWith('kw') || a.cls === 'ts' ? 1 : -1))
+  let out = '', pos = 0
+  for (const r of ranges) {
+    if (r.s < pos) continue
+    out += esc(text.slice(pos, r.s))
+    const inner = esc(text.slice(r.s, r.e))
+    out += r.cls === 'ts' || r.cls.startsWith('kw') ? `<span class="${r.cls}">${inner}</span>` : `<mark class="${r.cls}" style="${r.style}">${inner}</mark>`
+    pos = r.e
+  }
+  return out + esc(text.slice(pos))
+}
+
+// ── Vue virtuelle ────────────────────────────────────────────────────────────
+
+const viewCount = (t) => (t.filtered ? (t.info.filtered ?? 0) : t.info.total)
+function geometry(t) {
+  const count = viewCount(t)
+  const el = $('#scroll')
+  const h = el.clientHeight
+  const visible = Math.ceil(h / ROW) + 1
+  const full = count * ROW
+  const H = Math.min(full, MAXH)
+  const scaled = full > MAXH
+  let first
+  if (!scaled) first = Math.floor(el.scrollTop / ROW)
+  else first = Math.round(el.scrollTop / Math.max(1, H - h) * Math.max(0, count - visible + 1))
+  first = Math.max(0, Math.min(first, Math.max(0, count - visible + 1)))
+  return { count, visible, H, scaled, first, h }
+}
+function layout() {
+  const t = tab(); if (!t) return
+  const g = geometry(t)
+  $('#spacer').style.height = Math.max(g.H, 1) + 'px'
+  const digits = String(Math.max(1, t.info.total)).length
+  $('#rows').style.setProperty('--gw', (digits * 8 + 30) + 'px')
+  renderStatus()
+}
+function scrollToIndex(i, center = true) {
+  const t = tab(); const g = geometry(t); const el = $('#scroll')
+  i = Math.max(0, Math.min(i, g.count - 1))
+  const target = center ? i - Math.floor(g.visible / 2) + 1 : i
+  if (!g.scaled) {
+    if (center || i < g.first || i >= g.first + g.visible - 1) el.scrollTop = Math.max(0, target * ROW)
+  } else el.scrollTop = Math.max(0, target) / Math.max(1, g.count - g.visible + 1) * (g.H - g.h)
+  render()
+}
+function scrollToEnd() { const el = $('#scroll'); el.scrollTop = el.scrollHeight; render() }
+const atBottom = () => { const el = $('#scroll'); return el.scrollHeight - el.scrollTop - el.clientHeight < ROW * 2 }
+
+let fetching = null
+function render() {
+  const t = tab(); if (!t) return
+  const g = geometry(t)
+  const el = $('#scroll')
+  const top = g.scaled ? el.scrollTop : g.first * ROW
+  $('#rows').style.transform = `translateY(${top}px)`
+  const end = Math.min(g.count, g.first + g.visible)
+  let html = '', missing = false
+  const [sa, sb] = t.sel ? [Math.min(t.sel.a, t.sel.b), Math.max(t.sel.a, t.sel.b)] : [-1, -1]
+  for (let i = g.first; i < end; i++) {
+    const l = t.cache.get(i)
+    if (!l) { missing = true; html += `<div class="ln pending" data-i="${i}"><span class="g"> </span><span class="t">…</span></div>`; continue }
+    const cls = `ln lv${l.lv}${i >= sa && i <= sb ? ' sel' : ''}${t.cur === i ? ' cur' : ''}${t.bmSet.has(l.n) ? ' bm' : ''}`
+    html += `<div class="${cls}" data-i="${i}"><span class="g">${l.n + 1}</span><span class="t">${highlightHtml(l.t, l.lv)}${l.long ? '<span class="more"> … (ligne tronquée)</span>' : ''}</span></div>`
+  }
+  $('#rows').innerHTML = html
+  const ev = $('#emptyView')
+  if (!g.count) {
+    ev.classList.remove('hidden')
+    ev.textContent = t.progress != null ? 'Traitement…' : t.filtered ? 'Aucune ligne ne correspond aux filtres.' : t.info.missing ? 'Fichier introuvable (en attente de recréation…)' : 'Fichier vide.'
+  } else ev.classList.add('hidden')
+  if (missing) fetchRange(t, g.first, g.visible)
+}
+async function fetchRange(t, first, visible) {
+  const key = `${t.uid}:${first}`
+  if (fetching === key) return
+  fetching = key
+  const start = Math.max(0, first - 80)
+  const count = Math.min(1000, visible + 240)
+  try {
+    const r = await call('lines', { id: t.info.id, start, count, filtered: t.filtered })
+    if (t.cache.size > 20000) t.cache.clear()
+    r.lines.forEach((l, k) => t.cache.set(start + k, l))
+  } catch (e) { if (e.code === 'NO_SESSION') await reopenTab(t); else toast(e.message, true) }
+  finally { if (fetching === key) fetching = null }
+  if (t === tab()) render()
+}
+$('#scroll').addEventListener('scroll', () => {
+  const t = tab(); if (!t) return
+  t.stick = t.info.follow && atBottom()
+  requestAnimationFrame(render)
+})
+new ResizeObserver(() => { if (tab()) { layout(); render() } }).observe($('#scroll'))
+
+async function reopenTab(t) {
+  const r = await act('open', { path: t.info.path, encoding: t.encoding || null, follow: !!t.info.follow })
+  if (!r) return
+  t.info = r; t.cache.clear()
+  if (t.filtered) applyFilter()
+}
+
+// ── Sélection / détail ───────────────────────────────────────────────────────
+
+$('#rows').addEventListener('mousedown', (e) => {
+  const row = e.target.closest('.ln'); if (!row || row.classList.contains('pending')) return
+  const t = tab(); const i = Number(row.dataset.i)
+  if (e.target.closest('.g')) { toggleBookmark(t.cache.get(i)?.n); return }
+  if (e.shiftKey && t.sel) t.sel.b = i
+  else t.sel = { a: i, b: i }
+  t.cur = i
+  if (e.shiftKey) e.preventDefault()
+  render(); renderDetail(); renderStatus()
+})
+$('#rows').addEventListener('dblclick', (e) => {
+  const row = e.target.closest('.ln'); if (!row) return
+  const l = tab().cache.get(Number(row.dataset.i)); if (l) toggleBookmark(l.n)
+})
+async function renderDetail() {
+  const t = tab()
+  const l = t && t.cur != null ? t.cache.get(t.cur) : null
+  if (!l) { $('#detail').classList.add('hidden'); return }
+  $('#detail').classList.remove('hidden')
+  $('#detailTitle').textContent = `Ligne ${fmtN(l.n + 1)} — ${LV.find((x) => x.lv === l.lv)?.label || ''}`
+  let text = l.t
+  if (l.long) { const r = await act('line_full', { id: t.info.id, n: l.n }); if (r) text = r.t }
+  const s = text.trim()
+  if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
+    try { text = JSON.stringify(JSON.parse(s), null, 2) } catch {}
+  } else {
+    const j = s.indexOf('{')
+    if (j > 0 && s.endsWith('}')) { try { text = s.slice(0, j) + '\n' + JSON.stringify(JSON.parse(s.slice(j)), null, 2) } catch {} }
+  }
+  $('#detailText').textContent = text
+}
+$('#detailClose').addEventListener('click', () => { const t = tab(); t.cur = null; render(); renderDetail() })
+$('#detailCopy').addEventListener('click', () => copyText($('#detailText').textContent))
+async function copyText(s) { try { await navigator.clipboard.writeText(s); toast('Copié') } catch { toast('Copie impossible', true) } }
+
+async function selectedLines() {
+  const t = tab(); if (!t.sel) return null
+  const a = Math.min(t.sel.a, t.sel.b), b = Math.max(t.sel.a, t.sel.b)
+  if (b - a >= 100000) { toast('Sélection trop grande (100 000 lignes max)', true); return null }
+  const out = []
+  for (let s = a; s <= b; s += 1000) {
+    const r = await act('lines', { id: t.info.id, start: s, count: Math.min(1000, b - s + 1), filtered: t.filtered }); if (!r) return null
+    out.push(...r.lines.map((l) => l.t))
+  }
+  return out
+}
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+
+function currentLineNumber(t) {
+  if (t.cur != null && t.cache.get(t.cur)) return t.cache.get(t.cur).n
+  const g = geometry(t); const l = t.cache.get(g.first + Math.floor(g.visible / 2)) || t.cache.get(g.first)
+  return l ? l.n : null
+}
+async function gotoLine(n, select = true) {
+  const t = tab()
+  const r = await act('locate', { id: t.info.id, line: n }); if (!r) return
+  if (select) { t.sel = { a: r.index, b: r.index }; t.cur = r.index }
+  scrollToIndex(r.index)
+  if (select) setTimeout(renderDetail, 200)
+  if (select && !r.exact && t.filtered) toast('Ligne masquée par les filtres : ligne visible la plus proche')
+}
+$('#gotoInput').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return
+  const n = parseInt($('#gotoInput').value, 10)
+  if (!n || n < 1) { $('#gotoInput').classList.add('bad'); return }
+  $('#gotoInput').classList.remove('bad'); gotoLine(n - 1)
+})
+
+async function findNext(dir) {
+  const t = tab(); if (!t) return
+  t.find = $('#findInput').value
+  if (!t.find) return
+  const from = currentLineNumber(t) ?? (dir > 0 ? -1 : t.info.total)
+  const r = await act('find', { id: t.info.id, text: t.find, from, direction: dir > 0 ? 'next' : 'prev' }, null, 120000)
+  if (!r) return
+  if (r.line == null) { toast(dir > 0 ? 'Aucune occurrence plus bas' : 'Aucune occurrence plus haut'); render(); return }
+  gotoLine(r.line)
+}
+$('#findInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') findNext(e.shiftKey ? -1 : 1) })
+$('#findInput').addEventListener('input', () => { tab().find = $('#findInput').value; render() })
+$('#findNext').addEventListener('click', () => findNext(1))
+$('#findPrev').addEventListener('click', () => findNext(-1))
+
+// ── Signets ──────────────────────────────────────────────────────────────────
+
+async function loadBookmarks(t) {
+  const r = await act('bookmarks', { path: t.info.path }); if (!r) return
+  t.bookmarks = r.bookmarks; t.bmSet = new Set(r.bookmarks.map((b) => b.line))
+  if (t === tab()) render()
+}
+async function toggleBookmark(n) {
+  const t = tab(); if (n == null) return
+  const r = await act('bookmark.toggle', { id: t.info.id, line: n }); if (!r) return
+  t.bookmarks = r.bookmarks; t.bmSet = new Set(r.bookmarks.map((b) => b.line))
+  toast(t.bmSet.has(n) ? `Signet ajouté ligne ${n + 1}` : 'Signet retiré'); render()
+}
+function jumpBookmark(dir) {
+  const t = tab(); if (!t.bookmarks.length) return toast('Aucun signet')
+  const cur = currentLineNumber(t) ?? -1
+  const list = t.bookmarks.map((b) => b.line)
+  const n = dir > 0 ? (list.find((x) => x > cur) ?? list[0]) : ([...list].reverse().find((x) => x < cur) ?? list[list.length - 1])
+  gotoLine(n)
+}
+$('#btnBm').addEventListener('click', (e) => {
+  e.stopPropagation()
+  const t = tab(); const m = $('#bmList')
+  m.innerHTML = (t.bookmarks.length ? t.bookmarks.map((b) => `<button class="bm" data-l="${b.line}">★ Ligne ${fmtN(b.line + 1)}<small>${esc(b.text)}</small></button>`).join('')
+    : '<div class="empty">Aucun signet. Cliquez sur un numéro de ligne (ou Ctrl+B).</div>') +
+    (t.bookmarks.length ? '<hr><button data-l="clear" class="danger">🗑 Effacer tous les signets</button>' : '')
+  m.classList.toggle('hidden'); $('#exportList').classList.add('hidden')
+})
+$('#bmList').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-l]'); if (!b) return
+  $('#bmList').classList.add('hidden')
+  const t = tab()
+  if (b.dataset.l === 'clear') {
+    if (!confirm('Effacer tous les signets de ce fichier ?')) return
+    const r = await act('bookmarks.clear', { path: t.info.path }); if (r) { t.bookmarks = []; t.bmSet = new Set(); render() }
+    return
+  }
+  gotoLine(Number(b.dataset.l))
+})
+
+// ── Suivi / encodage / export ────────────────────────────────────────────────
+
+$('#btnFollow').addEventListener('click', async () => {
+  const t = tab()
+  const r = await act('follow', { id: t.info.id, follow: !t.info.follow }); if (!r) return
+  t.info = r; t.stick = r.follow
+  $('#btnFollow').classList.toggle('on', r.follow); renderTabs(); savePrefs()
+  if (r.follow) scrollToEnd()
+})
+$('#encSel').addEventListener('change', async () => {
+  const t = tab(); const enc = $('#encSel').value
+  const r = await act('reopen', { id: t.info.id, encoding: enc || null }); if (!r) return
+  t.info = r; t.encoding = enc; t.cache.clear(); t.filtered = false
+  syncToolbar(t); layout(); render(); savePrefs()
+  if (filterPayload(t.filter).text || t.filter.levels.length < 5 || t.filter.from || t.filter.to) applyFilter()
+})
+$('#btnPeriod').addEventListener('click', (e) => { e.stopPropagation(); $('#periodBox').classList.toggle('hidden') })
+$('#btnExport').addEventListener('click', (e) => { e.stopPropagation(); $('#exportList').classList.toggle('hidden'); $('#bmList').classList.add('hidden') })
+document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) $$('.menu-list').forEach((m) => m.classList.add('hidden')) })
+function download(name, content) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' })); a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+const baseName = (t) => t.info.name.replace(/\.[^.]+$/, '')
+$('#exportList').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-x]'); if (!b) return
+  $('#exportList').classList.add('hidden')
+  const t = tab()
+  if (b.dataset.x === 'download') {
+    const r = await act('export_text', { id: t.info.id, filtered: t.filtered }, null, 180000); if (!r) return
+    download(`${baseName(t)}${t.filtered ? '.filtré' : ''}.log`, r.text); toast(`${fmtN(r.lines)} lignes exportées`)
+  } else if (b.dataset.x === 'copy') {
+    if (!t.sel) return toast('Sélectionnez des lignes (clic, Maj+clic)', true)
+    const lines = await selectedLines(); if (lines) copyText(lines.join('\n'))
+  } else if (b.dataset.x === 'save') saveDialog(t, null)
+  else if (b.dataset.x === 'save-sel') {
+    if (!t.sel) return toast('Sélectionnez des lignes (clic, Maj+clic)', true)
+    saveDialog(t, [Math.min(t.sel.a, t.sel.b), Math.max(t.sel.a, t.sel.b)])
+  }
+})
+function saveDialog(t, range) {
+  const dir = t.info.path.replace(/[\\/][^\\/]*$/, '')
+  const sep = t.info.path.includes('\\') ? '\\' : '/'
+  const count = range ? range[1] - range[0] + 1 : viewCount(t)
+  const ov = dialog(`<h3>Enregistrer ${range ? 'la sélection' : t.filtered ? 'la vue filtrée' : 'le fichier'} (${fmtN(count)} lignes)</h3><div class="content">
+    <div class="field"><label>Fichier de destination (UTF-8)</label><input id="sPath" class="mono" value="${esc(dir + sep + baseName(t) + (range ? '.sélection' : '.filtré') + '.log')}" /></div>
+    <label class="chk"><input type="checkbox" id="sNum" /> Préfixer chaque ligne par son numéro</label>
+    <label class="chk"><input type="checkbox" id="sOver" /> Remplacer le fichier s'il existe</label>
+    <div class="progressbar hidden" id="sProg"><div></div></div></div>
+    <div class="foot"><span class="spacer"></span><button id="sCancel">Annuler</button><button class="primary" id="sOk">Enregistrer</button></div>`)
+  $('#sCancel', ov).onclick = () => ov.remove()
+  $('#sOk', ov).onclick = async () => {
+    $('#sOk', ov).disabled = true; $('#sProg', ov).classList.remove('hidden')
+    try {
+      const r = await window.ledroide.run(MODULE_ID, 'export', { id: t.info.id, dest: $('#sPath', ov).value.trim(), filtered: t.filtered, range,
+        line_numbers: $('#sNum', ov).checked, overwrite: $('#sOver', ov).checked },
+        { onProgress: (p) => { $('#sProg div', ov).style.width = (p.percent || 0) + '%' } })
+      ov.remove(); toast(`${fmtN(r.lines)} lignes enregistrées dans ${r.path}`)
+    } catch (e) { toast(e.message, true); $('#sOk', ov).disabled = false; $('#sProg', ov).classList.add('hidden') }
+  }
+}
+
+// ── Statut / progression ─────────────────────────────────────────────────────
+
+function setProgress(t, pct) {
+  t.progress = pct
+  if (t !== tab()) return
+  const bar = $('#progress > div')
+  bar.style.width = pct == null ? '0' : Math.max(3, pct) + '%'
+  renderStatus()
+}
+function renderStatus() {
+  const t = tab(); if (!t) return
+  const i = t.info
+  $('#stPath').textContent = i.path; $('#stPath').title = i.path
+  $('#stFormat').textContent = i.format
+  $('#stEnc').textContent = i.encoding_label + (i.bom ? ' (BOM)' : '')
+  $('#stSize').textContent = fmtBytes(i.size)
+  let lines = `${fmtN(i.total)} lignes`
+  if (t.filtered) lines = `${fmtN(i.filtered ?? 0)} / ${lines} filtrées`
+  if (i.indexing) lines += ` · indexation ${Math.round(t.progress ?? 0)} %`
+  else if (i.filter_running || t.progress != null) lines += ` · filtrage ${Math.round(t.progress ?? 0)} %`
+  if (i.missing) lines = `<span class="warn">fichier introuvable</span> · ` + lines
+  if (i.follow) lines += ' · <span style="color:var(--ok)">● suivi</span>'
+  $('#stLines').innerHTML = lines
+  const sel = t.sel ? Math.abs(t.sel.b - t.sel.a) + 1 : 0
+  $('#stSel').textContent = sel > 1 ? `${fmtN(sel)} lignes sélectionnées` : ''
+}
+
+// ── Événements serveur ───────────────────────────────────────────────────────
+
+const byId = (id) => state.tabs.find((t) => t.info.id === id)
+const on = (ev, fn) => window.ledroide.on(MODULE_ID, ev, fn)
+on('log:index', (d) => { const t = byId(d.id); if (!t) return; setProgress(t, d.percent); refreshInfo(t) })
+on('log:indexed', (d) => {
+  const t = byId(d.id); if (!t) return
+  t.info = d; setProgress(t, null)
+  for (const k of [...t.cache.keys()]) if (k >= d.total - 2) t.cache.delete(k)
+  if (t === tab()) { updateCounts(t); layout(); render() }
+  if (t.stick) scrollToEnd()
+})
+on('log:filtering', (d) => { const t = byId(d.id); if (t) setProgress(t, d.percent) })
+on('log:filtered', (d) => { const t = byId(d.id); if (!t) return; t.info = d; finishFilter(t) })
+on('log:append', (d) => {
+  const t = byId(d.id); if (!t) return
+  const before = viewCount(t)
+  t.info = d
+  for (const k of [...t.cache.keys()]) if (k >= before - 2) t.cache.delete(k)
+  if (t !== tab()) return
+  updateCounts(t); layout()
+  if (t.stick) scrollToEnd(); else render()
+})
+on('log:reset', (d) => {
+  const t = byId(d.id); if (!t) return
+  t.cache.clear(); t.sel = null; t.cur = null
+  toast(`${t.info.name} : ${d.reason === 'rotated' ? 'rotation détectée' : 'fichier tronqué'} — relecture`)
+})
+on('log:missing', (d) => { const t = byId(d.id); if (!t) return; t.info.missing = true; if (t === tab()) { renderStatus(); render() } })
+let infoTimer = null
+function refreshInfo(t) {
+  if (infoTimer) return
+  infoTimer = setTimeout(async () => {
+    infoTimer = null
+    try { const r = await call('info', { id: t.info.id }); t.info = r; if (t === tab()) { updateCounts(t); layout(); render() } } catch {}
+  }, 500)
+}
+
+// ── Clavier ──────────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', async (e) => {
+  const t = tab()
+  const inInput = e.target.matches('input, select, textarea')
+  if (e.ctrlKey && e.key.toLowerCase() === 'o') { e.preventDefault(); $('#btnOpen').click(); return }
+  if (!t) return
+  if (e.ctrlKey && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#findInput').focus(); $('#findInput').select(); return }
+  if (e.ctrlKey && e.key.toLowerCase() === 'g') { e.preventDefault(); $('#gotoInput').focus(); $('#gotoInput').select(); return }
+  if (e.key === 'F3') { e.preventDefault(); findNext(e.shiftKey ? -1 : 1); return }
+  if (e.key === 'F2') { e.preventDefault(); jumpBookmark(e.shiftKey ? -1 : 1); return }
+  if (inInput) return
+  if (e.ctrlKey && e.key.toLowerCase() === 'b') { e.preventDefault(); const n = currentLineNumber(t); if (n != null) toggleBookmark(n); return }
+  if (e.ctrlKey && e.key.toLowerCase() === 'c' && t.sel && !String(getSelection())) { e.preventDefault(); const l = await selectedLines(); if (l) copyText(l.join('\n')); return }
+  const g = geometry(t)
+  const move = { ArrowDown: 1, ArrowUp: -1, PageDown: g.visible - 2, PageUp: -(g.visible - 2) }[e.key]
+  if (move) {
+    e.preventDefault()
+    const i = Math.max(0, Math.min(g.count - 1, (t.cur ?? g.first) + move))
+    if (e.shiftKey && t.sel) t.sel.b = i; else t.sel = { a: i, b: i }
+    t.cur = i; scrollToIndex(i, false); setTimeout(renderDetail, 120); renderStatus()
+  } else if (e.key === 'Home' && e.ctrlKey) { e.preventDefault(); $('#scroll').scrollTop = 0 }
+  else if (e.key === 'End' && e.ctrlKey) { e.preventDefault(); scrollToEnd() }
+  else if (e.key === 'Escape') { t.sel = null; t.cur = null; render(); renderDetail(); renderStatus() }
+})
+
+// ── Démarrage ────────────────────────────────────────────────────────────────
+
+async function init() {
+  let prefs = {}
+  try { prefs = await call('prefs.get') } catch {}
+  try { state.highlights = JSON.parse(prefs.highlights || '[]') } catch {}
+  let tabs = []
+  try { tabs = JSON.parse(prefs.tabs || '[]') } catch {}
+  for (const x of tabs) {
+    try {
+      const r = await call('open', { path: x.path, encoding: x.encoding || null, follow: !!x.follow })
+      const t = newTab(r, x.encoding); t.stick = !!x.follow; state.tabs.push(t); loadBookmarks(t)
+    } catch {}
+  }
+  const act0 = state.tabs.find((t) => t.info.path === prefs.active) || state.tabs[0]
+  activate(act0?.uid ?? null)
+  if (act0?.stick) setTimeout(scrollToEnd, 300)
+}
+init()
+</script>
+</body>
+</html>

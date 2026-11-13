@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Test de débit</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --down: #38bdf8; --up: #a78bfa;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.icon { padding: 3px 7px; }
+  input, select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .note { color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs button { border: none; background: transparent; color: var(--muted); padding: 6px 12px; }
+  .tabs button.on { background: var(--surface2); color: var(--text); }
+
+  .pane { flex: 1; min-height: 0; overflow-y: auto; }
+  #pane-test { display: flex; flex-direction: column; align-items: center; padding: 18px 16px 24px; gap: 16px; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 24px; align-items: center; width: 100%; max-width: 1100px; }
+  .metrics { display: flex; flex-direction: column; gap: 12px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; position: relative; overflow: hidden; }
+  .metric .l { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .metric .v { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; line-height: 1.15; }
+  .metric .v small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .metric.active { border-color: var(--accent); }
+  .metric.down .v { color: var(--down); } .metric.up .v { color: var(--up); }
+  .metric .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); width: 0; transition: width .25s; }
+  .arrow { display: inline-block; width: 16px; height: 16px; border-radius: 50%; text-align: center; line-height: 16px; font-size: 11px; color: #0f0f12; font-weight: 800; }
+  .arrow.d { background: var(--down); } .arrow.u { background: var(--up); }
+
+  .gauge { position: relative; width: 360px; height: 330px; }
+  .gauge svg { width: 100%; height: 100%; display: block; }
+  .gauge .center { position: absolute; left: 0; right: 0; top: 118px; text-align: center; pointer-events: none; }
+  .gauge .num { font-size: 52px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .gauge .unit { color: var(--muted); font-size: 13px; margin-top: -4px; }
+  .gauge .phase { margin-top: 8px; font-size: 13px; color: #a1a1aa; min-height: 18px; }
+  #go { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -46%); width: 150px; height: 150px; border-radius: 50%; font-size: 22px; font-weight: 800;
+        letter-spacing: .08em; background: radial-gradient(circle at 50% 35%, #818cf8, #4f46e5); border: none; color: #fff; box-shadow: 0 0 0 10px rgba(99,102,241,.12), 0 0 40px rgba(99,102,241,.35); }
+  #go:hover { transform: translate(-50%, -46%) scale(1.04); background: radial-gradient(circle at 50% 35%, #a5b4fc, #6366f1); }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  .info { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 1100px; }
+  .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; min-width: 150px; }
+  .chip .l { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .chip .v { font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .about { max-width: 1100px; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+  .about summary { cursor: pointer; color: #a1a1aa; }
+  .about p { margin-top: 8px; }
+  .about code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: #c7d2fe; }
+
+  #pane-history { padding: 14px 16px 24px; }
+  .hbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .tile .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .l { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .chart { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px; position: relative; margin-bottom: 14px; }
+  .chart svg { display: block; width: 100%; height: 220px; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: #a1a1aa; padding: 2px 6px 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .tip { position: absolute; pointer-events: none; background: #0b0b0e; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 11.5px; white-space: nowrap; z-index: 5; }
+  table.grid { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  table.grid th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.grid td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.grid td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  table.grid th.num { text-align: right; }
+  table.grid tr:hover td { background: #1a1a1f; }
+  td .noteIn { width: 100%; background: transparent; border-color: transparent; padding: 2px 4px; }
+  td .noteIn:hover, td .noteIn:focus { border-color: var(--border); background: var(--surface2); }
+  .empty { text-align: center; padding: 50px 20px; color: var(--muted); }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+  @media (max-width: 900px) { .stage { grid-template-columns: 1fr; justify-items: center; } .metrics { width: 100%; max-width: 420px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">🚀 Test de débit</span>
+  <span class="spacer"></span>
+  <div class="tabs" id="tabs"><button data-tab="test" class="on">Test</button><button data-tab="history">Historique</button></div>
+</header>
+
+<div class="pane" id="pane-test">
+  <div class="stage">
+    <div class="metrics">
+      <div class="metric" id="mPing"><div class="l">⏱ Latence (médiane)</div><div class="v" id="vPing">—<small>ms</small></div><div class="bar"></div></div>
+      <div class="metric" id="mJitter"><div class="l">〰 Gigue</div><div class="v" id="vJitter">—<small>ms</small></div></div>
+    </div>
+    <div class="gauge">
+      <svg viewBox="0 0 360 330" id="gaugeSvg"></svg>
+      <div class="center hidden" id="gCenter"><div class="num" id="gNum">0</div><div class="unit">Mbit/s</div><div class="phase" id="gPhase"></div></div>
+      <button id="go" title="Démarrer le test">GO</button>
+    </div>
+    <div class="metrics">
+      <div class="metric down" id="mDown"><div class="l"><span class="arrow d">↓</span> Descendant</div><div class="v" id="vDown">—<small>Mbit/s</small></div><div class="bar"></div></div>
+      <div class="metric up" id="mUp"><div class="l"><span class="arrow u">↑</span> Montant</div><div class="v" id="vUp">—<small>Mbit/s</small></div><div class="bar"></div></div>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="danger hidden" id="btnCancel">■ Annuler le test</button>
+    <span class="muted">Connexions parallèles</span>
+    <select id="optConn"></select>
+    <span class="muted">Durée par sens</span>
+    <div class="seg" id="optDur"><button data-d="5">5 s</button><button data-d="10">10 s</button><button data-d="15">15 s</button><button data-d="20">20 s</button></div>
+    <label class="muted"><input type="checkbox" id="optLimit" /> Limiter à 25 Mo par sens (connexion mobile)</label>
+  </div>
+  <div class="info" id="info"></div>
+  <details class="about">
+    <summary>À propos de la mesure</summary>
+    <p class="note">Le test utilise les points de terminaison publics de <b>Cloudflare</b> (<code>speed.cloudflare.com</code>), servis par le centre de données Cloudflare le plus proche :
+      <code>/__down?bytes=N</code> (téléchargement) et <code>/__up</code> (envoi). La <b>latence</b> est la médiane de plusieurs requêtes vides sur une connexion déjà ouverte (temps de traitement du serveur déduit) ; la <b>gigue</b> est l'écart moyen entre deux mesures consécutives.
+      Les <b>débits</b> sont mesurés avec plusieurs connexions HTTPS parallèles, démarrées progressivement, et des requêtes de taille croissante (100 ko → 50 Mo) ; le premier quart de chaque mesure (montée en charge) est exclu du résultat.
+      Un test complet peut consommer plusieurs centaines de Mo sur une connexion rapide. L'IP publique et le centre de données proviennent de <code>/cdn-cgi/trace</code> et des en-têtes <code>cf-meta-*</code> ; le FAI n'est affiché que si Cloudflare le communique.</p>
+  </details>
+</div>
+
+<div class="pane hidden" id="pane-history">
+  <div class="hbar">
+    <div class="seg" id="hRange"><button data-r="7">7 j</button><button data-r="30">30 j</button><button data-r="365">1 an</button><button data-r="0">Tout</button></div>
+    <span class="spacer"></span>
+    <button id="btnCsv">⬇️ Exporter (CSV)</button>
+    <button class="danger" id="btnClear">🗑 Tout effacer</button>
+  </div>
+  <div class="tiles" id="hTiles"></div>
+  <div class="chart"><div class="legend"><span><i style="background:var(--down)"></i>Descendant</span><span><i style="background:var(--up)"></i>Montant</span><span><i style="background:#f59e0b"></i>Latence (axe droit)</span></div><div id="hChart"></div></div>
+  <div id="hTable"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'speedtest'
+const call = (action, payload = {}, timeout = 30000) => window.ledroide.call(MODULE_ID, action, payload, { timeout })
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2200)
+}
+const fmt = (v, d = 1) => v == null ? '—' : Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d })
+const fmtSpeed = (v) => v == null ? '—' : v >= 100 ? fmt(v, 0) : v >= 10 ? fmt(v, 1) : fmt(v, 2)
+const fmtBytes = (b) => b >= 1e9 ? fmt(b / 1e9, 2) + ' Go' : b >= 1e6 ? fmt(b / 1e6, 1) + ' Mo' : fmt(b / 1e3, 0) + ' ko'
+const fmtDate = (ts) => new Date(ts * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+
+const state = { running: false, jobId: null, conn: +(localGet('st-conn') || 4), dur: +(localGet('st-dur') || 10), limit: localGet('st-limit') === '1', range: +(localGet('st-range') ?? 30), history: null }
+
+// ── Jauge ───────────────────────────────────────────────────────────────────
+const TICKS = [0, 1, 5, 10, 20, 50, 100, 250, 500, 1000]
+const CX = 180, CY = 180, RAD = 140, A0 = 135, SWEEP = 270
+const pos = (v) => {
+  if (v <= 0) return 0
+  for (let i = 1; i < TICKS.length; i++) if (v <= TICKS[i]) return (i - 1 + (v - TICKS[i - 1]) / (TICKS[i] - TICKS[i - 1])) / (TICKS.length - 1)
+  return 1
+}
+const pt = (deg, r) => [CX + r * Math.cos(deg * Math.PI / 180), CY + r * Math.sin(deg * Math.PI / 180)]
+function arc(f0, f1, r) {
+  const a = A0 + SWEEP * f0, b = A0 + SWEEP * Math.max(f0 + 0.0001, f1)
+  const [x0, y0] = pt(a, r), [x1, y1] = pt(b, r)
+  return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${b - a > 180 ? 1 : 0} 1 ${x1.toFixed(2)},${y1.toFixed(2)}`
+}
+function buildGauge() {
+  let s = `<defs>
+    <linearGradient id="gd" x1="0" x2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#38bdf8"/></linearGradient>
+    <linearGradient id="gu" x1="0" x2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#c084fc"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    <path d="${arc(0, 1, RAD)}" stroke="#1f1f23" stroke-width="22" fill="none" stroke-linecap="round"/>`
+  TICKS.forEach((t, i) => {
+    const f = i / (TICKS.length - 1), deg = A0 + SWEEP * f
+    const [x0, y0] = pt(deg, RAD - 17), [x1, y1] = pt(deg, RAD - 25), [tx, ty] = pt(deg, RAD - 40)
+    s += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="#3f3f46" stroke-width="2"/><text x="${tx}" y="${ty + 4}" fill="#71717a" font-size="11.5" text-anchor="middle">${t}</text>`
+  })
+  s += `<path id="gArc" d="${arc(0, 0, RAD)}" stroke="url(#gd)" stroke-width="22" fill="none" stroke-linecap="round" filter="url(#glow)" opacity="0"/>
+        <circle id="gDot" r="7" fill="#fff" opacity="0"/>`
+  $('#gaugeSvg').innerHTML = s
+}
+let gTarget = 0, gShown = 0, gPhase = 'down', raf = null
+function setGauge(v, phase) {
+  gTarget = Math.max(0, v || 0); if (phase) gPhase = phase
+  if (!raf) raf = requestAnimationFrame(animate)
+}
+function animate() {
+  gShown += (gTarget - gShown) * 0.12
+  if (Math.abs(gTarget - gShown) < 0.01) gShown = gTarget
+  const f = pos(gShown)
+  const a = $('#gArc'), dot = $('#gDot')
+  a.setAttribute('d', arc(0, f, RAD)); a.setAttribute('stroke', gPhase === 'up' ? 'url(#gu)' : 'url(#gd)'); a.setAttribute('opacity', gShown > 0.005 ? 1 : 0)
+  const [x, y] = pt(A0 + SWEEP * f, RAD); dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('opacity', gShown > 0.005 ? 1 : 0)
+  $('#gNum').textContent = fmtSpeed(gShown)
+  raf = gShown !== gTarget ? requestAnimationFrame(animate) : null
+}
+
+// ── Test ────────────────────────────────────────────────────────────────────
+function renderOptions() {
+  $('#optConn').innerHTML = [1, 2, 4, 6, 8].map((n) => `<option value="${n}" ${n === state.conn ? 'selected' : ''}>${n}</option>`).join('')
+  $$('#optDur button').forEach((b) => b.classList.toggle('on', +b.dataset.d === state.dur))
+  $('#optLimit').checked = state.limit
+}
+$('#optConn').onchange = () => { state.conn = +$('#optConn').value; localSet('st-conn', state.conn) }
+$$('#optDur button').forEach((b) => b.onclick = () => { if (state.running) return; state.dur = +b.dataset.d; localSet('st-dur', state.dur); renderOptions() })
+$('#optLimit').onchange = () => { state.limit = $('#optLimit').checked; localSet('st-limit', state.limit ? '1' : '0') }
+
+function setMetric(id, html, active = false, pct = null) {
+  const m = $('#m' + id)
+  if (html !== null) $('#v' + id).innerHTML = html
+  m.classList.toggle('active', active)
+  const bar = $('.bar', m); if (bar) bar.style.width = pct == null ? '0' : pct + '%'
+}
+function resetMetrics() {
+  setMetric('Ping', '—<small>ms</small>'); setMetric('Jitter', '—<small>ms</small>')
+  setMetric('Down', '—<small>Mbit/s</small>'); setMetric('Up', '—<small>Mbit/s</small>')
+}
+function renderInfo(meta, res) {
+  const items = []
+  if (meta) {
+    items.push(['IP publique', meta.ip || '—'])
+    items.push(['Fournisseur (FAI)', meta.isp ? `${meta.isp}${meta.asn ? ' (AS' + meta.asn + ')' : ''}` : 'non communiqué'])
+    items.push(['Serveur Cloudflare', [meta.colo, meta.city].filter(Boolean).join(' — ') || '—'])
+    items.push(['Pays', meta.country || '—'])
+  }
+  if (res) {
+    items.push(['Données échangées', fmtBytes((res.down_bytes || 0) + (res.up_bytes || 0))])
+    items.push(['Durée du test', fmt(res.duration, 1) + ' s'])
+  }
+  $('#info').innerHTML = items.map(([l, v]) => `<div class="chip"><div class="l">${esc(l)}</div><div class="v">${esc(v)}</div></div>`).join('')
+}
+
+async function start() {
+  if (state.running) return
+  state.running = true
+  resetMetrics(); renderInfo(null)
+  $('#go').classList.add('hidden'); $('#gCenter').classList.remove('hidden'); $('#btnCancel').classList.remove('hidden')
+  $$('#optDur button, #optConn, #optLimit').forEach((e) => e.disabled = true)
+  setGauge(0, 'down'); $('#gPhase').textContent = 'Connexion…'
+  let meta = null
+  const payload = { connections: state.conn, duration: state.dur, limit_mb: state.limit ? 25 : 0 }
+  try {
+    const res = await window.ledroide.run(MODULE_ID, 'run', payload, {
+      onStart: (id) => { state.jobId = id },
+      onProgress: (p) => {
+        if (p.meta) { meta = p.meta; renderInfo(meta) }
+        $('#gPhase').textContent = p.message || ''
+        if (p.phase === 'ping') {
+          if (p.ping != null) setMetric('Ping', `${fmt(p.ping, 1)}<small>ms</small>`, !p.jitter && p.jitter !== 0, p.percent / 15 * 100)
+          if (p.jitter != null) { setMetric('Ping', null, false, null); setMetric('Jitter', `${fmt(p.jitter, 1)}<small>ms</small>`) }
+        } else if (p.phase === 'down' || p.phase === 'up') {
+          const id = p.phase === 'down' ? 'Down' : 'Up'
+          setGauge(p.done ? 0 : p.mbps, p.phase)
+          const base = p.phase === 'down' ? 15 : 60, span = p.phase === 'down' ? 45 : 40
+          setMetric(id, `${fmtSpeed(p.mbps)}<small>Mbit/s</small>`, !p.done, p.done ? null : Math.min(100, (p.percent - base) / span * 100))
+        }
+      },
+    })
+    setMetric('Ping', `${fmt(res.ping_ms, 1)}<small>ms</small>`); setMetric('Jitter', `${fmt(res.jitter_ms, 1)}<small>ms</small>`)
+    setMetric('Down', `${fmtSpeed(res.down_mbps)}<small>Mbit/s</small>`); setMetric('Up', `${fmtSpeed(res.up_mbps)}<small>Mbit/s</small>`)
+    renderInfo(meta || { ip: res.ip, isp: res.isp, asn: res.asn, colo: res.server, country: res.location }, res)
+    $('#gPhase').textContent = 'Terminé'
+    toast('Test terminé et enregistré')
+    state.history = null
+  } catch (e) {
+    $('#gPhase').textContent = ''
+    toast(e.code === 'JOB_CANCELLED' ? 'Test annulé' : e.message, e.code !== 'JOB_CANCELLED')
+  }
+  state.running = false; state.jobId = null
+  setGauge(0)
+  $('#btnCancel').classList.add('hidden'); $('#go').classList.remove('hidden'); $('#go').textContent = 'GO'
+  $('#gCenter').classList.add('hidden')
+  $$('#optDur button, #optConn, #optLimit').forEach((e) => e.disabled = false)
+}
+$('#go').onclick = start
+$('#btnCancel').onclick = () => { if (state.jobId) window.ledroide.cancel(MODULE_ID, state.jobId).catch(() => {}) }
+
+// ── Historique ──────────────────────────────────────────────────────────────
+async function loadHistory() {
+  try { state.history = await call('history', { limit: 5000 }) } catch (e) { return toast(e.message, true) }
+  renderHistory()
+}
+function renderHistory() {
+  const h = state.history
+  $$('#hRange button').forEach((b) => b.classList.toggle('on', +b.dataset.r === state.range))
+  const since = state.range ? Date.now() / 1000 - state.range * 86400 : 0
+  const tests = h.tests.filter((t) => t.ts >= since)
+  const avg = (k) => { const v = tests.map((t) => t[k]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null }
+  const max = (k) => { const v = tests.map((t) => t[k]).filter((x) => x != null); return v.length ? Math.max(...v) : null }
+  $('#hTiles').innerHTML = [
+    [tests.length, 'Tests sur la période', ''],
+    [fmtSpeed(avg('down_mbps')) + ' Mbit/s', 'Descendant moyen', 'var(--down)'],
+    [fmtSpeed(max('down_mbps')) + ' Mbit/s', 'Descendant max.', 'var(--down)'],
+    [fmtSpeed(avg('up_mbps')) + ' Mbit/s', 'Montant moyen', 'var(--up)'],
+    [fmtSpeed(max('up_mbps')) + ' Mbit/s', 'Montant max.', 'var(--up)'],
+    [fmt(avg('ping_ms'), 1) + ' ms', 'Latence moyenne', '#fcd34d'],
+  ].map(([v, l, c]) => `<div class="tile"><div class="v" style="color:${c || 'inherit'}">${v}</div><div class="l">${l}</div></div>`).join('')
+  drawHistory(tests.slice().reverse())
+  if (!tests.length) { $('#hTable').innerHTML = `<div class="empty">Aucun test sur cette période. Lancez un test depuis l'onglet « Test ».</div>`; return }
+  $('#hTable').innerHTML = `<table class="grid"><thead><tr><th>Date</th><th class="num">Latence</th><th class="num">Gigue</th><th class="num">Descendant</th><th class="num">Montant</th><th>IP</th><th>Serveur</th><th style="width:22%">Note</th><th></th></tr></thead><tbody>
+    ${tests.map((t) => `<tr><td>${fmtDate(t.ts)}</td><td class="num">${fmt(t.ping_ms, 1)} ms</td><td class="num">${fmt(t.jitter_ms, 1)} ms</td>
+      <td class="num" style="color:var(--down)">${fmtSpeed(t.down_mbps)} Mbit/s</td><td class="num" style="color:var(--up)">${fmtSpeed(t.up_mbps)} Mbit/s</td>
+      <td>${esc(t.ip)}</td><td>${esc([t.server, t.isp].filter(Boolean).join(' · '))}</td>
+      <td><input class="noteIn" data-id="${t.id}" maxlength="200" placeholder="Ajouter une note…" value="${esc(t.note)}" /></td>
+      <td><button class="icon danger" data-del="${t.id}" title="Supprimer">✕</button></td></tr>`).join('')}</tbody></table>`
+  $$('#hTable .noteIn').forEach((i) => i.onchange = async () => {
+    try { await call('note', { id: +i.dataset.id, note: i.value }); const t = h.tests.find((x) => x.id === +i.dataset.id); if (t) t.note = i.value; toast('Note enregistrée') } catch (e) { toast(e.message, true) }
+  })
+  $$('#hTable [data-del]').forEach((b) => b.onclick = async () => {
+    try { await call('delete', { id: +b.dataset.del }); loadHistory() } catch (e) { toast(e.message, true) }
+  })
+}
+
+function drawHistory(tests) {
+  const el = $('#hChart')
+  const W = Math.max(320, el.clientWidth || 800), H = 220, L = 46, R = 44, T = 24, B = 26
+  if (tests.length < 1) { el.innerHTML = '<div class="note" style="padding:80px 0;text-align:center">Pas encore de mesures.</div>'; return }
+  const t0 = tests[0].ts, t1 = tests[tests.length - 1].ts
+  const spanT = Math.max(1, t1 - t0)
+  const x = (t) => tests.length === 1 ? (L + W - R) / 2 : L + (t - t0) / spanT * (W - L - R)
+  const maxS = Math.max(1, ...tests.flatMap((t) => [t.down_mbps || 0, t.up_mbps || 0]))
+  const nice = (v) => { const p = 10 ** Math.floor(Math.log10(v)); return Math.ceil(v / p) * p }
+  const topS = nice(maxS * 1.1), topP = nice(Math.max(5, ...tests.map((t) => t.ping_ms || 0)) * 1.15)
+  const y = (v) => T + (1 - v / topS) * (H - T - B), yp = (v) => T + (1 - v / topP) * (H - T - B)
+  let g = ''
+  for (let i = 0; i <= 4; i++) {
+    const v = topS * i / 4
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#27272a"/><text x="${L - 6}" y="${y(v) + 4}" fill="#71717a" font-size="10.5" text-anchor="end">${Math.round(v)}</text>
+          <text x="${W - R + 6}" y="${yp(topP * i / 4) + 4}" fill="#a16207" font-size="10.5">${Math.round(topP * i / 4)}</text>`
+  }
+  const nT = Math.min(6, tests.length)
+  for (let i = 0; i < nT; i++) {
+    const t = tests.length === 1 ? t0 : t0 + spanT * i / Math.max(1, nT - 1)
+    const lbl = new Date(t * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + (spanT < 2 * 86400 ? ' ' + new Date(t * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '')
+    g += `<text x="${x(t)}" y="${H - 7}" fill="#71717a" font-size="10.5" text-anchor="${nT === 1 ? 'middle' : i === 0 ? 'start' : i === nT - 1 ? 'end' : 'middle'}">${lbl}</text>`
+  }
+  const line = (k, yf, color, dash = '') => {
+    const pts = tests.filter((t) => t[k] != null)
+    if (!pts.length) return ''
+    const d = 'M' + pts.map((t) => `${x(t.ts).toFixed(1)},${yf(t[k]).toFixed(1)}`).join('L')
+    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="${dash}" stroke-linejoin="round"/>` +
+      (pts.length <= 60 ? pts.map((t) => `<circle cx="${x(t.ts)}" cy="${yf(t[k])}" r="3" fill="${color}"/>`).join('') : '')
+  }
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">${g}
+    ${line('ping_ms', yp, '#f59e0b', '4 3')}${line('up_mbps', y, '#a78bfa')}${line('down_mbps', y, '#38bdf8')}
+    <text x="${L}" y="9" fill="#71717a" font-size="10">Mbit/s</text><text x="${W - R + 6}" y="9" fill="#a16207" font-size="10">ms</text>
+    <line id="hc" y1="${T}" y2="${H - B}" stroke="#a1a1aa" stroke-dasharray="3 3" visibility="hidden"/></svg><div class="tip hidden"></div>`
+  const svg = $('svg', el), tip = $('.tip', el), hc = $('#hc', el)
+  svg.onmousemove = (e) => {
+    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * W
+    let best = null
+    for (const t of tests) if (!best || Math.abs(x(t.ts) - px) < Math.abs(x(best.ts) - px)) best = t
+    hc.setAttribute('x1', x(best.ts)); hc.setAttribute('x2', x(best.ts)); hc.setAttribute('visibility', 'visible')
+    tip.innerHTML = `<b>${fmtDate(best.ts)}</b><br>↓ ${fmtSpeed(best.down_mbps)} · ↑ ${fmtSpeed(best.up_mbps)} Mbit/s · ${fmt(best.ping_ms, 1)} ms`
+    tip.classList.remove('hidden')
+    tip.style.left = Math.min(x(best.ts) / W * r.width + 10, r.width - tip.offsetWidth - 4) + 'px'; tip.style.top = '30px'
+  }
+  svg.onmouseleave = () => { tip.classList.add('hidden'); hc.setAttribute('visibility', 'hidden') }
+}
+window.addEventListener('resize', () => { if (state.history && !$('#pane-history').classList.contains('hidden')) renderHistory() })
+$$('#hRange button').forEach((b) => b.onclick = () => { state.range = +b.dataset.r; localSet('st-range', state.range); renderHistory() })
+$('#btnCsv').onclick = async () => {
+  let r
+  try { r = await call('export_csv') } catch (e) { return toast(e.message, true) }
+  if (!r.count) return toast('Aucun test à exporter', true)
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([r.csv], { type: 'text/csv' }))
+  a.download = `tests-debit-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+$('#btnClear').onclick = async () => {
+  if (!confirm('Effacer tout l\'historique des tests ?')) return
+  try { await call('delete', { all: true }); toast('Historique effacé'); loadHistory() } catch (e) { toast(e.message, true) }
+}
+
+// ── Onglets ─────────────────────────────────────────────────────────────────
+function showTab(tab) {
+  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab))
+  $('#pane-test').classList.toggle('hidden', tab !== 'test'); $('#pane-history').classList.toggle('hidden', tab !== 'history')
+  if (tab === 'history') loadHistory()
+}
+$$('#tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab))
+
+buildGauge(); renderOptions()
+call('meta', {}, 20000).then(renderInfo).catch(() => {})
+</script>
+</body>
+</html>

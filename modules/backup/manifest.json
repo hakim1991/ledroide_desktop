@@ -1,0 +1,41 @@
+{
+  "id": "backup",
+  "name": "Sauvegarde",
+  "version": "1.0.0",
+  "description": "Jeux de sauvegarde incrémentale par instantanés horodatés (liens physiques ou stockage dédupliqué, compression optionnelle) vers un dossier local, un disque externe, un partage réseau ou un serveur SFTP : exclusions, rotation quotidienne/hebdomadaire/mensuelle, planification avec rattrapage, vérification d'intégrité, navigation et restauration, journal.",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "sauvegarde",
+    "backup",
+    "restauration",
+    "incrémental",
+    "fichier"
+  ],
+  "icon": "🗄️",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "database",
+    "filesystem",
+    "network"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [],
+    "modules": []
+  },
+  "env": [
+    {
+      "key": "BACKUP_SFTP_PASSWORD",
+      "description": "Mot de passe SFTP (facultatif, seulement pour une destination SFTP avec mot de passe)",
+      "required": false,
+      "secret": true
+    }
+  ],
+  "config_schema": {}
+}

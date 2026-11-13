@@ -1,0 +1,35 @@
+{
+  "id": "mock-server",
+  "name": "Serveur d'API simulé",
+  "version": "1.0.0",
+  "description": "Serveurs HTTP locaux simulant une API : routes avec paramètres et jokers, réponses à gabarits, délais, réponses séquentielles ou aléatoires, CORS, proxy vers une vraie API, journal des requêtes en direct avec rejeu, import OpenAPI.",
+  "category": "Développement",
+  "tags": [
+    "api",
+    "mock",
+    "http",
+    "rest",
+    "test",
+    "openapi"
+  ],
+  "icon": "🎭",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "network",
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "PyYAML>=6,<7"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

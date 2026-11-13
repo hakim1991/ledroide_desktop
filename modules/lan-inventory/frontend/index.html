@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inventaire réseau local</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; flex-wrap: wrap; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 6px; }
+  .net { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+  .net b { color: var(--text); font-weight: 500; }
+  #prog { display: flex; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  #prog .bar { width: 260px; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  #prog .bar div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .stats { display: flex; gap: 8px; padding: 10px 12px 0; flex-wrap: wrap; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; min-width: 120px; cursor: pointer; }
+  .stat.on { border-color: var(--accent); background: rgba(99,102,241,.10); }
+  .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 11.5px; }
+  .stat.new b { color: #fcd34d; }
+  .alert { margin: 10px 12px 0; padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(245,158,11,.45); background: rgba(245,158,11,.08);
+           display: flex; gap: 10px; align-items: center; color: #fde68a; flex-wrap: wrap; }
+  .tools { display: flex; gap: 8px; padding: 10px 12px; align-items: center; flex-wrap: wrap; }
+  #main { flex: 1; min-height: 0; display: flex; }
+  #list { flex: 1; min-width: 0; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th { position: sticky; top: 0; background: var(--surface); text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px;
+       padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; z-index: 1; }
+  th.sorted { color: var(--text); }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  tr.dev { cursor: pointer; }
+  tr.dev:hover td { background: #1c1c21; }
+  tr.dev.sel td { background: rgba(99,102,241,.14); }
+  tr.dev.off td { color: #8b8b94; }
+  table.narrow .w { display: none; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3f3f46; margin-right: 6px; vertical-align: 1px; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 6px rgba(34,197,94,.6); }
+  .nm { font-weight: 500; }
+  .sub { color: var(--muted); font-size: 11.5px; }
+  .tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 10px; background: #27272a; color: #a1a1aa; margin-left: 4px; vertical-align: 1px; }
+  .tag.new { background: rgba(245,158,11,.18); color: #fcd34d; }
+  .tag.self { background: rgba(99,102,241,.2); color: #c7d2fe; }
+  .port { display: inline-block; font-size: 11px; padding: 0 5px; border-radius: 4px; background: #1e293b; color: #93c5fd; margin-right: 3px; }
+  #panel { width: 360px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  #panel h2 { font-size: 16px; display: flex; gap: 8px; align-items: center; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 5px 10px; font-size: 12.5px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .kv div { overflow-wrap: anywhere; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  textarea { min-height: 70px; resize: vertical; }
+  .timeline { display: flex; gap: 2px; }
+  .timeline i { flex: 1; height: 16px; border-radius: 2px; background: #27272a; }
+  .timeline i.y { background: var(--ok); }
+  .sect { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .empty { padding: 50px; text-align: center; color: var(--muted); line-height: 1.7; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(560px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  .st { font-size: 11px; padding: 1px 7px; border-radius: 10px; }
+  .st.ok { background: rgba(34,197,94,.15); color: #86efac; } .st.error { background: rgba(239,68,68,.15); color: #fca5a5; }
+  .st.cancelled, .st.running { background: rgba(245,158,11,.15); color: #fcd34d; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">🖧 Inventaire réseau local</span>
+  <span class="net" id="net"></span>
+  <span class="spacer"></span>
+  <span class="muted" id="lastScan" style="font-size:12px"></span>
+  <button class="primary" id="btnScan">⟳ Balayer le réseau</button>
+  <button id="btnSettings">⚙ Réglages</button>
+  <button id="btnHistory">🕘 Balayages</button>
+  <button id="btnCsv">⬇ CSV</button>
+</header>
+<div id="prog" class="hidden"><span style="font-weight:600">Balayage…</span><div class="bar"><div id="progBar"></div></div><span class="muted" id="progMsg"></span>
+  <span class="spacer"></span><button class="danger" id="btnCancel">Annuler</button></div>
+<div id="alert" class="alert hidden"></div>
+<div class="stats" id="stats"></div>
+<div class="tools">
+  <input id="q" placeholder="Rechercher (nom, IP, MAC, fabricant, notes)…" style="width:320px" />
+  <select id="typeFilter"><option value="">Tous les types</option></select>
+  <span class="spacer"></span>
+  <span class="muted" style="font-size:12px" id="count"></span>
+</div>
+<div id="main">
+  <div id="list"></div>
+  <aside id="panel" class="hidden"></aside>
+</div>
+<div id="toast"></div>
+<script>
+const MODULE_ID = 'lan-inventory'
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, r = document) => r.querySelector(s)
+const $$ = (s, r = document) => [...r.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const TYPE = {
+  inconnu: ['❔', 'Inconnu'], ordinateur: ['💻', 'Ordinateur'], mobile: ['📱', 'Mobile / tablette'], routeur: ['🌐', 'Box / routeur'],
+  reseau: ['📶', 'Équipement réseau'], imprimante: ['🖨️', 'Imprimante'], nas: ['🗄️', 'NAS'], serveur: ['🖥️', 'Serveur'],
+  camera: ['📷', 'Caméra'], multimedia: ['📺', 'Multimédia'], objet: ['💡', 'Objet connecté'], console: ['🎮', 'Console'], apple: ['', 'Apple'],
+}
+const tIcon = (t) => (TYPE[t] || TYPE.inconnu)[0] || '🍏'
+const tName = (t) => (TYPE[t] || TYPE.inconnu)[1]
+const state = { info: null, devices: [], totalScans: 0, filter: 'all', sort: localGet('li-sort') || 'ip', dir: 1, sel: null, detail: null, jobId: null }
+
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 6000 : 2600)
+}
+async function act(action, payload, opts) { try { return await call(action, payload, opts) } catch (e) { toast(e.message || String(e), true); return null } }
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+function relDate(iso) {
+  if (!iso) return ''
+  const a = (Date.now() - new Date(iso)) / 60000
+  if (a < 1) return "à l'instant"
+  if (a < 60) return `il y a ${Math.round(a)} min`
+  if (a < 1440) return `il y a ${Math.round(a / 60)} h`
+  return `il y a ${Math.round(a / 1440)} j`
+}
+function dialog(title, html, buttons) {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog"><h3>${esc(title)}</h3><div class="content">${html}</div><div class="foot"><span class="spacer"></span>
+    ${buttons.map((b, i) => `<button data-i="${i}" class="${b.cls || ''}">${esc(b.label)}</button>`).join('')}</div></div>`
+  document.body.appendChild(ov)
+  const close = () => ov.remove()
+  $$('.foot button', ov).forEach((btn) => btn.onclick = async () => {
+    const b = buttons[+btn.dataset.i]
+    if (!b.onClick) return close()
+    if ((await b.onClick(ov)) !== false) close()
+  })
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) close() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') close() })
+  return ov
+}
+
+async function loadInfo() {
+  state.info = await act('info')
+  if (!state.info) return
+  const n = state.info.network, s = state.info.settings
+  $('#net').innerHTML = `Réseau <b class="mono">${esc(s.cidr || n.cidr)}</b>${s.cidr ? ' (manuel)' : ''} · cet ordinateur <b class="mono">${esc(n.ip || '?')}</b>` +
+    (n.gateway ? ` · passerelle <b class="mono">${esc(n.gateway)}</b>` : '') + (s.interval_min ? ` · auto toutes les ${s.interval_min} min` : '')
+  const ls = state.info.last_scan
+  $('#lastScan').textContent = ls ? `Dernier balayage ${relDate(ls.started_at)}` : 'Jamais balayé'
+  if (state.info.scanning) showProgress(state.info.scanning)
+  const tf = $('#typeFilter')
+  if (tf.options.length === 1) tf.innerHTML += Object.keys(TYPE).map((t) => `<option value="${t}">${tIcon(t)} ${tName(t)}</option>`).join('')
+}
+async function loadDevices() {
+  const r = await act('devices.list')
+  if (!r) return
+  state.devices = r.devices; state.totalScans = r.total_scans
+  render()
+  if (state.sel) openDetail(state.sel, true)
+}
+
+function filtered() {
+  const q = $('#q').value.trim().toLowerCase(), tf = $('#typeFilter').value
+  let list = state.devices.filter((d) => {
+    if (state.filter === 'online' && !d.online) return false
+    if (state.filter === 'offline' && d.online) return false
+    if (state.filter === 'new' && !d.is_new) return false
+    if (state.filter === 'unknown' && d.known) return false
+    if (tf && d.type_effective !== tf) return false
+    if (!q) return true
+    return [d.name, d.hostname, d.netbios, d.mdns, d.ip, d.mac, d.vendor, d.notes].some((x) => (x || '').toLowerCase().includes(q))
+  })
+  const ipn = (ip) => ip ? ip.split('.').reduce((a, b) => a * 256 + +b, 0) : 0
+  const key = { ip: (d) => ipn(d.ip), name: (d) => (d.label || '~').toLowerCase(), vendor: (d) => (d.vendor || '~').toLowerCase(),
+                first: (d) => d.first_seen, last: (d) => d.last_seen, type: (d) => d.type_effective }[state.sort] || ((d) => ipn(d.ip))
+  list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * state.dir })
+  return list
+}
+function render() {
+  const all = state.devices
+  const counts = { all: all.length, online: all.filter((d) => d.online).length, offline: all.filter((d) => !d.online).length,
+                   new: all.filter((d) => d.is_new).length, unknown: all.filter((d) => !d.known).length }
+  const S = [['all', 'Appareils connus de l’inventaire'], ['online', 'En ligne (dernier balayage)'], ['offline', 'Hors ligne'], ['new', 'Nouveaux'], ['unknown', 'Non approuvés']]
+  $('#stats').innerHTML = S.map(([k, l]) => `<div class="stat ${state.filter === k ? 'on' : ''} ${k === 'new' && counts.new ? 'new' : ''}" data-f="${k}"><b>${counts[k]}</b><span>${l}</span></div>`).join('')
+  $$('.stat').forEach((el) => el.onclick = () => { state.filter = state.filter === el.dataset.f ? 'all' : el.dataset.f; render() })
+  const news = all.filter((d) => d.is_new)
+  $('#alert').classList.toggle('hidden', !news.length)
+  if (news.length) {
+    $('#alert').innerHTML = `⚠ <b>${news.length} nouvel(s) appareil(s)</b> détecté(s) : ${news.slice(0, 5).map((d) => `<span class="mono">${esc(d.label || d.ip)}</span>`).join(', ')}${news.length > 5 ? '…' : ''}
+      <span class="spacer"></span><button id="aShow">Afficher</button><button id="aAck">Marquer comme vus</button><button class="primary" id="aKnown">Approuver tous</button>`
+    $('#aShow').onclick = () => { state.filter = 'new'; render() }
+    $('#aAck').onclick = async () => { await act('devices.ack', {}); loadDevices() }
+    $('#aKnown').onclick = async () => { await act('devices.ack', { known: true }); toast('Appareils approuvés'); loadDevices() }
+  }
+  const list = filtered()
+  $('#count').textContent = `${list.length} affiché(s)`
+  if (!all.length) {
+    $('#list').innerHTML = `<div class="empty">📡<br>Aucun appareil dans l’inventaire.<br>Cliquez sur <b>Balayer le réseau</b> pour découvrir les appareils connectés.<br>
+      <span class="hint">Le balayage envoie un ping à chaque adresse du sous-réseau (32 en parallèle au plus) puis lit la table ARP ; il dure environ 10 à 20 s pour un /24.</span></div>`
+    return
+  }
+  const th = (k, l, w, c = '') => `<th data-s="${k}" style="width:${w}" class="${c} ${state.sort === k ? 'sorted' : ''}">${l}${state.sort === k ? (state.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`
+  $('#list').innerHTML = `<table class="${state.sel ? 'narrow' : ''}"><thead><tr>${th('name', 'Appareil', '27%')}${th('ip', 'Adresse IP', '11%')}<th class="w" style="width:13%">MAC</th>
+    ${th('vendor', 'Fabricant', '12%')}${th('type', 'Type', '11%')}<th style="width:10%">Ports</th>${th('first', 'Première vue', '8%', 'w')}${th('last', 'Dernière vue', '8%')}</tr></thead><tbody>
+    ${list.map((d) => `<tr class="dev ${d.online ? '' : 'off'} ${d.id === state.sel ? 'sel' : ''}" data-id="${d.id}">
+      <td><span class="dot ${d.online ? 'on' : ''}"></span>${tIcon(d.type_effective)} <span class="nm">${esc(d.label || 'Appareil sans nom')}</span>
+        ${d.is_new ? '<span class="tag new">nouveau</span>' : ''}${d.is_self ? '<span class="tag self">cet ordinateur</span>' : ''}
+        ${d.is_gateway ? '<span class="tag">passerelle</span>' : ''}
+        ${d.name && (d.hostname || d.netbios) ? `<div class="sub">${esc(d.hostname || d.netbios)}</div>` : ''}</td>
+      <td class="mono">${esc(d.ip)}</td><td class="mono w">${esc(d.mac || '—')}</td><td title="${esc(d.vendor)}">${esc(d.vendor || '—')}</td>
+      <td>${esc(tName(d.type_effective))}</td><td>${d.ports.map((p) => `<span class="port">${p}</span>`).join('') || '<span class="muted">—</span>'}</td>
+      <td class="w" title="${esc(fmtDate(d.first_seen))}">${esc(fmtDate(d.first_seen))}</td><td title="${esc(fmtDate(d.last_seen))}">${esc(d.online ? 'en ligne' : relDate(d.last_seen))}</td></tr>`).join('')}
+    </tbody></table>${list.length ? '' : '<div class="empty">Aucun appareil ne correspond au filtre.</div>'}`
+  $$('th[data-s]').forEach((h) => h.onclick = () => {
+    state.dir = state.sort === h.dataset.s ? -state.dir : 1; state.sort = h.dataset.s; localSet('li-sort', state.sort); render()
+  })
+  $$('tr.dev').forEach((tr) => tr.onclick = () => openDetail(+tr.dataset.id))
+}
+
+async function openDetail(id, quiet = false) {
+  const r = await (quiet ? call('device.get', { id }).catch(() => null) : act('device.get', { id }))
+  if (!r) { state.sel = null; $('#panel').classList.add('hidden'); return }
+  const reflow = !$('table.narrow')
+  state.sel = id; state.detail = r
+  if (reflow) render()
+  $$('tr.dev').forEach((tr) => tr.classList.toggle('sel', +tr.dataset.id === id))
+  const d = r.device
+  const P = $('#panel')
+  P.classList.remove('hidden')
+  const seen = r.timeline.filter((t) => t.seen).length
+  P.innerHTML = `<div class="row"><h2>${tIcon(d.type_effective)} ${esc(d.label || 'Appareil sans nom')}</h2><span class="spacer"></span><button class="icon" id="pClose" title="Fermer">✕</button></div>
+    <div class="row"><span class="dot ${d.online ? 'on' : ''}"></span>${d.online ? 'En ligne' : 'Hors ligne depuis ' + esc(relDate(d.last_seen))}
+      ${d.is_new ? '<span class="tag new">nouveau</span>' : ''}${d.known ? '<span class="tag">approuvé</span>' : ''}</div>
+    <div class="field"><label>Nom personnalisé</label><input id="pName" maxlength="100" placeholder="${esc(d.hostname || d.mdns || d.netbios || 'Ex. Imprimante du bureau')}" value="${esc(d.name)}" /></div>
+    <div class="field"><label>Type</label><select id="pType"><option value="">Automatique (${esc(tName(d.type_guessed))})</option>
+      ${Object.keys(TYPE).map((t) => `<option value="${t}" ${d.type === t ? 'selected' : ''}>${tIcon(t)} ${tName(t)}</option>`).join('')}</select></div>
+    <div class="field"><label>Notes</label><textarea id="pNotes" maxlength="5000" placeholder="Emplacement, propriétaire, IP réservée…">${esc(d.notes)}</textarea></div>
+    <label><input type="checkbox" id="pKnown" ${d.known ? 'checked' : ''}/> Appareil approuvé (connu)</label>
+    <div class="row"><button class="primary" id="pSave">Enregistrer</button><span class="spacer"></span><button class="danger" id="pDel">Oublier l’appareil</button></div>
+    <div class="sect">Identification</div>
+    <div class="kv"><div>Adresse IP</div><div class="mono">${esc(d.ip)}</div><div>Adresse MAC</div><div class="mono">${esc(d.mac || '—')}</div>
+      <div>Fabricant</div><div>${esc(d.vendor || 'inconnu')}</div><div>Nom DNS</div><div>${esc(d.hostname || '—')}</div>
+      <div>NetBIOS</div><div>${esc(d.netbios || '—')}</div><div>mDNS</div><div>${esc(d.mdns || '—')}</div>
+      <div>Latence</div><div>${d.rtt_ms != null ? d.rtt_ms + ' ms' : '— (vu par ARP)'}</div>
+      <div>Première vue</div><div>${esc(fmtDate(d.first_seen))}</div><div>Dernière vue</div><div>${esc(fmtDate(d.last_seen))}</div>
+      <div>Vu</div><div>${d.seen_count} balayage(s)</div></div>
+    <div class="sect">Ports courants ouverts</div>
+    <div class="row">${d.ports.length ? d.ports.map((p) => `<span class="port" title="${esc(r.port_names[p] || '')}">${p} ${esc(r.port_names[p] || '')}</span>`).join('') : `<span class="muted">${d.ports_at ? 'Aucun' : 'Non testés'}</span>`}</div>
+    <div class="row"><button id="pPorts" ${d.online ? '' : 'disabled'}>🔎 Tester les ports</button>${d.ports_at ? `<span class="muted" style="font-size:11.5px">testé ${esc(relDate(d.ports_at))}</span>` : ''}
+      ${d.ports.some((p) => [80, 8080, 443, 8443, 8123, 5000].includes(p)) ? `<button id="pWeb">🌐 Ouvrir l’interface web</button>` : ''}</div>
+    <div class="sect">Présence (${seen}/${r.timeline.length} derniers balayages)</div>
+    <div class="timeline">${r.timeline.map((t) => `<i class="${t.seen ? 'y' : ''}"></i>`).join('')}</div>
+    <div class="sect">Adresses IP successives</div>
+    <div class="kv">${r.ips.map((x) => `<div class="mono">${esc(x.ip)}</div><div>${esc(fmtDate(x.first))} → ${esc(fmtDate(x.last))} (${x.n}×)</div>`).join('') || '<div>—</div><div></div>'}</div>`
+  if (!quiet) P.scrollTop = 0
+  $('#pClose').onclick = () => { state.sel = null; P.classList.add('hidden'); render() }
+  $('#pSave').onclick = async () => {
+    const res = await act('device.update', { id, device: { name: $('#pName').value, notes: $('#pNotes').value, type: $('#pType').value, known: $('#pKnown').checked } })
+    if (res) { toast('Appareil enregistré'); await loadDevices() }
+  }
+  $('#pDel').onclick = async () => {
+    if (!confirm('Oublier cet appareil (nom, notes et historique) ? Il réapparaîtra comme nouveau s’il est de nouveau détecté.')) return
+    if (await act('device.delete', { id })) { state.sel = null; P.classList.add('hidden'); loadDevices() }
+  }
+  $('#pPorts').onclick = async () => {
+    $('#pPorts').disabled = true; $('#pPorts').textContent = 'Test en cours…'
+    try { await window.ledroide.run(MODULE_ID, 'device.ports', { id }); toast('Ports testés'); await loadDevices() }
+    catch (e) { toast(e.message, true); $('#pPorts').disabled = false }
+  }
+  const web = $('#pWeb')
+  if (web) web.onclick = () => {
+    const p = d.ports.find((x) => [443, 8443].includes(x)) ? (d.ports.includes(443) ? 443 : 8443) : d.ports.find((x) => [80, 8080, 8123, 5000].includes(x))
+    window.open(`${[443, 8443].includes(p) ? 'https' : 'http'}://${d.ip}${[80, 443].includes(p) ? '' : ':' + p}/`, '_blank')
+  }
+}
+
+function showProgress(p) {
+  $('#prog').classList.remove('hidden'); $('#btnScan').disabled = true
+  $('#progBar').style.width = `${p.percent || 0}%`; $('#progMsg').textContent = p.message || ''
+}
+function hideProgress() { $('#prog').classList.add('hidden'); $('#btnScan').disabled = false }
+
+$('#btnScan').onclick = async () => {
+  showProgress({ percent: 0, message: 'Démarrage…' })
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'scan', {}, { onStart: (id) => (state.jobId = id) })
+    toast(`${r.found} appareil(s) en ligne sur ${r.cidr} — ${r.new.length} nouveau(x) — ${r.elapsed_s} s`)
+  } catch (e) { toast(e.code === 'JOB_CANCELLED' ? 'Balayage annulé' : e.message, e.code !== 'JOB_CANCELLED') }
+  finally { state.jobId = null; hideProgress(); loadInfo(); loadDevices() }
+}
+$('#btnCancel').onclick = () => state.jobId ? window.ledroide.cancel(MODULE_ID, state.jobId) : toast('Balayage périodique : il se terminera de lui-même')
+$('#q').oninput = render
+$('#typeFilter').onchange = render
+$('#btnCsv').onclick = async () => {
+  const r = await act('export.csv')
+  if (!r) return
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([r.csv], { type: 'text/csv;charset=utf-8' }))
+  a.download = r.filename; a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+}
+$('#btnSettings').onclick = () => {
+  const s = state.info.settings, n = state.info.network
+  const ov = dialog('Réglages du balayage', `
+    <div class="field"><label>Sous-réseau à balayer</label><input id="sCidr" class="mono" placeholder="Automatique : ${esc(n.cidr)}" value="${esc(s.cidr)}" />
+      <div class="hint">Laisser vide pour le réseau de la carte active. Réseaux privés uniquement, /22 au plus (1024 adresses).</div></div>
+    <div class="field"><label>Balayage périodique (pendant que l’application est ouverte)</label>
+      <select id="sInt">${[[0, 'Désactivé'], [15, 'Toutes les 15 min'], [30, 'Toutes les 30 min'], [60, 'Toutes les heures'], [180, 'Toutes les 3 h'], [720, 'Toutes les 12 h'], [1440, 'Une fois par jour']]
+        .map(([v, l]) => `<option value="${v}" ${s.interval_min === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <label><input type="checkbox" id="sAlert" ${s.alert_new ? 'checked' : ''}/> Alerter quand un nouvel appareil apparaît</label>
+    <label><input type="checkbox" id="sNames" ${s.resolve_names ? 'checked' : ''}/> Résoudre les noms (DNS inverse, NetBIOS, mDNS)</label>
+    <label><input type="checkbox" id="sPorts" ${s.scan_ports ? 'checked' : ''}/> Tester les ports courants à chaque balayage (${state.info.ports.length} ports, appareils en ligne uniquement)</label>
+    <div class="row"><div class="field"><label>Délai du ping (ms)</label><input id="sTo" type="number" min="200" max="3000" value="${s.ping_timeout_ms}" style="width:110px" /></div>
+      <div class="field"><label>Pings simultanés</label><input id="sConc" type="number" min="4" max="64" value="${s.ping_concurrency}" style="width:110px" /></div></div>
+    <div class="hint">Charge réseau : un ping ICMP par adresse (≈ 74 octets), ${s.ping_concurrency} au plus en parallèle, soit quelques dizaines de Ko pour un /24 ; la table ARP est lue localement.
+      Le test de ports ouvre une connexion TCP par port (48 au plus en parallèle, délai 0,5 s) sans rien envoyer. À n’utiliser que sur vos propres réseaux.</div>
+    <div class="row"><button class="danger" id="sPurge">Oublier les appareils non approuvés absents depuis 90 jours</button></div>`,
+    [{ label: 'Annuler' }, { label: 'Enregistrer', cls: 'primary', onClick: async (el) => {
+      const r = await act('settings.save', { settings: { cidr: $('#sCidr', el).value.trim(), interval_min: +$('#sInt', el).value, alert_new: $('#sAlert', el).checked,
+        resolve_names: $('#sNames', el).checked, scan_ports: $('#sPorts', el).checked, ping_timeout_ms: +$('#sTo', el).value, ping_concurrency: +$('#sConc', el).value } })
+      if (!r) return false
+      toast('Réglages enregistrés'); loadInfo()
+    } }])
+  $('#sPurge', ov).onclick = async () => { const r = await act('devices.purge', { days: 90 }); if (r) { toast(`${r.deleted} appareil(s) oublié(s)`); loadDevices() } }
+}
+$('#btnHistory').onclick = async () => {
+  const r = await act('scans.list', { limit: 100 })
+  if (!r) return
+  const S = { ok: 'Terminé', error: 'Échec', cancelled: 'Annulé', running: 'En cours' }
+  dialog('Historique des balayages', r.scans.length ? `<div style="max-height:60vh;overflow:auto"><table><thead><tr><th style="width:130px">Date</th><th style="width:120px">Plage</th><th style="width:90px">Déclencheur</th><th style="width:85px">Statut</th><th>Résultat</th></tr></thead><tbody>
+    ${r.scans.map((s) => `<tr><td>${esc(fmtDate(s.started_at))}</td><td class="mono">${esc(s.cidr)}</td><td class="muted">${esc(s.trigger)}</td><td><span class="st ${s.status}">${S[s.status] || s.status}</span></td>
+      <td title="${esc(s.message)}">${esc(s.message)}${s.elapsed_s ? ` (${s.elapsed_s} s)` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Aucun balayage.</div>',
+    [{ label: 'Fermer', cls: 'primary' }]).querySelector('.dialog').style.width = 'min(820px, calc(100vw - 32px))'
+}
+
+window.ledroide.on(MODULE_ID, 'scan:progress', showProgress)
+window.ledroide.on(MODULE_ID, 'scan:started', (p) => { showProgress({ percent: 0, message: p.trigger === 'périodique' ? 'Balayage périodique…' : 'Démarrage…' }) })
+window.ledroide.on(MODULE_ID, 'scan:finished', () => { if (!state.jobId) { hideProgress(); loadInfo(); loadDevices() } })
+window.ledroide.on(MODULE_ID, 'devices:new', (p) => {
+  toast(`⚠ Nouvel appareil : ${p.devices.map((d) => d.label || d.ip).join(', ')}`, true)
+  loadDevices()
+})
+
+;(async () => { await loadInfo(); await loadDevices() })()
+</script>
+</body>
+</html>

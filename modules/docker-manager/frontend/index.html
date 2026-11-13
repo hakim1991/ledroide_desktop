@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Docker</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --docker: #2496ed;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.danger:hover:not(:disabled) { border-color: rgba(239,68,68,.5); }
+  button.icon { padding: 4px 7px; min-width: 28px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  label.chk { display: inline-flex; align-items: center; gap: 5px; color: #a1a1aa; cursor: pointer; }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 12px;
+          background: var(--surface2); border: 1px solid var(--border); color: #a1a1aa; }
+  .pill .d { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill.ok .d { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .pill.bad .d { background: var(--err); }
+
+  #app { flex: 1; min-height: 0; display: flex; }
+  nav { width: 170px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  nav button { display: flex; align-items: center; gap: 8px; text-align: left; border: none; background: transparent; padding: 8px 10px; color: #a1a1aa; }
+  nav button:hover:not(:disabled) { background: var(--surface2); border: none; }
+  nav button.on { background: rgba(99,102,241,.16); color: var(--text); }
+  nav .count { margin-left: auto; font-size: 11px; color: var(--muted); }
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+  .toolbar input[type=search] { width: 220px; }
+  .scroll { flex: 1; min-height: 0; overflow: auto; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { position: sticky; top: 0; background: var(--surface); text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px;
+       text-transform: uppercase; letter-spacing: .03em; padding: 7px 10px; border-bottom: 1px solid var(--border); z-index: 1; white-space: nowrap; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:hover td { background: #1a1a1e; }
+  td.actions { white-space: nowrap; text-align: right; }
+  td.actions button { margin-left: 3px; }
+  .name { font-weight: 500; }
+  .sub { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .chip { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); color: #a1a1aa; margin: 1px 3px 1px 0; }
+  .chip.compose { color: #93c5fd; border-color: rgba(36,150,237,.4); }
+  .chip.ok { color: #86efac; border-color: rgba(34,197,94,.4); }
+  .state { display: inline-flex; align-items: center; gap: 6px; }
+  .state .d { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .state.running .d { background: var(--ok); }
+  .state.paused .d { background: var(--warn); }
+  .state.exited .d, .state.dead .d { background: #52525b; }
+  .state.restarting .d, .state.created .d { background: var(--docker); }
+  .bar { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; width: 70px; margin-top: 3px; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .bar.hot > div { background: var(--warn); }
+  .ports a { color: #93c5fd; text-decoration: none; cursor: pointer; }
+  .ports a:hover { text-decoration: underline; }
+  .empty-row { padding: 40px; text-align: center; color: var(--muted); }
+  .summary { color: var(--muted); font-size: 12px; }
+
+  #logs { height: 42%; min-height: 140px; border-top: 1px solid var(--border); background: #0b0b0e; display: flex; flex-direction: column; flex-shrink: 0; }
+  #logs .lhead { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  #logs .lhead b { font-weight: 600; }
+  #logOut { flex: 1; overflow: auto; padding: 6px 10px; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; line-height: 1.5; user-select: text; }
+  #logOut div { white-space: pre; }
+  #logOut.wrap div { white-space: pre-wrap; word-break: break-all; }
+  #logOut .err { color: #fca5a5; }
+  #logOut mark { background: rgba(245,158,11,.35); color: inherit; }
+  #logOut .sys { color: var(--muted); font-style: italic; }
+  .live { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+  .live .d { width: 7px; height: 7px; border-radius: 50%; background: #52525b; }
+  .live.on { color: #86efac; }
+  .live.on .d { background: var(--ok); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  #splitLogs { height: 5px; cursor: row-resize; background: var(--border); flex-shrink: 0; }
+  #splitLogs:hover { background: var(--accent); }
+
+  .center { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; max-width: 520px; }
+  .card .big { font-size: 42px; text-align: center; margin-bottom: 8px; }
+  .card h2 { font-size: 17px; text-align: center; margin-bottom: 8px; }
+  .card p { color: #a1a1aa; line-height: 1.55; margin-bottom: 10px; }
+  .card ol { color: #a1a1aa; line-height: 1.7; margin: 0 0 16px 20px; }
+  .card code { background: var(--surface2); border: 1px solid var(--border); padding: 0 5px; border-radius: 4px; font-size: 12px; }
+  .card .actions { display: flex; gap: 8px; justify-content: center; }
+  .card .detail { font-size: 12px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 14px; word-break: break-word; }
+
+  .projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; padding: 14px; }
+  .proj { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .proj .top { display: flex; align-items: center; gap: 8px; }
+  .proj .top b { font-size: 14px; }
+  .proj .meta { font-size: 11.5px; color: var(--muted); word-break: break-all; }
+  .proj .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .section-title { padding: 14px 14px 0; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: .04em; }
+  .filebox { display: flex; gap: 8px; padding: 10px 14px; align-items: center; flex-wrap: wrap; }
+  .filebox input { flex: 1; min-width: 260px; }
+  .recent { padding: 0 14px; display: flex; flex-direction: column; gap: 4px; }
+  .recent .r { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px 5px 10px; }
+  .recent .r .p { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .recent .r .p.missing { color: var(--muted); text-decoration: line-through; }
+  .console { margin: 12px 14px; background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; max-height: 240px; overflow: auto;
+             font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; user-select: text; }
+
+  .pullbox { display: flex; gap: 8px; align-items: center; }
+  .progress { flex: 1; min-width: 160px; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--docker); transition: width .2s; }
+  .progress.indet > div { width: 30% !important; animation: indet 1.2s infinite linear; }
+  @keyframes indet { from { margin-left: -30%; } to { margin-left: 100%; } }
+  #pullStatus { padding: 0 14px 10px; display: flex; gap: 10px; align-items: center; font-size: 12px; color: #a1a1aa; }
+  #pullStatus .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+
+  .clean { padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .ccard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .ccard h4 { font-size: 13.5px; }
+  .ccard p { color: #a1a1aa; font-size: 12px; line-height: 1.5; flex: 1; }
+  .ccard .row { display: flex; align-items: center; gap: 8px; }
+  .ccard.system { border-color: rgba(239,68,68,.35); }
+  .df { margin: 14px 14px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(820px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; display: flex; align-items: center; gap: 8px; }
+  .dialog .content { padding: 0 18px; overflow: auto; flex: 1; min-height: 0; }
+  .dialog .foot { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); margin-top: 12px; }
+  pre.json { background: #0b0b0e; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: ui-monospace, Consolas, monospace;
+             font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; user-select: text; }
+  pre.json .k { color: #93c5fd; } pre.json .s { color: #86efac; } pre.json .n { color: #fbbf24; } pre.json .b { color: #f0abfc; }
+  .kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px; margin-bottom: 12px; font-size: 12.5px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .kv div:nth-child(even) { word-break: break-all; }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">🐳 Docker</span>
+  <span class="pill" id="statusPill"><span class="d"></span><span id="statusText">Vérification…</span></span>
+  <span class="spacer"></span>
+  <label class="chk" title="Actualiser automatiquement toutes les 5 s"><input type="checkbox" id="autoRefresh" checked /> Actualisation auto</label>
+  <button id="btnRefresh" title="Actualiser (F5)">⟳ Actualiser</button>
+</header>
+
+<div id="unavailable" class="center hidden">
+  <div class="card">
+    <div class="big" id="uaIcon">🐳</div>
+    <h2 id="uaTitle">Docker introuvable</h2>
+    <p id="uaText"></p>
+    <div class="detail mono hidden" id="uaDetail"></div>
+    <ol id="uaSteps"></ol>
+    <div class="actions"><button class="primary" id="uaRetry">⟳ Réessayer</button></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <nav id="nav">
+    <button data-tab="containers" class="on">📦 Conteneurs <span class="count" id="cntContainers"></span></button>
+    <button data-tab="images">💿 Images <span class="count" id="cntImages"></span></button>
+    <button data-tab="volumes">💾 Volumes <span class="count" id="cntVolumes"></span></button>
+    <button data-tab="networks">🔗 Réseaux <span class="count" id="cntNetworks"></span></button>
+    <button data-tab="compose">🧩 Compose <span class="count" id="cntCompose"></span></button>
+    <button data-tab="clean">🧹 Nettoyage</button>
+  </nav>
+  <main>
+    <section class="pane" data-pane="containers">
+      <div class="toolbar">
+        <input type="search" id="cSearch" placeholder="Filtrer (nom, image, projet)…" />
+        <select id="cFilter">
+          <option value="all">Tous</option><option value="running">En cours</option><option value="stopped">Arrêtés</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="cStats" checked /> Statistiques CPU / mémoire</label>
+        <span class="spacer"></span>
+        <span class="summary" id="cSummary"></span>
+      </div>
+      <div class="scroll"><table>
+        <thead><tr><th>Nom</th><th>Image</th><th>État</th><th>Ports</th><th>CPU</th><th>Mémoire</th><th></th></tr></thead>
+        <tbody id="cBody"></tbody>
+      </table></div>
+      <div id="splitLogs" class="hidden"></div>
+      <div id="logs" class="hidden">
+        <div class="lhead">
+          <b id="logTitle">Journaux</b>
+          <span class="live" id="logLive"><span class="d"></span><span id="logLiveTxt">arrêté</span></span>
+          <select id="logTail" title="Lignes initiales">
+            <option value="100">100 lignes</option><option value="300" selected>300 lignes</option><option value="1000">1000 lignes</option><option value="5000">5000 lignes</option>
+          </select>
+          <label class="chk"><input type="checkbox" id="logTs" /> Horodatage</label>
+          <label class="chk"><input type="checkbox" id="logWrap" /> Retour à la ligne</label>
+          <input type="search" id="logFilter" placeholder="Filtrer…" style="width:160px" />
+          <span class="spacer"></span>
+          <button id="logToggle">⏸ Arrêter</button>
+          <button class="icon" id="logClear" title="Vider">🧽</button>
+          <button class="icon" id="logSave" title="Enregistrer">⬇</button>
+          <button class="icon" id="logClose" title="Fermer">✕</button>
+        </div>
+        <div id="logOut"></div>
+      </div>
+    </section>
+
+    <section class="pane hidden" data-pane="images">
+      <div class="toolbar">
+        <input type="search" id="iSearch" placeholder="Filtrer les images…" />
+        <label class="chk"><input type="checkbox" id="iAll" /> Couches intermédiaires</label>
+        <span class="spacer"></span>
+        <div class="pullbox">
+          <input id="pullInput" placeholder="Image à télécharger (ex. nginx:alpine)" style="width:250px" />
+          <button class="primary" id="pullBtn">⬇ Pull</button>
+        </div>
+      </div>
+      <div id="pullStatus" class="hidden">
+        <div class="progress" id="pullBar"><div style="width:0"></div></div>
+        <span class="msg" id="pullMsg"></span>
+        <button class="icon" id="pullCancel" title="Annuler">✕</button>
+      </div>
+      <div class="scroll"><table>
+        <thead><tr><th>Dépôt</th><th>Tag</th><th>ID</th><th>Taille</th><th>Créée</th><th></th></tr></thead>
+        <tbody id="iBody"></tbody>
+      </table></div>
+      <div class="toolbar"><span class="summary" id="iSummary"></span></div>
+    </section>
+
+    <section class="pane hidden" data-pane="volumes">
+      <div class="toolbar"><input type="search" id="vSearch" placeholder="Filtrer les volumes…" /><span class="spacer"></span><span class="summary" id="vSummary"></span></div>
+      <div class="scroll"><table>
+        <thead><tr><th>Nom</th><th>Pilote</th><th>Projet</th><th>Point de montage</th><th></th></tr></thead>
+        <tbody id="vBody"></tbody>
+      </table></div>
+    </section>
+
+    <section class="pane hidden" data-pane="networks">
+      <div class="toolbar"><input type="search" id="nSearch" placeholder="Filtrer les réseaux…" /><span class="spacer"></span><span class="summary" id="nSummary"></span></div>
+      <div class="scroll"><table>
+        <thead><tr><th>Nom</th><th>ID</th><th>Pilote</th><th>Portée</th><th>Options</th><th></th></tr></thead>
+        <tbody id="nBody"></tbody>
+      </table></div>
+    </section>
+
+    <section class="pane hidden" data-pane="compose">
+      <div class="scroll">
+        <div class="section-title">Fichier docker-compose</div>
+        <div class="filebox">
+          <input id="composeFile" class="mono" placeholder="C:\chemin\vers\docker-compose.yml" />
+          <button class="primary" data-cf="up">▶ up -d</button>
+          <button data-cf="restart">⟳ restart</button>
+          <button data-cf="stop">⏹ stop</button>
+          <button data-cf="pull">⬇ pull</button>
+          <button class="danger" data-cf="down">⏏ down</button>
+        </div>
+        <div class="recent" id="composeRecent"></div>
+        <pre class="console hidden" id="composeConsole"></pre>
+        <div class="section-title">Projets détectés</div>
+        <div class="projects" id="projects"></div>
+      </div>
+    </section>
+
+    <section class="pane hidden" data-pane="clean">
+      <div class="scroll">
+        <div class="section-title">Espace disque utilisé</div>
+        <div class="df"><table><thead><tr><th>Type</th><th>Total</th><th>Actifs</th><th>Taille</th><th>Récupérable</th></tr></thead><tbody id="dfBody"></tbody></table></div>
+        <div class="section-title">Nettoyage</div>
+        <div class="clean" id="cleanCards"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'docker-manager'
+const call = (action, payload = {}, timeout = 60000) => window.ledroide.call(MODULE_ID, action, payload, { timeout })
+const run = (action, payload, opts) => window.ledroide.run(MODULE_ID, action, payload, opts)
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const state = {
+  tab: 'containers', status: null, containers: [], stats: new Map(), images: [], volumes: [], networks: [],
+  compose: { projects: [], files: [] }, log: null, pullJob: null, busy: new Set(),
+}
+let toastTimer = null
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 6000 : 2400)
+}
+async function act(action, payload, okMsg, timeout) {
+  try {
+    const r = await call(action, payload, timeout)
+    if (okMsg) toast(okMsg)
+    return r
+  } catch (e) {
+    if (e.code === 'DOCKER_NOT_FOUND' || e.code === 'DAEMON_DOWN' || e.code === 'DOCKER_TIMEOUT') checkStatus()
+    toast(e.message || String(e), true); return null
+  }
+}
+
+function fmtBytes(n) {
+  if (!n) return '0 o'
+  const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
+  return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)).replace('.', ',') + ' ' + u[i]
+}
+const STATE_FR = { running: 'en cours', exited: 'arrêté', paused: 'en pause', restarting: 'redémarrage', created: 'créé', dead: 'mort', removing: 'suppression' }
+
+// ── Statut ───────────────────────────────────────────────────────────────────
+
+async function checkStatus() {
+  let s
+  try { s = await call('status', {}, 30000) } catch (e) { s = { available: false, message: e.message } }
+  state.status = s
+  const pill = $('#statusPill')
+  if (s.daemon) {
+    pill.className = 'pill ok'
+    $('#statusText').textContent = `Moteur ${s.server_version}${s.os ? ' · ' + s.os : ''}`
+    pill.title = `${s.platform || ''}\nClient ${s.client_version}\n${s.exe || ''}`
+    $('#unavailable').classList.add('hidden'); $('#app').classList.remove('hidden')
+    return true
+  }
+  pill.className = 'pill bad'
+  $('#statusText').textContent = s.available ? 'Démon arrêté' : 'Docker introuvable'
+  showUnavailable(s)
+  return false
+}
+
+function showUnavailable(s) {
+  $('#app').classList.add('hidden'); $('#unavailable').classList.remove('hidden')
+  stopLogs()
+  if (!s.available) {
+    $('#uaIcon').textContent = '🐳'
+    $('#uaTitle').textContent = 'Docker introuvable'
+    $('#uaText').textContent = "Le programme « docker » n'a pas été trouvé sur cet ordinateur. Ce module pilote Docker via son interface en ligne de commande."
+    $('#uaSteps').innerHTML = `<li>Installez <b>Docker Desktop</b> (Windows / macOS) ou <b>Docker Engine</b> (Linux).</li>
+      <li>Vérifiez dans un terminal que <code>docker version</code> fonctionne.</li>
+      <li>Si Docker est installé ailleurs, ajoutez son dossier au <code>PATH</code> (menu « Variables » de l'application) puis réessayez.</li>`
+    $('#uaDetail').classList.add('hidden')
+  } else {
+    $('#uaIcon').textContent = '💤'
+    $('#uaTitle').textContent = 'Le démon Docker ne répond pas'
+    $('#uaText').textContent = `Le CLI Docker${s.client_version ? ' ' + s.client_version : ''} est installé mais le moteur n'est pas joignable.`
+    $('#uaSteps').innerHTML = `<li>Démarrez <b>Docker Desktop</b> et attendez qu'il indique « Engine running ».</li>
+      <li>Sous Linux : <code>sudo systemctl start docker</code>.</li>`
+    $('#uaDetail').textContent = s.detail || ''
+    $('#uaDetail').classList.toggle('hidden', !s.detail)
+  }
+}
+
+// ── Conteneurs ───────────────────────────────────────────────────────────────
+
+async function loadContainers() {
+  const r = await act('containers.list')
+  if (!r) return
+  state.containers = r.containers
+  $('#cntContainers').textContent = r.containers.length || ''
+  renderContainers()
+  if ($('#cStats').checked && r.containers.some((c) => c.state === 'running')) loadStats()
+}
+
+let statsBusy = false
+async function loadStats() {
+  if (statsBusy) return
+  statsBusy = true
+  try {
+    const r = await call('containers.stats', {}, 45000)
+    state.stats = new Map(r.stats.map((s) => [s.id, s]))
+    renderContainers()
+  } catch {} finally { statsBusy = false }
+}
+
+function statFor(c) {
+  for (const [id, s] of state.stats) if (c.id.startsWith(id) || id.startsWith(c.short_id)) return s
+  return null
+}
+
+function portsHtml(c) {
+  return c.ports.map((p) => {
+    if (p.raw) return `<span class="chip">${esc(p.raw)}</span>`
+    if (p.host_port) {
+      const host = p.ip && p.ip !== '0.0.0.0' && p.ip !== '::' ? p.ip : 'localhost'
+      const link = p.proto === 'tcp' ? `<a data-url="http://${esc(host)}:${esc(p.host_port.split('-')[0])}">${esc(p.host_port)}</a>` : esc(p.host_port)
+      return `<span class="chip">${link}→${esc(p.container_port)}/${esc(p.proto)}</span>`
+    }
+    return `<span class="chip">${esc(p.container_port)}/${esc(p.proto)}</span>`
+  }).join('')
+}
+
+function renderContainers() {
+  const q = $('#cSearch').value.trim().toLowerCase()
+  const f = $('#cFilter').value
+  const list = state.containers.filter((c) => {
+    if (f === 'running' && c.state !== 'running') return false
+    if (f === 'stopped' && c.state === 'running') return false
+    return !q || [c.name, c.image, c.compose_project, c.short_id].some((v) => (v || '').toLowerCase().includes(q))
+  })
+  const running = state.containers.filter((c) => c.state === 'running').length
+  $('#cSummary').textContent = `${running} en cours · ${state.containers.length} au total`
+  if (!list.length) {
+    $('#cBody').innerHTML = `<tr><td colspan="7" class="empty-row">${state.containers.length ? 'Aucun conteneur ne correspond au filtre.' : 'Aucun conteneur. Lancez-en un avec <code>docker run</code> ou un projet Compose.'}</td></tr>`
+    return
+  }
+  $('#cBody').innerHTML = list.map((c) => {
+    const s = c.state === 'running' ? statFor(c) : null
+    const busy = state.busy.has(c.id)
+    const on = c.state === 'running' || c.state === 'restarting'
+    return `<tr data-id="${esc(c.id)}">
+      <td><div class="name">${esc(c.name)}</div><div class="sub mono">${esc(c.short_id)}${c.compose_project ? ` <span class="chip compose" title="Projet Compose">${esc(c.compose_project)}${c.compose_service ? ' / ' + esc(c.compose_service) : ''}</span>` : ''}</div></td>
+      <td><span class="mono">${esc(c.image)}</span></td>
+      <td><span class="state ${esc(c.state)}"><span class="d"></span>${esc(STATE_FR[c.state] || c.state)}</span><div class="sub">${esc(c.status)}</div></td>
+      <td class="ports">${portsHtml(c)}</td>
+      <td>${s ? `${s.cpu.toFixed(1).replace('.', ',')} %<div class="bar ${s.cpu > 80 ? 'hot' : ''}"><div style="width:${Math.min(100, s.cpu)}%"></div></div>` : '<span class="muted">—</span>'}</td>
+      <td>${s ? `${fmtBytes(s.mem_used)}<div class="bar ${s.mem_percent > 80 ? 'hot' : ''}" title="${s.mem_percent.toFixed(1)} % de ${fmtBytes(s.mem_limit)}"><div style="width:${Math.min(100, s.mem_percent)}%"></div></div>` : '<span class="muted">—</span>'}</td>
+      <td class="actions">
+        ${on ? `<button class="icon" data-a="stop" title="Arrêter" ${busy ? 'disabled' : ''}>⏹</button><button class="icon" data-a="restart" title="Redémarrer" ${busy ? 'disabled' : ''}>⟳</button>`
+             : c.state === 'paused' ? `<button class="icon" data-a="unpause" title="Reprendre" ${busy ? 'disabled' : ''}>▶</button>`
+             : `<button class="icon" data-a="start" title="Démarrer" ${busy ? 'disabled' : ''}>▶</button>`}
+        ${c.state === 'running' ? `<button class="icon" data-a="pause" title="Mettre en pause" ${busy ? 'disabled' : ''}>⏸</button>` : ''}
+        <button class="icon" data-a="logs" title="Journaux">📜</button>
+        <button class="icon" data-a="inspect" title="Inspecter">🔍</button>
+        <button class="icon danger" data-a="remove" title="Supprimer" ${busy ? 'disabled' : ''}>🗑</button>
+      </td></tr>`
+  }).join('')
+}
+
+$('#cBody').addEventListener('click', async (e) => {
+  const link = e.target.closest('a[data-url]')
+  if (link) { window.open(link.dataset.url, '_blank'); return }
+  const btn = e.target.closest('button[data-a]'); if (!btn) return
+  const id = btn.closest('tr').dataset.id
+  const c = state.containers.find((x) => x.id === id); if (!c) return
+  const a = btn.dataset.a
+  if (a === 'logs') return openLogs(c)
+  if (a === 'inspect') return inspect('container', c.id, c.name)
+  let force = false
+  if (a === 'remove') {
+    if (!confirm(`Supprimer le conteneur « ${c.name} » ?${c.state === 'running' ? '\nIl est en cours d’exécution : il sera arrêté de force.' : ''}`)) return
+    force = c.state === 'running'
+  }
+  state.busy.add(id); renderContainers()
+  const labels = { start: 'démarré', stop: 'arrêté', restart: 'redémarré', pause: 'mis en pause', unpause: 'repris', remove: 'supprimé' }
+  await act('containers.action', { id, action: a, force }, `« ${c.name} » ${labels[a]}`, 120000)
+  state.busy.delete(id)
+  await loadContainers()
+})
+$('#cSearch').addEventListener('input', renderContainers)
+$('#cFilter').addEventListener('change', renderContainers)
+$('#cStats').addEventListener('change', () => { if ($('#cStats').checked) loadStats(); else { state.stats.clear(); renderContainers() } })
+
+// ── Journaux ─────────────────────────────────────────────────────────────────
+
+const LOG_MAX = 5000
+function openLogs(c) {
+  stopLogs()
+  state.log = { container: c, stream: null, lines: [], live: false }
+  $('#logTitle').textContent = `Journaux — ${c.name}`
+  $('#logs').classList.remove('hidden'); $('#splitLogs').classList.remove('hidden')
+  $('#logOut').innerHTML = ''
+  startLogs()
+}
+async function startLogs() {
+  const L = state.log; if (!L) return
+  if (L.stream) await call('logs.stop', { stream_id: L.stream }).catch(() => {})
+  L.lines = []; $('#logOut').innerHTML = ''
+  const r = await act('logs.start', { id: L.container.id, tail: Number($('#logTail').value), timestamps: $('#logTs').checked, follow: true })
+  if (!r) return setLive(false)
+  L.stream = r.stream_id; setLive(true)
+}
+function stopLogs() {
+  const L = state.log
+  if (L && L.stream) call('logs.stop', { stream_id: L.stream }).catch(() => {})
+  if (L) { L.stream = null; setLive(false) }
+}
+function setLive(on) {
+  if (state.log) state.log.live = on
+  $('#logLive').classList.toggle('on', on)
+  $('#logLiveTxt').textContent = on ? 'en direct' : 'arrêté'
+  $('#logToggle').textContent = on ? '⏸ Arrêter' : '▶ Reprendre'
+}
+function lineHtml(l, q) {
+  let t = esc(l.t)
+  if (q) { const i = l.t.toLowerCase().indexOf(q); if (i < 0) return null; t = esc(l.t.slice(0, i)) + '<mark>' + esc(l.t.slice(i, i + q.length)) + '</mark>' + esc(l.t.slice(i + q.length)) }
+  return `<div class="${l.s === 'err' ? 'err' : ''}">${t || ' '}</div>`
+}
+function appendLines(lines) {
+  const out = $('#logOut')
+  const atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 30
+  const q = $('#logFilter').value.trim().toLowerCase()
+  state.log.lines.push(...lines)
+  if (state.log.lines.length > LOG_MAX) state.log.lines.splice(0, state.log.lines.length - LOG_MAX)
+  out.insertAdjacentHTML('beforeend', lines.map((l) => lineHtml(l, q)).filter(Boolean).join(''))
+  while (out.childElementCount > LOG_MAX) out.firstElementChild.remove()
+  if (atBottom) out.scrollTop = out.scrollHeight
+}
+function rerenderLogs() {
+  if (!state.log) return
+  const q = $('#logFilter').value.trim().toLowerCase()
+  const out = $('#logOut')
+  out.innerHTML = state.log.lines.map((l) => lineHtml(l, q)).filter(Boolean).join('')
+  out.scrollTop = out.scrollHeight
+}
+window.ledroide.on(MODULE_ID, 'logs:lines', (d) => { if (state.log && d.stream_id === state.log.stream) appendLines(d.lines) })
+window.ledroide.on(MODULE_ID, 'logs:end', (d) => {
+  if (state.log && d.stream_id === state.log.stream) {
+    state.log.stream = null; setLive(false)
+    $('#logOut').insertAdjacentHTML('beforeend', '<div class="sys">— flux terminé (conteneur arrêté) —</div>')
+  }
+})
+$('#logToggle').addEventListener('click', () => (state.log?.live ? stopLogs() : startLogs()))
+$('#logTail').addEventListener('change', startLogs)
+$('#logTs').addEventListener('change', startLogs)
+$('#logWrap').addEventListener('change', () => $('#logOut').classList.toggle('wrap', $('#logWrap').checked))
+$('#logFilter').addEventListener('input', rerenderLogs)
+$('#logClear').addEventListener('click', () => { if (state.log) state.log.lines = []; $('#logOut').innerHTML = '' })
+$('#logClose').addEventListener('click', () => { stopLogs(); state.log = null; $('#logs').classList.add('hidden'); $('#splitLogs').classList.add('hidden') })
+$('#logSave').addEventListener('click', () => {
+  if (!state.log) return
+  download(`${state.log.container.name}.log`, state.log.lines.map((l) => l.t).join('\n'))
+})
+$('#splitLogs').addEventListener('mousedown', (e) => {
+  const start = e.clientY, h = $('#logs').offsetHeight
+  const move = (ev) => { $('#logs').style.height = Math.max(120, Math.min(window.innerHeight - 160, h + start - ev.clientY)) + 'px' }
+  const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up) }
+  addEventListener('mousemove', move); addEventListener('mouseup', up)
+})
+function download(name, content, type = 'text/plain;charset=utf-8') {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type })); a.download = name.replace(/[\\/:*?"<>|]+/g, '_')
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
+// ── Inspection ───────────────────────────────────────────────────────────────
+
+function jsonHtml(v) {
+  return esc(JSON.stringify(v, null, 2)).replace(/(&quot;(?:\\.|[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b)/gi,
+    (m, str, colon, bool, num) => str ? `<span class="${colon ? 'k' : 's'}">${str}</span>${colon || ''}` : bool ? `<span class="b">${bool}</span>` : `<span class="n">${num}</span>`)
+}
+async function inspect(kind, id, title) {
+  const r = await act('containers.inspect', { kind, id })
+  if (!r) return
+  const d = r.data || {}
+  let kv = ''
+  if (kind === 'container') {
+    const env = (d.Config?.Env || []).length
+    const mounts = (d.Mounts || []).map((m) => `${m.Source || m.Name} → ${m.Destination}`).join('\n')
+    const nets = Object.entries(d.NetworkSettings?.Networks || {}).map(([n, v]) => `${n} (${v.IPAddress || '—'})`).join(', ')
+    kv = [['Image', d.Config?.Image], ['Commande', [...(d.Config?.Entrypoint || []), ...(d.Config?.Cmd || [])].join(' ')], ['Créé', d.Created],
+      ['Démarré', d.State?.StartedAt], ['Redémarrage', d.HostConfig?.RestartPolicy?.Name], ['Réseaux', nets], ['Volumes', mounts], ['Variables', `${env} définie(s)`]]
+      .map(([k, v]) => `<div>${k}</div><div class="mono">${esc(v || '—').replace(/\n/g, '<br>')}</div>`).join('')
+  }
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog"><h3>🔍 ${esc(title)}</h3><div class="content">${kv ? `<div class="kv">${kv}</div>` : ''}<pre class="json">${jsonHtml(d)}</pre></div>
+    <div class="foot"><button id="dCopy">📋 Copier le JSON</button><span class="spacer"></span><button class="primary" id="dClose">Fermer</button></div></div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  $('#dClose', ov).onclick = () => ov.remove()
+  $('#dCopy', ov).onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(d, null, 2)); toast('JSON copié') } catch { toast('Copie impossible', true) } }
+}
+
+// ── Images ───────────────────────────────────────────────────────────────────
+
+async function loadImages() {
+  const r = await act('images.list', { all: $('#iAll').checked })
+  if (!r) return
+  state.images = r.images
+  $('#cntImages').textContent = r.images.length || ''
+  renderImages()
+}
+function renderImages() {
+  const q = $('#iSearch').value.trim().toLowerCase()
+  const list = state.images.filter((i) => !q || `${i.repository}:${i.tag} ${i.short_id}`.toLowerCase().includes(q))
+  const total = state.images.reduce((s, i) => s + i.size, 0)
+  $('#iSummary').textContent = `${state.images.length} image(s) · ${fmtBytes(total)} (taille virtuelle, couches partagées comptées plusieurs fois)`
+  $('#iBody').innerHTML = list.length ? list.map((i) => `<tr data-id="${esc(i.id)}" data-ref="${esc(i.ref)}">
+      <td><span class="name ${i.dangling ? 'muted' : ''}">${esc(i.repository)}</span> ${i.in_use ? '<span class="chip ok">utilisée</span>' : ''}${i.dangling ? '<span class="chip">orpheline</span>' : ''}</td>
+      <td class="mono">${esc(i.tag)}</td><td class="mono muted">${esc(i.short_id)}</td>
+      <td>${esc(fmtBytes(i.size))}</td><td class="muted">${esc(i.created_since)}</td>
+      <td class="actions"><button class="icon" data-a="run" title="Copier une commande docker run">📋</button><button class="icon" data-a="inspect" title="Inspecter">🔍</button><button class="icon danger" data-a="remove" title="Supprimer">🗑</button></td></tr>`).join('')
+    : `<tr><td colspan="6" class="empty-row">${state.images.length ? 'Aucune image ne correspond.' : 'Aucune image locale. Téléchargez-en une avec « Pull ».'}</td></tr>`
+}
+$('#iBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-a]'); if (!btn) return
+  const tr = btn.closest('tr'); const img = state.images.find((i) => i.id === tr.dataset.id); if (!img) return
+  if (btn.dataset.a === 'inspect') return inspect('image', img.dangling ? img.id : img.ref, img.ref)
+  if (btn.dataset.a === 'run') {
+    try { await navigator.clipboard.writeText(`docker run --rm -it ${img.ref}`); toast('Commande copiée') } catch { toast('Copie impossible', true) }
+    return
+  }
+  if (!confirm(`Supprimer l'image « ${img.ref} » ?${img.in_use ? '\nElle est utilisée par un conteneur : la suppression sera forcée.' : ''}`)) return
+  const r = await act('images.remove', { id: img.dangling ? img.id : img.ref, force: img.in_use }, 'Image supprimée', 120000)
+  if (r) loadImages()
+})
+$('#iSearch').addEventListener('input', renderImages)
+$('#iAll').addEventListener('change', loadImages)
+
+async function pull() {
+  const image = $('#pullInput').value.trim()
+  if (!image) { $('#pullInput').focus(); return }
+  if (state.pullJob) return
+  $('#pullStatus').classList.remove('hidden'); $('#pullBtn').disabled = true
+  const bar = $('#pullBar'); bar.classList.add('indet'); bar.firstElementChild.style.width = '0'
+  $('#pullMsg').textContent = `Téléchargement de ${image}…`
+  try {
+    const r = await run('images.pull', { image }, {
+      onStart: (id) => (state.pullJob = id),
+      onProgress: (p) => {
+        if (p.percent != null) { bar.classList.remove('indet'); bar.firstElementChild.style.width = p.percent + '%' }
+        $('#pullMsg').textContent = (p.layers ? `${p.done}/${p.layers} couches · ` : '') + (p.message || '')
+      },
+    })
+    toast(`Image ${r.image} téléchargée`); $('#pullInput').value = ''
+    loadImages()
+  } catch (e) { toast(e.message || String(e), true) }
+  state.pullJob = null; $('#pullBtn').disabled = false; $('#pullStatus').classList.add('hidden')
+}
+$('#pullBtn').addEventListener('click', pull)
+$('#pullInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') pull() })
+$('#pullCancel').addEventListener('click', () => state.pullJob && window.ledroide.cancel(MODULE_ID, state.pullJob))
+
+// ── Volumes / réseaux ────────────────────────────────────────────────────────
+
+async function loadVolumes() {
+  const r = await act('volumes.list'); if (!r) return
+  state.volumes = r.volumes; $('#cntVolumes').textContent = r.volumes.length || ''; renderVolumes()
+}
+function renderVolumes() {
+  const q = $('#vSearch').value.trim().toLowerCase()
+  const list = state.volumes.filter((v) => !q || `${v.name} ${v.compose_project}`.toLowerCase().includes(q))
+  $('#vSummary').textContent = `${state.volumes.length} volume(s)`
+  $('#vBody').innerHTML = list.length ? list.map((v) => `<tr data-n="${esc(v.name)}">
+    <td class="mono" title="${esc(v.name)}">${esc(v.name.length > 40 ? v.name.slice(0, 20) + '…' + v.name.slice(-12) : v.name)}</td><td>${esc(v.driver)}</td>
+    <td>${v.compose_project ? `<span class="chip compose">${esc(v.compose_project)}</span>` : ''}</td>
+    <td class="mono muted">${esc(v.mountpoint)}</td>
+    <td class="actions"><button class="icon" data-a="inspect" title="Inspecter">🔍</button><button class="icon danger" data-a="remove" title="Supprimer">🗑</button></td></tr>`).join('')
+    : `<tr><td colspan="5" class="empty-row">Aucun volume.</td></tr>`
+}
+$('#vBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-a]'); if (!btn) return
+  const name = btn.closest('tr').dataset.n
+  if (btn.dataset.a === 'inspect') return inspect('volume', name, name)
+  if (!confirm(`Supprimer définitivement le volume « ${name} » et ses données ?`)) return
+  if (await act('volumes.remove', { name }, 'Volume supprimé')) loadVolumes()
+})
+$('#vSearch').addEventListener('input', renderVolumes)
+
+async function loadNetworks() {
+  const r = await act('networks.list'); if (!r) return
+  state.networks = r.networks; $('#cntNetworks').textContent = r.networks.length || ''; renderNetworks()
+}
+function renderNetworks() {
+  const q = $('#nSearch').value.trim().toLowerCase()
+  const list = state.networks.filter((n) => !q || `${n.name} ${n.driver}`.toLowerCase().includes(q))
+  $('#nSummary').textContent = `${state.networks.length} réseau(x)`
+  $('#nBody').innerHTML = list.length ? list.map((n) => `<tr data-n="${esc(n.name)}">
+    <td><span class="name">${esc(n.name)}</span> ${n.builtin ? '<span class="chip">intégré</span>' : ''}${n.compose_project ? `<span class="chip compose">${esc(n.compose_project)}</span>` : ''}</td>
+    <td class="mono muted">${esc(n.id)}</td><td>${esc(n.driver)}</td><td>${esc(n.scope)}</td>
+    <td>${n.internal ? '<span class="chip">interne</span>' : ''}${n.ipv6 ? '<span class="chip">IPv6</span>' : ''}</td>
+    <td class="actions"><button class="icon" data-a="inspect" title="Inspecter">🔍</button>${n.builtin ? '' : '<button class="icon danger" data-a="remove" title="Supprimer">🗑</button>'}</td></tr>`).join('')
+    : `<tr><td colspan="6" class="empty-row">Aucun réseau.</td></tr>`
+}
+$('#nBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-a]'); if (!btn) return
+  const name = btn.closest('tr').dataset.n
+  if (btn.dataset.a === 'inspect') return inspect('network', name, name)
+  if (!confirm(`Supprimer le réseau « ${name} » ?`)) return
+  if (await act('networks.remove', { name }, 'Réseau supprimé')) loadNetworks()
+})
+$('#nSearch').addEventListener('input', renderNetworks)
+
+// ── Compose ──────────────────────────────────────────────────────────────────
+
+async function loadCompose() {
+  let r
+  try { r = await call('compose.list') } catch (e) { toast(e.message, true); return }
+  state.compose = { projects: r.projects || [], files: r.files || [] }
+  $('#cntCompose').textContent = state.compose.projects.length || ''
+  renderCompose()
+}
+const PSTAT = { running: ['ok', 'en cours'], partial: ['', 'partiel'], stopped: ['', 'arrêté'] }
+function renderCompose() {
+  $('#composeRecent').innerHTML = state.compose.files.map((f) => `<div class="r" data-p="${esc(f.path)}">
+    <span class="p mono ${f.exists ? '' : 'missing'}" title="${f.exists ? 'Utiliser ce fichier' : 'Fichier introuvable'}">📄 ${esc(f.path)}</span>
+    <button class="icon" data-a="forget" title="Oublier">✕</button></div>`).join('')
+  const ps = state.compose.projects
+  $('#projects').innerHTML = ps.length ? ps.map((p) => {
+    const file = p.config_files[0] || ''
+    return `<div class="proj" data-name="${esc(p.name)}" data-file="${esc(file)}">
+      <div class="top"><b>🧩 ${esc(p.name)}</b><span class="chip ${PSTAT[p.status][0]}">${p.running}/${p.total} ${PSTAT[p.status][1]}</span></div>
+      <div class="meta">${p.services.map((s) => `<span class="chip">${esc(s)}</span>`).join('')}</div>
+      ${p.working_dir ? `<div class="meta mono" title="Dossier de travail">📁 ${esc(p.working_dir)}</div>` : ''}
+      ${p.config_files.map((f) => `<div class="meta mono">📄 ${esc(f)}</div>`).join('')}
+      <div class="btns">
+        <button class="primary" data-a="up" ${file ? '' : 'disabled title="Fichier compose inconnu"'}>▶ up -d</button>
+        <button data-a="restart">⟳ restart</button><button data-a="stop">⏹ stop</button>
+        <button class="danger" data-a="down">⏏ down</button>
+        <button data-a="logs" title="Journaux du premier service">📜</button>
+      </div></div>`
+  }).join('') : '<div class="muted">Aucun projet Compose détecté (labels com.docker.compose.project). Choisissez un fichier docker-compose ci-dessus et lancez « up ».</div>'
+}
+async function composeRun(action, payload) {
+  if (action === 'down' && !confirm(`Exécuter « docker compose down » ?\nLes conteneurs et réseaux du projet seront supprimés (les volumes nommés sont conservés).`)) return
+  const con = $('#composeConsole'); con.classList.remove('hidden'); con.textContent = `$ docker compose ${action}…\n`
+  $$('[data-cf], .proj button').forEach((b) => (b.disabled = true))
+  try {
+    await run('compose.run', { action, ...payload }, { onProgress: (p) => { if (p.message) { con.textContent += p.message + '\n'; con.scrollTop = con.scrollHeight } } })
+    con.textContent += `✔ Terminé\n`; toast(`compose ${action} terminé`)
+  } catch (e) { con.textContent += `✖ ${e.message}\n`; toast(e.message, true) }
+  $$('[data-cf], .proj button').forEach((b) => (b.disabled = false))
+  await loadCompose(); loadContainers()
+}
+$$('[data-cf]').forEach((b) => b.addEventListener('click', () => {
+  const file = $('#composeFile').value.trim()
+  if (!file) { toast('Indiquez le chemin du fichier docker-compose.yml', true); $('#composeFile').focus(); return }
+  composeRun(b.dataset.cf, { file })
+}))
+$('#composeRecent').addEventListener('click', async (e) => {
+  const row = e.target.closest('.r'); if (!row) return
+  if (e.target.closest('[data-a=forget]')) { await act('compose.forget', { path: row.dataset.p }); loadCompose(); return }
+  $('#composeFile').value = row.dataset.p
+})
+$('#projects').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-a]'); if (!btn) return
+  const card = btn.closest('.proj'); const name = card.dataset.name; const file = card.dataset.file
+  if (btn.dataset.a === 'logs') {
+    const p = state.compose.projects.find((x) => x.name === name)
+    const c = state.containers.find((x) => x.id === p?.containers[0]?.id)
+    if (c) { switchTab('containers'); openLogs(c) }
+    return
+  }
+  composeRun(btn.dataset.a, btn.dataset.a === 'up' ? { file, project: name } : { project: name })
+})
+
+// ── Nettoyage ────────────────────────────────────────────────────────────────
+
+const CLEAN = [
+  { t: 'containers', h: '📦 Conteneurs arrêtés', p: 'Supprime tous les conteneurs arrêtés.' },
+  { t: 'images', h: '💿 Images inutilisées', p: 'Supprime les images orphelines (&lt;none&gt;).', all: 'Toutes les images non utilisées par un conteneur' },
+  { t: 'volumes', h: '💾 Volumes inutilisés', p: 'Supprime les volumes anonymes non utilisés.', all: 'Inclure les volumes nommés (données perdues)' },
+  { t: 'networks', h: '🔗 Réseaux inutilisés', p: 'Supprime les réseaux personnalisés sans conteneur.' },
+  { t: 'builder', h: '🧱 Cache de construction', p: 'Supprime le cache de build (BuildKit) inutilisé.' },
+  { t: 'system', h: '🧨 Nettoyage complet', p: 'Conteneurs arrêtés, réseaux inutilisés, images orphelines et cache de build.', all: 'Inclure toutes les images non utilisées', cls: 'system' },
+]
+function renderClean() {
+  $('#cleanCards').innerHTML = CLEAN.map((c) => `<div class="ccard ${c.cls || ''}" data-t="${c.t}"><h4>${c.h}</h4><p>${c.p}</p>
+    ${c.all ? `<label class="chk"><input type="checkbox" class="all" /> ${c.all}</label>` : ''}
+    <div class="row"><span class="spacer"></span><button class="danger" data-a="prune">🧹 Nettoyer</button></div></div>`).join('')
+}
+async function loadDf() {
+  const r = await act('disk_usage', {}, null, 60000); if (!r) return
+  const TYPE = { Images: 'Images', Containers: 'Conteneurs', 'Local Volumes': 'Volumes locaux', 'Build Cache': 'Cache de build' }
+  $('#dfBody').innerHTML = r.usage.map((u) => `<tr><td>${esc(TYPE[u.type] || u.type)}</td><td>${esc(u.total)}</td><td>${esc(u.active)}</td><td>${esc(u.size)}</td><td>${esc(u.reclaimable)}</td></tr>`).join('')
+}
+$('#cleanCards').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-a=prune]'); if (!btn) return
+  const card = btn.closest('.ccard'); const c = CLEAN.find((x) => x.t === card.dataset.t)
+  const all = !!$('.all', card)?.checked
+  if (!confirm(`${c.h.slice(3)} : ${c.p}${all ? '\n+ ' + c.all : ''}\n\nCette opération est irréversible. Continuer ?`)) return
+  btn.disabled = true; btn.textContent = '⏳ Nettoyage…'
+  const r = await act('prune', { target: c.t, all, confirm: true }, null, 620000)
+  btn.disabled = false; btn.textContent = '🧹 Nettoyer'
+  if (r) { toast(`Espace récupéré : ${r.reclaimed}`); loadDf(); refresh() }
+})
+
+// ── Navigation / actualisation ───────────────────────────────────────────────
+
+function switchTab(tab) {
+  state.tab = tab
+  $$('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab))
+  $$('.pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab))
+  refresh()
+}
+$('#nav').addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) switchTab(b.dataset.tab) })
+
+let refreshing = false
+async function refresh() {
+  if (refreshing || !state.status?.daemon) return
+  refreshing = true
+  try {
+    if (state.tab === 'containers') await loadContainers()
+    else if (state.tab === 'images') await loadImages()
+    else if (state.tab === 'volumes') await loadVolumes()
+    else if (state.tab === 'networks') await loadNetworks()
+    else if (state.tab === 'compose') await loadCompose()
+    else if (state.tab === 'clean') await loadDf()
+  } finally { refreshing = false }
+}
+async function fullRefresh() {
+  if (await checkStatus()) {
+    await refresh()
+    if (state.tab !== 'containers') loadContainers()
+    if (state.tab !== 'images') act('images.list').then((r) => { if (r) { state.images = r.images; $('#cntImages').textContent = r.images.length || '' } })
+  }
+}
+$('#btnRefresh').addEventListener('click', fullRefresh)
+$('#uaRetry').addEventListener('click', fullRefresh)
+document.addEventListener('keydown', (e) => { if (e.key === 'F5') { e.preventDefault(); fullRefresh() } })
+setInterval(() => {
+  if (!$('#autoRefresh').checked || document.hidden || !state.status?.daemon) return
+  if (state.tab === 'containers' || state.tab === 'compose') refresh()
+}, 5000)
+
+renderClean()
+fullRefresh()
+</script>
+</body>
+</html>

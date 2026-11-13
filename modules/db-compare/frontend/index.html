@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Comparateur de bases</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b; --add: #22c55e; --del: #ef4444; --chg: #f59e0b;
+    --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .note { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+  code, .mono { font-family: var(--mono); font-size: 12px; }
+
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  .tabs { display: flex; gap: 2px; }
+  .tabs button { border: none; background: transparent; color: var(--muted); border-radius: 6px; padding: 6px 12px; }
+  .tabs button.on { background: var(--surface2); color: var(--text); }
+  .tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #3f3f46; color: #fff; font-size: 11px; margin-left: 4px; }
+
+  #conns { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; padding: 10px 12px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+  .conn { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .conn .top { display: flex; align-items: center; gap: 8px; }
+  .conn .tag { font-weight: 700; font-size: 12px; padding: 2px 7px; border-radius: 5px; }
+  .conn.a .tag { background: rgba(99,102,241,.2); color: #a5b4fc; }
+  .conn.b .tag { background: rgba(245,158,11,.18); color: #fcd34d; }
+  .conn .role { color: var(--muted); font-size: 12px; }
+  .conn .row { display: flex; gap: 6px; }
+  .conn .row input { flex: 1; min-width: 0; }
+  .conn .status { font-size: 12px; color: var(--muted); min-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conn .status.ok { color: #86efac; } .conn .status.bad { color: #fca5a5; }
+  #swap { align-self: center; font-size: 16px; }
+
+  #main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; flex-shrink: 0; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { padding: 3px 9px; border-radius: 12px; font-size: 12px; background: var(--surface2); border: 1px solid var(--border); cursor: pointer; }
+  .chip.on { border-color: var(--accent); }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .chip.same b { color: #a1a1aa; } .chip.changed b { color: var(--chg); } .chip.only_a b { color: var(--add); } .chip.only_b b { color: var(--del); }
+
+  .split { flex: 1; min-height: 0; display: flex; }
+  #tableList { width: 260px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border); background: var(--surface); }
+  .ti { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .ti:hover { background: #1c1c21; }
+  .ti.sel { background: rgba(99,102,241,.16); }
+  .ti .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st { font-size: 10.5px; padding: 1px 6px; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; flex-shrink: 0; }
+  .st.same { background: #27272a; color: #a1a1aa; }
+  .st.changed { background: rgba(245,158,11,.15); color: #fcd34d; }
+  .st.only_a { background: rgba(34,197,94,.15); color: #86efac; }
+  .st.only_b { background: rgba(239,68,68,.15); color: #fca5a5; }
+  #tableDetail { flex: 1; min-width: 0; overflow: auto; padding: 14px 16px; }
+  #tableDetail h2 { font-size: 16px; display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  #tableDetail h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 6px; }
+  table.grid { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  table.grid th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 6px 8px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); white-space: nowrap; }
+  table.grid td { padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.grid td.v { font-family: var(--mono); font-size: 12px; word-break: break-word; }
+  table.grid tr.only_a td { background: rgba(34,197,94,.07); }
+  table.grid tr.only_b td { background: rgba(239,68,68,.07); }
+  table.grid tr.changed td { background: rgba(245,158,11,.06); }
+  td.hl { color: #fcd34d; font-weight: 600; }
+  .na { color: #52525b; }
+  .null { color: #52525b; font-style: italic; }
+
+  .empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 30px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 26px 30px; text-align: center; max-width: 520px; }
+  .card h2 { font-size: 16px; margin-bottom: 6px; }
+  .card p { color: var(--muted); line-height: 1.55; }
+
+  .opts { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .keys { display: flex; gap: 8px; flex-wrap: wrap; max-width: 520px; }
+  .keys label { display: inline-flex; align-items: center; gap: 4px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; font-size: 12px; cursor: pointer; }
+  .progress { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; width: 220px; }
+  .progress div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .counts { display: flex; gap: 10px; padding: 12px; flex-wrap: wrap; }
+  .count { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 140px; cursor: pointer; }
+  .count.on { border-color: var(--accent); }
+  .count .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .count .l { color: var(--muted); font-size: 12px; }
+  .count.add .v { color: var(--add); } .count.del .v { color: var(--del); } .count.chg .v { color: var(--chg); }
+  #dataRows { flex: 1; min-height: 0; overflow: auto; padding: 0 12px 12px; }
+
+  #sqlOut { flex: 1; min-height: 0; margin: 12px; resize: none; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre; tab-size: 4; background: #0b0b0e; }
+  .warnings { margin: 0 12px; padding: 8px 12px; border: 1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.08); border-radius: 8px; color: #fcd34d; font-size: 12px; line-height: 1.6; }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+  datalist { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">🗄️ Comparateur de bases</span>
+  <span class="spacer"></span>
+  <div class="tabs" id="tabs">
+    <button data-tab="schema" class="on">Schéma <span class="badge hidden" id="badgeSchema"></span></button>
+    <button data-tab="data">Données <span class="badge hidden" id="badgeData"></span></button>
+    <button data-tab="script">Script SQL</button>
+  </div>
+</header>
+
+<section id="conns">
+  <div class="conn a" data-side="a"></div>
+  <button class="icon" id="swap" title="Inverser A et B">⇄</button>
+  <div class="conn b" data-side="b"></div>
+</section>
+
+<div id="main">
+  <div class="pane" id="pane-schema">
+    <div class="bar">
+      <button class="primary" id="btnSchema">Comparer le schéma</button>
+      <span class="muted" id="schemaInfo"></span>
+      <span class="spacer"></span>
+      <div class="chips" id="chips"></div>
+      <input id="tblFilter" placeholder="Filtrer les tables…" style="width:170px" />
+    </div>
+    <div class="split hidden" id="schemaSplit">
+      <div id="tableList"></div>
+      <div id="tableDetail"></div>
+    </div>
+    <div class="empty" id="schemaEmpty">
+      <div class="card">
+        <h2>Comparez deux bases de données</h2>
+        <p>Indiquez la base <b>A</b> (référence) et la base <b>B</b> (cible), puis lancez la comparaison. Le script de migration transforme <b>B</b> pour qu'elle corresponde à <b>A</b>, dans le dialecte de B.<br><br>
+        Les bases sont ouvertes en <b>lecture seule</b> : rien n'y est jamais écrit.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pane hidden" id="pane-data">
+    <div class="bar">
+      <div class="opts">
+        <div class="field"><label>Table (présente dans A et B)</label><select id="dTable" style="min-width:200px"></select></div>
+        <div class="field"><label>Clé de comparaison</label><div class="keys" id="dKeys"><span class="muted">Comparez d'abord le schéma</span></div></div>
+        <div class="field"><label title="Lignes lues par requête">Taille des lots</label><input id="dBatch" type="number" min="50" max="50000" step="50" value="2000" style="width:90px" /></div>
+        <div class="field"><label title="0 = toute la table">Lignes max. par base</label><input id="dMax" type="number" min="0" value="0" style="width:100px" /></div>
+        <div class="field"><label title="Nombre de différences détaillées conservées">Différences détaillées max.</label><input id="dDiffs" type="number" min="1" max="100000" value="1000" style="width:100px" /></div>
+      </div>
+      <span class="spacer"></span>
+      <div class="progress hidden" id="dProg"><div></div></div>
+      <span class="muted" id="dMsg"></span>
+      <button class="hidden danger" id="btnCancel">Annuler</button>
+      <button class="primary" id="btnData" disabled>Comparer les données</button>
+    </div>
+    <div class="counts hidden" id="dCounts"></div>
+    <div id="dataRows"><div class="empty"><div class="card"><h2>Comparaison des données</h2><p>Les lignes sont appariées par clé (clé primaire par défaut) et lues par lots triés : même les très grosses tables sont comparées sans tout charger en mémoire. Seules les colonnes présentes dans les deux bases sont comparées.</p></div></div></div>
+  </div>
+
+  <div class="pane hidden" id="pane-script">
+    <div class="bar">
+      <div class="seg" id="scriptKind"><button data-k="schema" class="on">Schéma</button><button data-k="data">Données</button></div>
+      <span id="schemaOpts"><label><input type="checkbox" id="optDrops" /> Inclure les suppressions (tables et colonnes absentes de A)</label></span>
+      <span id="dataOpts" class="hidden" style="display:inline-flex;gap:12px">
+        <label><input type="checkbox" id="optIns" checked /> INSERT (manquantes)</label>
+        <label><input type="checkbox" id="optUpd" checked /> UPDATE (modifiées)</label>
+        <label><input type="checkbox" id="optDel" /> DELETE (en trop dans B)</label>
+      </span>
+      <button id="btnGen">Générer</button>
+      <span class="spacer"></span>
+      <span class="muted" id="scriptInfo"></span>
+      <button id="btnCopy" disabled>📋 Copier</button>
+      <button id="btnSave" disabled>💾 Enregistrer…</button>
+    </div>
+    <div class="warnings hidden" id="warnings" style="margin-top:10px"></div>
+    <textarea id="sqlOut" readonly spellcheck="false" placeholder="Le script apparaît ici après une comparaison."></textarea>
+  </div>
+</div>
+
+<datalist id="recentPaths"></datalist>
+<datalist id="recentUrls"></datalist>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'db-compare'
+const call = (action, payload = {}, timeout = 120000) => window.ledroide.call(MODULE_ID, action, payload, { timeout })
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const fmtN = (n) => Number(n || 0).toLocaleString('fr-FR')
+const ST = { same: 'identique', changed: 'modifiée', only_a: 'A seul', only_b: 'B seul' }
+const ST_COL = { same: 'identique', changed: 'modifiée', only_a: 'à ajouter', only_b: 'en trop' }
+
+function localGet(k) { try { return localStorage.getItem(k) } catch { return null } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+
+const state = {
+  conns: { a: { kind: 'sqlite', path: '', url: '', password: '', pg_schema: 'public' }, b: { kind: 'sqlite', path: '', url: '', password: '', pg_schema: 'public' } },
+  schema: null, sel: null, filter: 'all', data: null, dataView: 'changed', jobId: null, scriptKind: 'schema', sql: '',
+}
+try {
+  const saved = JSON.parse(localGet('dbc-conns') || 'null')
+  if (saved) for (const s of ['a', 'b']) Object.assign(state.conns[s], saved[s] || {}, { password: '' })
+} catch {}
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 6000 : 2400)
+}
+
+function persistConns() {
+  const strip = (c) => ({ kind: c.kind, path: c.path, url: c.url, pg_schema: c.pg_schema })
+  localSet('dbc-conns', JSON.stringify({ a: strip(state.conns.a), b: strip(state.conns.b) }))
+}
+
+// ── Connexions ──────────────────────────────────────────────────────────────
+function renderConn(side) {
+  const c = state.conns[side]
+  const el = $(`.conn[data-side="${side}"]`)
+  const pg = c.kind === 'postgresql'
+  el.innerHTML = `
+    <div class="top">
+      <span class="tag">${side.toUpperCase()}</span>
+      <span class="role">${side === 'a' ? 'Référence (source)' : 'Cible (à migrer)'}</span>
+      <span class="spacer"></span>
+      <div class="seg"><button data-kind="sqlite" class="${pg ? '' : 'on'}">SQLite</button><button data-kind="postgresql" class="${pg ? 'on' : ''}">PostgreSQL</button></div>
+    </div>
+    ${pg ? `
+      <div class="row"><input data-f="url" list="recentUrls" spellcheck="false" placeholder="postgresql://utilisateur@hôte:5432/base" value="${esc(c.url)}" /></div>
+      <div class="row">
+        <input data-f="password" type="password" autocomplete="off" placeholder="Mot de passe (non enregistré)" value="${esc(c.password)}" />
+        <input data-f="pg_schema" spellcheck="false" title="Schéma PostgreSQL" placeholder="public" value="${esc(c.pg_schema)}" style="flex:0 0 110px" />
+        <button data-act="test">Tester</button>
+      </div>` : `
+      <div class="row"><input data-f="path" list="recentPaths" spellcheck="false" placeholder="C:\\dossier\\base.db  (chemin complet du fichier)" value="${esc(c.path)}" />
+      <button data-act="test">Tester</button></div>
+      <div class="note">Fichier ouvert en lecture seule (mode=ro).</div>`}
+    <div class="status" data-status></div>`
+  $$('.seg button', el).forEach((b) => b.onclick = () => { c.kind = b.dataset.kind; persistConns(); renderConn(side) })
+  $$('input[data-f]', el).forEach((i) => i.oninput = () => { c[i.dataset.f] = i.value; if (i.dataset.f !== 'password') persistConns() })
+  $$('input[data-f]', el).forEach((i) => i.onkeydown = (e) => { if (e.key === 'Enter') testConn(side) })
+  $('[data-act=test]', el).onclick = () => testConn(side)
+}
+
+function connPayload(side) {
+  const c = state.conns[side]
+  return c.kind === 'sqlite' ? { kind: 'sqlite', path: c.path } : { kind: 'postgresql', url: c.url, password: c.password, pg_schema: c.pg_schema || 'public' }
+}
+
+function setStatus(side, text, cls = '') {
+  const s = $(`.conn[data-side="${side}"] [data-status]`)
+  s.textContent = text; s.className = 'status ' + cls; s.title = text
+}
+
+async function testConn(side) {
+  setStatus(side, 'Connexion…')
+  try {
+    const r = await call('conn.test', { conn: connPayload(side) })
+    setStatus(side, `✓ ${r.version} — ${r.tables} table${r.tables > 1 ? 's' : ''} (${r.ms} ms)`, 'ok')
+    loadRecents()
+  } catch (e) { setStatus(side, '✗ ' + e.message, 'bad') }
+}
+
+async function loadRecents() {
+  try {
+    const r = await call('recents.list')
+    $('#recentPaths').innerHTML = r.recents.filter((x) => x.kind === 'sqlite').map((x) => `<option value="${esc(x.value)}"></option>`).join('')
+    $('#recentUrls').innerHTML = r.recents.filter((x) => x.kind === 'postgresql').map((x) => `<option value="${esc(x.value)}">${esc(x.pg_schema)}</option>`).join('')
+  } catch {}
+}
+
+$('#swap').onclick = () => {
+  [state.conns.a, state.conns.b] = [state.conns.b, state.conns.a]
+  persistConns(); renderConn('a'); renderConn('b')
+  toast('Bases A et B inversées — relancez la comparaison')
+}
+
+// ── Onglets ─────────────────────────────────────────────────────────────────
+function showTab(tab) {
+  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab))
+  for (const t of ['schema', 'data', 'script']) $('#pane-' + t).classList.toggle('hidden', t !== tab)
+  localSet('dbc-tab', tab)
+}
+$$('#tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab))
+
+// ── Schéma ──────────────────────────────────────────────────────────────────
+$('#btnSchema').onclick = async () => {
+  const btn = $('#btnSchema'); btn.disabled = true; btn.textContent = 'Comparaison…'
+  try {
+    const r = await call('schema.compare', { a: connPayload('a'), b: connPayload('b') })
+    state.schema = r
+    setStatus('a', `✓ ${r.a.version} — ${r.a.tables} tables`, 'ok')
+    setStatus('b', `✓ ${r.b.version} — ${r.b.tables} tables`, 'ok')
+    const firstDiff = r.diff.tables.find((t) => t.status !== 'same')
+    state.sel = (r.diff.tables.find((t) => t.name === state.sel) || firstDiff || r.diff.tables[0] || {}).name || null
+    renderSchema(); fillDataTables(); loadRecents()
+    state.sql = ''; state.scriptKind = 'schema'; await generate(true)
+  } catch (e) { toast(e.message, true) }
+  btn.disabled = false; btn.textContent = 'Comparer le schéma'
+}
+
+function renderSchema() {
+  const r = state.schema
+  if (!r) return
+  $('#schemaEmpty').classList.add('hidden'); $('#schemaSplit').classList.remove('hidden')
+  const s = r.diff.summary
+  const nd = s.changed + s.only_a + s.only_b
+  $('#badgeSchema').textContent = nd; $('#badgeSchema').classList.toggle('hidden', !nd)
+  $('#schemaInfo').textContent = `${r.a.label} (${r.a.dialect}) ↔ ${r.b.label} (${r.b.dialect})` + (r.diff.cross_dialect ? ' — dialectes différents : types comparés par famille' : '')
+  $('#chips').innerHTML = [['all', 'Toutes', r.diff.tables.length], ['diff', 'Différences', nd], ['changed', 'Modifiées', s.changed], ['only_a', 'A seul', s.only_a], ['only_b', 'B seul', s.only_b], ['same', 'Identiques', s.same]]
+    .map(([k, l, n]) => `<span class="chip ${k} ${state.filter === k ? 'on' : ''}" data-f="${k}">${l} <b>${n}</b></span>`).join('')
+  $$('#chips .chip').forEach((c) => c.onclick = () => { state.filter = c.dataset.f; renderSchema() })
+  const q = $('#tblFilter').value.trim().toLowerCase()
+  const list = r.diff.tables.filter((t) => (state.filter === 'all' || (state.filter === 'diff' ? t.status !== 'same' : t.status === state.filter)) && (!q || t.name.toLowerCase().includes(q)))
+  $('#tableList').innerHTML = list.map((t) => `<div class="ti ${t.name === state.sel ? 'sel' : ''}" data-n="${esc(t.name)}"><span class="n">${esc(t.name)}</span><span class="st ${t.status}">${ST[t.status]}</span></div>`).join('')
+    || '<div class="note" style="padding:14px">Aucune table pour ce filtre.</div>'
+  $$('#tableList .ti').forEach((el) => el.onclick = () => { state.sel = el.dataset.n; renderSchema() })
+  renderDetail()
+}
+$('#tblFilter').oninput = renderSchema
+
+const v = (x) => x === null || x === undefined ? '<span class="null">—</span>' : esc(x)
+function colCells(c, other, changes, field) {
+  if (!c) return '<td class="na">—</td>'
+  const hl = changes && changes.includes(field) ? ' hl' : ''
+  if (field === 'type') return `<td class="v${hl}">${esc(c.type || '(aucun)')}</td>`
+  if (field === 'nullable') return `<td class="${hl.trim()}">${c.nullable ? 'oui' : '<b>NOT NULL</b>'}</td>`
+  return `<td class="v${hl}">${c.auto ? '<span class="muted">auto-incrément</span>' : v(c.default)}</td>`
+}
+
+function renderDetail() {
+  const r = state.schema
+  const t = r && r.diff.tables.find((x) => x.name === state.sel)
+  const d = $('#tableDetail')
+  if (!t) { d.innerHTML = '<div class="note">Sélectionnez une table.</div>'; return }
+  let h = `<h2>${esc(t.name)} <span class="st ${t.status}">${ST[t.status]}</span></h2>`
+  if (t.status === 'only_a') h += `<div class="note">Table présente uniquement dans A : le script la crée dans B.</div>`
+  if (t.status === 'only_b') h += `<div class="note">Table présente uniquement dans B : le script la supprime si « Inclure les suppressions » est coché.</div>`
+  const tbl = r[t.status === 'only_b' ? 'b' : 'a']
+  if (t.status === 'only_a' || t.status === 'only_b') {
+    h += `<div class="note" style="margin-top:6px">Base ${t.status === 'only_a' ? 'A' : 'B'} : ${esc(tbl.label)}</div>`
+    return void (d.innerHTML = h)
+  }
+  h += `<h3>Colonnes</h3><table class="grid"><thead><tr><th>Colonne</th><th>État</th><th>Type A</th><th>Type B</th><th>NULL A</th><th>NULL B</th><th>Défaut A</th><th>Défaut B</th></tr></thead><tbody>`
+  for (const c of t.columns) {
+    h += `<tr class="${c.status}"><td><b>${esc(c.name)}</b></td><td><span class="st ${c.status}">${ST_COL[c.status]}</span></td>
+      ${colCells(c.a, c.b, c.changes, 'type')}${colCells(c.b, c.a, c.changes, 'type')}
+      ${colCells(c.a, c.b, c.changes, 'nullable')}${colCells(c.b, c.a, c.changes, 'nullable')}
+      ${colCells(c.a, c.b, c.changes, 'default')}${colCells(c.b, c.a, c.changes, 'default')}</tr>`
+  }
+  h += '</tbody></table>'
+  const pk = (x) => x && x.length ? x.map(esc).join(', ') : '<span class="null">aucune</span>'
+  h += `<h3>Clé primaire</h3><table class="grid"><tbody><tr class="${t.pk.same ? '' : 'changed'}"><td style="width:50%">A : <span class="mono">${pk(t.pk.a)}</span></td><td>B : <span class="mono">${pk(t.pk.b)}</span></td></tr></tbody></table>`
+  const fkTxt = (f) => f ? `<span class="mono">(${f.columns.map(esc).join(', ')}) → ${esc(f.ref_table)}(${f.ref_columns.map(esc).join(', ')})</span>${f.on_delete && f.on_delete !== 'NO ACTION' ? ` <span class="muted">ON DELETE ${esc(f.on_delete)}</span>` : ''}${f.on_update && f.on_update !== 'NO ACTION' ? ` <span class="muted">ON UPDATE ${esc(f.on_update)}</span>` : ''}` : '<span class="na">—</span>'
+  h += `<h3>Clés étrangères</h3>` + (t.fks.length ? `<table class="grid"><thead><tr><th>État</th><th>A</th><th>B</th></tr></thead><tbody>${t.fks.map((f) => `<tr class="${f.status}"><td><span class="st ${f.status}">${ST_COL[f.status]}</span></td><td>${fkTxt(f.a)}</td><td>${fkTxt(f.b)}</td></tr>`).join('')}</tbody></table>` : '<div class="note">Aucune.</div>')
+  const ixTxt = (i) => i ? `<span class="mono">${esc(i.name)}</span> <span class="muted">(${i.columns.map(esc).join(', ')})${i.unique ? ' — unique' : ''}${i.partial ? ' — partiel' : ''}</span>` : '<span class="na">—</span>'
+  h += `<h3>Index</h3>` + (t.indexes.length ? `<table class="grid"><thead><tr><th>État</th><th>A</th><th>B</th></tr></thead><tbody>${t.indexes.map((i) => `<tr class="${i.status}"><td><span class="st ${i.status}">${ST_COL[i.status]}</span></td><td>${ixTxt(i.a)}</td><td>${ixTxt(i.b)}</td></tr>`).join('')}</tbody></table>` : '<div class="note">Aucun.</div>')
+  d.innerHTML = h
+}
+
+// ── Données ─────────────────────────────────────────────────────────────────
+function fillDataTables() {
+  const tabs = state.schema ? state.schema.common_tables : []
+  const prev = $('#dTable').value || localGet('dbc-table')
+  $('#dTable').innerHTML = tabs.length ? tabs.map((t) => `<option value="${esc(t.name)}">${esc(t.name)}${t.pk.length ? '' : ' (sans clé primaire)'}</option>`).join('') : '<option value="">(aucune table commune)</option>'
+  if (tabs.some((t) => t.name === prev)) $('#dTable').value = prev
+  fillKeys()
+}
+function fillKeys() {
+  const t = state.schema && state.schema.common_tables.find((x) => x.name === $('#dTable').value)
+  $('#btnData').disabled = !t || !!state.jobId
+  if (!t) { $('#dKeys').innerHTML = '<span class="muted">Comparez d\'abord le schéma</span>'; return }
+  $('#dKeys').innerHTML = t.columns.map((c) => `<label><input type="checkbox" value="${esc(c)}" ${t.pk.includes(c) ? 'checked' : ''} /> ${esc(c)}</label>`).join('')
+}
+$('#dTable').onchange = () => { localSet('dbc-table', $('#dTable').value); fillKeys() }
+
+$('#btnData').onclick = async () => {
+  const keys = $$('#dKeys input:checked').map((i) => i.value)
+  if (!keys.length) return toast('Cochez au moins une colonne de clé', true)
+  const options = { table: $('#dTable').value, key: keys, batch_size: +$('#dBatch').value || 2000, max_rows: +$('#dMax').value || 0, max_diffs: +$('#dDiffs').value || 1000 }
+  $('#btnData').disabled = true; $('#btnCancel').classList.remove('hidden'); $('#dProg').classList.remove('hidden')
+  $('#dProg div').style.width = '0%'; $('#dMsg').textContent = 'Démarrage…'
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'data.compare', { a: connPayload('a'), b: connPayload('b'), options }, {
+      onStart: (id) => { state.jobId = id },
+      onProgress: (p) => { $('#dProg div').style.width = (p.percent || 0) + '%'; $('#dMsg').textContent = p.message || '' },
+    })
+    state.data = r
+    state.dataView = r.counts.changed ? 'changed' : r.counts.added ? 'added' : r.counts.removed ? 'removed' : 'changed'
+    renderData()
+    $('#dMsg').textContent = `${fmtN(r.rows_a)} lignes (A) / ${fmtN(r.rows_b)} lignes (B) comparées`
+    toast('Comparaison des données terminée')
+  } catch (e) {
+    $('#dMsg').textContent = ''
+    toast(e.code === 'JOB_CANCELLED' ? 'Comparaison annulée' : e.message, e.code !== 'JOB_CANCELLED')
+  }
+  state.jobId = null
+  $('#btnCancel').classList.add('hidden'); $('#dProg').classList.add('hidden'); fillKeys()
+}
+$('#btnCancel').onclick = () => { if (state.jobId) window.ledroide.cancel(MODULE_ID, state.jobId).catch(() => {}) }
+
+function renderData() {
+  const r = state.data
+  const n = r.counts.added + r.counts.removed + r.counts.changed
+  $('#badgeData').textContent = fmtN(n); $('#badgeData').classList.toggle('hidden', !n)
+  $('#dCounts').classList.remove('hidden')
+  $('#dCounts').innerHTML = [['changed', 'chg', 'Modifiées', r.counts.changed], ['added', 'add', 'Manquantes dans B (A seul)', r.counts.added], ['removed', 'del', 'En trop dans B (B seul)', r.counts.removed], ['same', '', 'Identiques', r.counts.same]]
+    .map(([k, cls, l, val]) => `<div class="count ${cls} ${state.dataView === k ? 'on' : ''}" data-k="${k}"><div class="v">${fmtN(val)}</div><div class="l">${l}</div></div>`).join('')
+    + `<div class="note" style="align-self:center;max-width:340px">Table <b>${esc(r.table)}</b> — clé : <span class="mono">${r.key.map(esc).join(', ')}</span>${r.truncated ? '<br><span style="color:#fcd34d">Limite de différences détaillées atteinte : seules les premières sont listées.</span>' : ''}${r.limited ? '<br><span style="color:#fcd34d">Limite de lignes atteinte : comparaison partielle.</span>' : ''}</div>`
+  $$('#dCounts .count').forEach((c) => c.onclick = () => { if (c.dataset.k !== 'same') { state.dataView = c.dataset.k; renderData() } })
+  const cols = [...r.key, ...r.columns]
+  const cell = (x) => `<td class="v">${x === null ? '<span class="null">NULL</span>' : esc(x)}</td>`
+  let h = ''
+  if (state.dataView === 'changed') {
+    if (!r.changed.length) h = '<div class="note" style="padding:12px 0">Aucune ligne modifiée.</div>'
+    else {
+      h = `<table class="grid"><thead><tr><th>Clé</th><th>Colonne</th><th>Valeur A</th><th>Valeur B</th></tr></thead><tbody>`
+      for (const row of r.changed) {
+        row.diff.forEach((i, j) => {
+          h += `<tr class="changed">${j === 0 ? `<td class="v" rowspan="${row.diff.length}"><b>${row.key.map((k) => esc(k)).join(', ')}</b></td>` : ''}<td>${esc(r.columns[i])}</td>${cell(row.a[i])}${cell(row.b[i])}</tr>`
+        })
+      }
+      h += '</tbody></table>'
+    }
+  } else {
+    const rows = r[state.dataView]
+    if (!rows.length) h = '<div class="note" style="padding:12px 0">Aucune ligne.</div>'
+    else h = `<table class="grid"><thead><tr>${cols.map((c, i) => `<th>${i < r.key.length ? '🔑 ' : ''}${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr class="${state.dataView === 'added' ? 'only_a' : 'only_b'}">${row.map(cell).join('')}</tr>`).join('')}</tbody></table>`
+  }
+  $('#dataRows').innerHTML = h
+}
+
+// ── Script ──────────────────────────────────────────────────────────────────
+function setScriptKind(k) {
+  state.scriptKind = k
+  $$('#scriptKind button').forEach((b) => b.classList.toggle('on', b.dataset.k === k))
+  $('#schemaOpts').classList.toggle('hidden', k !== 'schema'); $('#dataOpts').classList.toggle('hidden', k !== 'data')
+}
+$$('#scriptKind button').forEach((b) => b.onclick = () => { setScriptKind(b.dataset.k); generate() })
+for (const id of ['optDrops', 'optIns', 'optUpd', 'optDel']) $('#' + id).onchange = () => generate()
+$('#btnGen').onclick = () => generate()
+
+async function generate(quiet = false) {
+  setScriptKind(state.scriptKind)
+  let r
+  try {
+    if (state.scriptKind === 'schema') {
+      if (!state.schema) { if (!quiet) toast('Comparez d\'abord le schéma', true); return }
+      r = await call('schema.script', { id: state.schema.id, include_drops: $('#optDrops').checked })
+    } else {
+      if (!state.data) { if (!quiet) toast('Comparez d\'abord les données d\'une table', true); return }
+      r = await call('data.script', { id: state.data.id, inserts: $('#optIns').checked, updates: $('#optUpd').checked, deletes: $('#optDel').checked })
+    }
+  } catch (e) { return toast(e.message, true) }
+  state.sql = r.sql
+  $('#sqlOut').value = r.sql
+  const lines = r.sql.split('\n').length
+  $('#scriptInfo').textContent = `Dialecte ${r.dialect === 'postgresql' ? 'PostgreSQL' : 'SQLite'} — ${fmtN(lines)} lignes`
+  const w = r.warnings || []
+  $('#warnings').classList.toggle('hidden', !w.length)
+  $('#warnings').innerHTML = w.map((x) => '⚠ ' + esc(x)).join('<br>')
+  $('#btnCopy').disabled = $('#btnSave').disabled = !r.sql
+}
+
+$('#btnCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText(state.sql); toast('Script copié') }
+  catch { $('#sqlOut').select(); document.execCommand('copy'); toast('Script copié') }
+}
+$('#btnSave').onclick = () => {
+  const name = state.scriptKind === 'schema' ? 'migration-schema' : `donnees-${(state.data && state.data.table) || 'table'}`
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([state.sql], { type: 'application/sql' }))
+  a.download = `${name.replace(/[^\w.-]+/g, '_')}.sql`
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
+// ── Démarrage ───────────────────────────────────────────────────────────────
+renderConn('a'); renderConn('b')
+showTab(['schema', 'data', 'script'].includes(localGet('dbc-tab')) ? localGet('dbc-tab') : 'schema')
+loadRecents()
+call('psycopg.status').then((r) => { if (!r.installed) toast('Pilote PostgreSQL (psycopg) absent : seules les bases SQLite sont disponibles', true) }).catch(() => {})
+</script>
+</body>
+</html>
