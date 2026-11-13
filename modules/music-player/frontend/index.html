@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecteur audio et podcasts</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.ghost { background: transparent; border-color: transparent; }
+  button.ghost:hover:not(:disabled) { background: var(--surface2); border-color: transparent; }
+  button.on { color: var(--accent-h); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; user-select: text; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=range] { accent-color: var(--accent); padding: 0; border: none; background: transparent; }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 6px; }
+  #scanBar { display: flex; align-items: center; gap: 8px; min-width: 200px; }
+  .progressbar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; flex: 1; min-width: 80px; }
+  .progressbar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+
+  #main { flex: 1; min-height: 0; display: flex; }
+  #nav { width: 200px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 10px 8px; overflow-y: auto; }
+  #nav h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 8px 6px; display: flex; align-items: center; }
+  #nav h4 button { margin-left: auto; padding: 0 6px; font-size: 14px; line-height: 18px; }
+  .nv { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: #c4c4cc; }
+  .nv:hover { background: var(--surface2); }
+  .nv.sel { background: rgba(99,102,241,.18); color: #fff; }
+  .nv .n { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+  .nv .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nv.drop { outline: 2px dashed var(--accent); }
+
+  #content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; flex-shrink: 0; flex-wrap: wrap; }
+  .bar h2 { font-size: 18px; }
+  .hero { display: flex; gap: 18px; align-items: flex-end; padding: 18px 16px 10px; }
+  .hero .art { width: 150px; height: 150px; border-radius: 10px; flex-shrink: 0; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .hero .kind { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .hero h2 { font-size: 26px; margin: 4px 0 6px; }
+  .hero .meta { color: #a1a1aa; margin-bottom: 10px; }
+  .hero .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  #view { flex: 1; overflow-y: auto; padding: 0 16px 16px; position: relative; }
+
+  table.tracks { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.tracks th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; padding: 6px 8px; border-bottom: 1px solid var(--border);
+                    position: sticky; top: 0; background: var(--bg); z-index: 1; cursor: pointer; }
+  table.tracks td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.tracks tr.trk:hover td { background: var(--surface); }
+  table.tracks tr.trk.sel td { background: rgba(99,102,241,.16); }
+  table.tracks tr.trk.playing td { color: var(--accent-h); }
+  table.tracks tr.trk.dragover td { border-top: 2px solid var(--accent); }
+  table.tracks .c-n { width: 44px; color: var(--muted); text-align: right; }
+  table.tracks .c-d { width: 64px; text-align: right; color: #a1a1aa; }
+  table.tracks .c-x { width: 40px; text-align: center; }
+  table.tracks .tt { display: flex; align-items: center; gap: 10px; }
+  table.tracks .tt img, table.tracks .tt .ph { width: 32px; height: 32px; border-radius: 4px; flex-shrink: 0; object-fit: cover; }
+  table.tracks .tt span { overflow: hidden; text-overflow: ellipsis; }
+  .ph { display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.85); font-size: 15px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 18px 14px; padding-top: 6px; }
+  .card { cursor: pointer; }
+  .card .art { aspect-ratio: 1; border-radius: 8px; overflow: hidden; position: relative; box-shadow: 0 6px 16px rgba(0,0,0,.35); background: var(--surface2); }
+  .card .art img, .card .art .ph { width: 100%; height: 100%; object-fit: cover; font-size: 40px; }
+  .card .art .play { position: absolute; right: 8px; bottom: 8px; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); border: none;
+                     color: #fff; font-size: 15px; opacity: 0; transform: translateY(6px); transition: .15s; box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+  .card:hover .art .play { opacity: 1; transform: none; }
+  .card .t { font-weight: 600; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .s { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card.round .art { border-radius: 50%; }
+  .badge { position: absolute; top: 6px; right: 6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px; }
+
+  .ep { display: flex; gap: 12px; padding: 12px 6px; border-bottom: 1px solid var(--line); align-items: flex-start; }
+  .ep:hover { background: var(--surface); }
+  .ep.played .et { color: var(--muted); }
+  .ep.playing .et { color: var(--accent-h); }
+  .ep img, .ep .ph { width: 54px; height: 54px; border-radius: 6px; object-fit: cover; flex-shrink: 0; font-size: 22px; }
+  .ep .body { flex: 1; min-width: 0; }
+  .ep .et { font-weight: 600; font-size: 13.5px; margin-bottom: 3px; }
+  .ep .em { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+  .ep .sum { color: #a1a1aa; line-height: 1.45; font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; user-select: text; white-space: pre-line; }
+  .ep .sum.open { -webkit-line-clamp: unset; }
+  .ep .acts { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+  .ep .pbar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 6px; max-width: 260px; }
+  .ep .pbar i { display: block; height: 100%; background: var(--accent); }
+  .ep .dl { font-size: 11px; color: var(--accent-h); min-width: 70px; text-align: right; }
+
+  .empty { max-width: 460px; margin: 60px auto; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; }
+  .empty h2 { font-size: 17px; margin-bottom: 8px; }
+  .empty p { color: var(--muted); line-height: 1.5; margin-bottom: 16px; }
+
+  #queue { width: 320px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; }
+  #queue .qh { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  #queue .qh b { flex: 1; }
+  #qList { flex: 1; overflow-y: auto; padding: 6px; }
+  .qi { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+  .qi:hover { background: var(--surface2); }
+  .qi.cur { background: rgba(99,102,241,.18); }
+  .qi.past { opacity: .5; }
+  .qi img, .qi .ph { width: 34px; height: 34px; border-radius: 4px; object-fit: cover; flex-shrink: 0; font-size: 14px; }
+  .qi .tx { flex: 1; min-width: 0; }
+  .qi .tx div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qi .tx .a { color: var(--muted); font-size: 11.5px; }
+  .qi .rm { opacity: 0; padding: 2px 6px; border: none; background: transparent; color: var(--muted); }
+  .qi:hover .rm { opacity: 1; }
+  .qi.dragover { box-shadow: inset 0 2px 0 var(--accent); }
+
+  #player { flex-shrink: 0; height: 84px; border-top: 1px solid var(--border); background: #131316; display: grid;
+            grid-template-columns: minmax(200px, 1fr) minmax(320px, 2fr) minmax(200px, 1fr); align-items: center; gap: 16px; padding: 0 16px; }
+  #nowInfo { display: flex; gap: 12px; align-items: center; min-width: 0; }
+  #nowArt { width: 56px; height: 56px; border-radius: 6px; flex-shrink: 0; object-fit: cover; font-size: 24px; }
+  #nowTxt { min-width: 0; }
+  #nowTxt div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #nowTitle { font-weight: 600; }
+  #nowSub { color: var(--muted); font-size: 12px; }
+  #ctrl { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  #ctrl .btns { display: flex; gap: 6px; align-items: center; }
+  #ctrl .btns button { border: none; background: transparent; font-size: 16px; padding: 4px 8px; color: #c4c4cc; }
+  #ctrl .btns button:hover:not(:disabled) { color: #fff; background: transparent; }
+  #ctrl .btns button.on { color: var(--accent-h); }
+  #btnPlay { width: 38px; height: 38px; border-radius: 50% !important; background: #fff !important; color: #111 !important; font-size: 15px !important; }
+  #seekRow { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 11.5px; color: var(--muted); }
+  #seek { flex: 1; }
+  #right { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+  #right button { border: none; background: transparent; font-size: 15px; color: #c4c4cc; }
+  #right button.on { color: var(--accent-h); }
+  #vol { width: 100px; }
+  #speed { padding: 2px 4px; font-size: 12px; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(560px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .note { color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .fitem { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); }
+  .fitem .p { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .eq { display: flex; gap: 10px; justify-content: space-between; padding: 6px 0; }
+  .eq .band { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .eq input[type=range] { writing-mode: vertical-lr; direction: rtl; height: 140px; width: 22px; }
+  .eq .v { color: var(--text); font-size: 11px; min-width: 32px; text-align: center; }
+  dl.kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; user-select: text; }
+  dl.kv dt { color: var(--muted); } dl.kv dd { word-break: break-all; }
+  .menu-list { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; z-index: 65;
+               min-width: 210px; box-shadow: 0 8px 24px rgba(0,0,0,.45); max-height: 70vh; overflow-y: auto; }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  .menu-list .lbl { color: var(--muted); font-size: 11px; padding: 4px 10px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+
+  #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">🎵 Lecteur audio et podcasts</span>
+  <input id="q" placeholder="Rechercher titres, artistes, albums… (Ctrl+F)" style="width:300px">
+  <span class="spacer"></span>
+  <div id="scanBar" class="hidden"><div class="progressbar"><i></i></div><span class="muted" id="scanMsg" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div>
+  <button id="btnFolders">📁 Dossiers…</button>
+  <button id="btnScan" title="Rechercher les nouveaux morceaux">🔄 Actualiser</button>
+</header>
+
+<div id="main">
+  <nav id="nav">
+    <h4>Bibliothèque</h4>
+    <div class="nv sel" data-v="tracks">🎵 <span class="t">Titres</span><span class="n" id="nTracks"></span></div>
+    <div class="nv" data-v="artists">🎤 <span class="t">Artistes</span><span class="n" id="nArtists"></span></div>
+    <div class="nv" data-v="albums">💿 <span class="t">Albums</span><span class="n" id="nAlbums"></span></div>
+    <div class="nv" data-v="recent">🆕 <span class="t">Ajouts récents</span></div>
+    <div class="nv" data-v="top">🔥 <span class="t">Les plus écoutés</span></div>
+    <h4>Playlists <button id="btnNewPl" title="Nouvelle playlist">＋</button></h4>
+    <div id="plNav"></div>
+    <h4>Podcasts <button id="btnAddPod" title="S'abonner à un podcast">＋</button></h4>
+    <div class="nv" data-v="episodes">📻 <span class="t">Nouveaux épisodes</span><span class="n" id="nNew"></span></div>
+    <div id="podNav"></div>
+  </nav>
+  <section id="content"><div id="head"></div><div id="view"></div></section>
+  <aside id="queue" class="hidden">
+    <div class="qh"><b>File d'attente</b><button class="icon ghost" id="qClear" title="Vider la file">🗑</button><button class="icon ghost" id="qClose" title="Fermer">✕</button></div>
+    <div id="qList"></div>
+  </aside>
+</div>
+
+<footer id="player">
+  <div id="nowInfo"><div id="nowArt" class="ph" style="background:#27272a">♪</div><div id="nowTxt"><div id="nowTitle" class="muted">Rien en lecture</div><div id="nowSub"></div></div></div>
+  <div id="ctrl">
+    <div class="btns">
+      <button id="btnShuffle" title="Aléatoire (S)">🔀</button>
+      <button id="btnPrev" title="Précédent (Ctrl+←)">⏮</button>
+      <button id="btnPlay" title="Lecture / pause (Espace)">▶</button>
+      <button id="btnNext" title="Suivant (Ctrl+→)">⏭</button>
+      <button id="btnRepeat" title="Répétition (R)">🔁</button>
+    </div>
+    <div id="seekRow"><span id="tCur" class="num">0:00</span><input type="range" id="seek" min="0" max="1000" value="0"><span id="tDur" class="num">0:00</span></div>
+  </div>
+  <div id="right">
+    <select id="speed" title="Vitesse de lecture"><option value="0.75">0,75×</option><option value="1" selected>1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="2">2×</option></select>
+    <button id="btnEq" title="Égaliseur">🎚</button>
+    <button id="btnQueue" title="File d'attente">☰</button>
+    <button id="btnMute" title="Muet (M)">🔊</button>
+    <input type="range" id="vol" min="0" max="100" value="80" title="Volume (↑/↓)">
+  </div>
+</footer>
+<audio id="audio" preload="auto"></audio>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'music-player'
+const BASE = `/modules/${MODULE_ID}/api`
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+function localGet(k, d = null) { try { return localStorage.getItem(k) ?? d } catch { return d } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+function dur(s) { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0') }
+function longDur(s) { s = Math.round(s || 0); if (s < 60) return `${s} s`; const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60); return h ? `${h} h ${m} min` : `${m} min` }
+function hue(str) { let h = 0; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) % 360; return h }
+function phStyle(key) { return `background:linear-gradient(135deg,hsl(${hue(key)} 50% 40%),hsl(${(hue(key) + 50) % 360} 55% 25%))` }
+function artHtml(t, cls = '') {
+  if (t && t.has_cover) return `<img class="${cls}" src="${BASE}/cover/${t.id}" alt="" loading="lazy" draggable="false">`
+  return `<div class="ph ${cls}" style="${phStyle((t?.album || t?.title || '') + (t?.artist || ''))}">♪</div>`
+}
+function remoteImg(url, key, cls = '') {
+  return url ? `<img class="${cls}" src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=&quot;ph ${cls}&quot; style=&quot;${phStyle(key)}&quot;>📻</div>'">`
+    : `<div class="ph ${cls}" style="${phStyle(key)}">📻</div>`
+}
+function fmtDate(ts) { return ts ? new Date(ts * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '' }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+async function act(action, payload, okMsg, opts) {
+  try { const r = await call(action, payload, opts); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+function dialog(html) {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); ov.remove() } })
+  setTimeout(() => ov.querySelector('input')?.focus(), 30)
+  return ov
+}
+function menu(x, y, items) {
+  $$('.menu-list').forEach((m) => m.remove())
+  const m = document.createElement('div'); m.className = 'menu-list'
+  m.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : it.label === null ? `<div class="lbl">${esc(it.text)}</div>` : `<button data-i="${i}" class="${it.danger ? 'danger' : ''}">${it.label}</button>`).join('')
+  document.body.appendChild(m)
+  const r = m.getBoundingClientRect()
+  m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px'
+  m.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; m.remove(); items[+b.dataset.i].run() })
+  setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', off) } }), 0)
+}
+
+// ── State ──
+const L = { tracks: [], byId: new Map(), playlists: [], podcasts: [], folders: [], view: 'tracks', arg: null, q: '', sort: { k: null, dir: 1 },
+  list: [], sel: new Set(), lastIdx: null, epFilter: 'all' }
+const P = { queue: [], idx: -1, order: [], shuffle: localGet('mp-shuffle') === '1', repeat: localGet('mp-repeat') || 'off', cur: null, counted: false, lastSave: 0 }
+const audio = $('#audio')
+
+async function loadLibrary() {
+  const r = await act('tracks.list'); if (!r) return
+  L.tracks = r.tracks; L.byId = new Map(r.tracks.map((t) => [t.id, t]))
+  $('#nTracks').textContent = L.tracks.length || ''
+  $('#nArtists').textContent = artists().length || ''
+  $('#nAlbums').textContent = albums().length || ''
+}
+async function loadPlaylists() {
+  const r = await act('playlists.list'); if (!r) return
+  L.playlists = r.playlists
+  $('#plNav').innerHTML = L.playlists.map((p) => `<div class="nv" data-v="playlist" data-id="${p.id}">🎼 <span class="t">${esc(p.name)}</span><span class="n">${p.count}</span></div>`).join('')
+    || '<div class="muted" style="padding:4px 8px;font-size:12px">Aucune playlist</div>'
+  markNav()
+}
+async function loadPodcasts() {
+  const r = await act('podcasts.list'); if (!r) return
+  L.podcasts = r.podcasts
+  $('#podNav').innerHTML = L.podcasts.map((p) => `<div class="nv" data-v="podcast" data-id="${p.id}">🎙 <span class="t">${esc(p.title)}</span><span class="n">${p.unplayed || ''}</span></div>`).join('')
+  $('#nNew').textContent = L.podcasts.reduce((s, p) => s + p.unplayed, 0) || ''
+  markNav()
+}
+async function loadFolders() { const r = await act('folders.list'); if (r) L.folders = r.folders }
+function markNav() { $$('.nv').forEach((n) => n.classList.toggle('sel', n.dataset.v === L.view && (!n.dataset.id || +n.dataset.id === L.arg))) }
+
+function artists() {
+  const m = new Map()
+  for (const t of L.tracks) { const a = t.album_artist || t.artist || 'Artiste inconnu'; if (!m.has(a)) m.set(a, { name: a, tracks: [], albums: new Set() }); m.get(a).tracks.push(t); if (t.album) m.get(a).albums.add(t.album) }
+  return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+}
+function albums() {
+  const m = new Map()
+  for (const t of L.tracks) {
+    if (!t.album) continue
+    const key = t.album + '\u0000' + (t.album_artist || t.artist)
+    if (!m.has(key)) m.set(key, { key, name: t.album, artist: t.album_artist || t.artist || 'Artiste inconnu', year: t.year, tracks: [], cover: null })
+    const a = m.get(key); a.tracks.push(t); if (!a.cover && t.has_cover) a.cover = t
+  }
+  return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+}
+const sortAlbum = (a, b) => a.disc_no - b.disc_no || a.track_no - b.track_no || a.title.localeCompare(b.title, 'fr')
+function matches(t, q) { return !q || [t.title, t.artist, t.album, t.genre].some((v) => (v || '').toLowerCase().includes(q)) }
+
+// ── Views ──
+function go(view, arg = null) { L.view = view; L.arg = arg; L.sel.clear(); markNav(); render() }
+$('#nav').addEventListener('click', (e) => { const n = e.target.closest('.nv'); if (n) go(n.dataset.v, n.dataset.id ? +n.dataset.id : null) })
+function render() {
+  const v = L.view
+  $('#view').scrollTop = 0
+  if (!L.tracks.length && ['tracks', 'artists', 'albums', 'recent', 'top'].includes(v) && !L.q) return renderWelcome()
+  if (v === 'tracks') return trackView('Titres', L.tracks.filter((t) => matches(t, L.q.toLowerCase())), { sortable: true })
+  if (v === 'recent') return trackView('Ajouts récents', [...L.tracks].sort((a, b) => b.added_at.localeCompare(a.added_at) || b.id - a.id).slice(0, 200))
+  if (v === 'top') return trackView('Les plus écoutés', L.tracks.filter((t) => t.play_count).sort((a, b) => b.play_count - a.play_count).slice(0, 100), { plays: true })
+  if (v === 'artists') return renderArtists()
+  if (v === 'artist') return renderArtist(L.arg)
+  if (v === 'albums') return renderAlbums()
+  if (v === 'album') return renderAlbum(L.arg)
+  if (v === 'playlist') return renderPlaylist(L.arg)
+  if (v === 'podcast' || v === 'episodes') return renderEpisodes()
+}
+function renderWelcome() {
+  $('#head').innerHTML = ''
+  $('#view').innerHTML = `<div class="empty"><h2>Votre bibliothèque est vide</h2><p>Ajoutez un dossier contenant votre musique (MP3, FLAC, OGG, Opus, M4A, WAV…) : titres, artistes, albums et pochettes sont lus dans les tags.</p>
+    <button class="primary" id="wAdd">📁 Ajouter un dossier…</button></div>`
+  $('#wAdd').onclick = foldersDialog
+}
+function trackTable(list, opts = {}) {
+  L.list = list
+  const cols = [['n', '#', 'c-n'], ['title', 'Titre', ''], ['artist', 'Artiste', ''], ['album', 'Album', ''], ['duration', '⏱', 'c-d']]
+  if (opts.plays) cols.splice(4, 0, ['play_count', 'Écoutes', 'c-d'])
+  const cur = P.cur?.type === 'track' ? P.cur.id : null
+  return `<table class="tracks"><colgroup>${cols.map(([, , c]) => `<col class="${c}">`).join('')}${opts.remove ? '<col class="c-x">' : ''}</colgroup>
+    <thead><tr>${cols.map(([k, l, c]) => `<th class="${c}" data-sort="${k}">${l}${L.sort.k === k ? (L.sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}${opts.remove ? '<th class="c-x"></th>' : ''}</tr></thead>
+    <tbody>${list.map((t, i) => `<tr class="trk ${L.sel.has(i) ? 'sel' : ''} ${t.id === cur ? 'playing' : ''}" data-i="${i}" ${opts.drag ? 'draggable="true"' : ''}>
+      <td class="c-n num">${t.id === cur ? '♫' : opts.trackNo && t.track_no ? t.track_no : i + 1}</td>
+      <td><div class="tt">${opts.noArt ? '' : artHtml(t)}<span>${esc(t.title)}</span></div></td>
+      <td>${esc(t.artist || '—')}</td><td>${esc(t.album || '—')}</td>${opts.plays ? `<td class="c-d num">${t.play_count}</td>` : ''}
+      <td class="c-d num">${dur(t.duration)}</td>${opts.remove ? `<td class="c-x"><button class="icon ghost" data-rm="${i}" title="Retirer de la playlist">✕</button></td>` : ''}</tr>`).join('')}</tbody></table>
+    ${list.length ? '' : '<div class="muted" style="padding:30px;text-align:center">Aucun morceau.</div>'}`
+}
+function heroHtml(kind, title, meta, art, extra = '') {
+  return `<div class="hero">${art}<div><div class="kind">${kind}</div><h2>${esc(title)}</h2><div class="meta">${meta}</div>
+    <div class="acts"><button class="primary" id="hPlay">▶ Lecture</button><button id="hShuffle">🔀 Aléatoire</button><button id="hQueue">＋ File d'attente</button>${extra}</div></div></div>`
+}
+function bindHero(list) {
+  $('#hPlay').onclick = () => playList(list, 0, false)
+  $('#hShuffle').onclick = () => playList(list, 0, true)
+  $('#hQueue').onclick = () => { enqueue(list.map(trackItem)); toast(`${list.length} morceau(x) ajouté(s) à la file`) }
+}
+function trackView(title, list, opts = {}) {
+  if (opts.sortable && L.sort.k) {
+    const k = L.sort.k, d = L.sort.dir
+    list = [...list].sort((a, b) => (k === 'n' ? a.id - b.id : typeof a[k] === 'number' ? a[k] - b[k] : String(a[k]).localeCompare(String(b[k]), 'fr')) * d)
+  }
+  const total = list.reduce((s, t) => s + t.duration, 0)
+  $('#head').innerHTML = `<div class="bar"><h2>${esc(title)}</h2><span class="muted">${list.length} morceau(x) · ${longDur(total)}${L.q ? ` · recherche « ${esc(L.q)} »` : ''}</span><span class="spacer"></span>
+    <button class="primary" id="hPlay" ${list.length ? '' : 'disabled'}>▶ Lecture</button><button id="hShuffle" ${list.length ? '' : 'disabled'}>🔀 Aléatoire</button><button id="hQueue" ${list.length ? '' : 'disabled'}>＋ File</button></div>`
+  bindHero(list)
+  $('#view').innerHTML = trackTable(list, opts)
+  if (opts.sortable) $$('th[data-sort]').forEach((th) => th.onclick = () => { L.sort = { k: th.dataset.sort, dir: L.sort.k === th.dataset.sort ? -L.sort.dir : 1 }; render() })
+}
+function renderArtists() {
+  const q = L.q.toLowerCase(), list = artists().filter((a) => !q || a.name.toLowerCase().includes(q))
+  $('#head').innerHTML = `<div class="bar"><h2>Artistes</h2><span class="muted">${list.length}</span></div>`
+  $('#view').innerHTML = `<div class="cards">${list.map((a, i) => `<div class="card round" data-i="${i}"><div class="art">${artHtml(a.tracks.find((t) => t.has_cover) || { title: a.name, artist: a.name })}<button class="play" data-play="${i}" title="Lire">▶</button></div>
+    <div class="t" style="text-align:center">${esc(a.name)}</div><div class="s" style="text-align:center">${a.albums.size} album(s) · ${a.tracks.length} titre(s)</div></div>`).join('')}</div>`
+  $$('.card').forEach((c) => c.onclick = (e) => {
+    const a = list[+c.dataset.i]
+    if (e.target.closest('[data-play]')) return playList([...a.tracks].sort((x, y) => x.album.localeCompare(y.album) || sortAlbum(x, y)), 0)
+    go('artist', a.name)
+  })
+}
+function renderArtist(name) {
+  const a = artists().find((x) => x.name === name); if (!a) return go('artists')
+  const tracks = [...a.tracks].sort((x, y) => (y.year || '').localeCompare(x.year || '') || x.album.localeCompare(y.album) || sortAlbum(x, y))
+  const cover = a.tracks.find((t) => t.has_cover)
+  $('#head').innerHTML = heroHtml('Artiste', a.name, `${a.albums.size} album(s) · ${a.tracks.length} titre(s) · ${longDur(a.tracks.reduce((s, t) => s + t.duration, 0))}`,
+    cover ? `<img class="art" src="${BASE}/cover/${cover.id}" alt="" style="border-radius:50%;object-fit:cover">` : `<div class="art ph" style="${phStyle(a.name)};border-radius:50%;font-size:50px">🎤</div>`)
+  bindHero(tracks)
+  $('#view').innerHTML = trackTable(tracks)
+}
+function renderAlbums() {
+  const q = L.q.toLowerCase(), list = albums().filter((a) => !q || a.name.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q))
+  $('#head').innerHTML = `<div class="bar"><h2>Albums</h2><span class="muted">${list.length}</span></div>`
+  $('#view').innerHTML = `<div class="cards">${list.map((a, i) => `<div class="card" data-i="${i}"><div class="art">${artHtml(a.cover || { title: a.name, album: a.name, artist: a.artist })}<button class="play" data-play="${i}" title="Lire">▶</button></div>
+    <div class="t">${esc(a.name)}</div><div class="s">${esc(a.artist)}${a.year ? ' · ' + esc(a.year) : ''}</div></div>`).join('') || '<div class="muted">Aucun album (les morceaux sans tag « album » apparaissent dans Titres).</div>'}</div>`
+  $$('.card').forEach((c) => c.onclick = (e) => {
+    const a = list[+c.dataset.i]
+    if (e.target.closest('[data-play]')) return playList([...a.tracks].sort(sortAlbum), 0)
+    go('album', a.key)
+  })
+}
+function renderAlbum(key) {
+  const a = albums().find((x) => x.key === key); if (!a) return go('albums')
+  const tracks = [...a.tracks].sort(sortAlbum)
+  $('#head').innerHTML = heroHtml('Album', a.name, `<a class="lnk" id="hArtist" style="color:var(--text);cursor:pointer">${esc(a.artist)}</a>${a.year ? ' · ' + esc(a.year) : ''} · ${tracks.length} titre(s) · ${longDur(tracks.reduce((s, t) => s + t.duration, 0))}`,
+    a.cover ? `<img class="art" src="${BASE}/cover/${a.cover.id}" alt="" style="object-fit:cover">` : `<div class="art ph" style="${phStyle(a.name + a.artist)};font-size:50px">💿</div>`)
+  bindHero(tracks)
+  $('#hArtist').onclick = () => go('artist', a.artist)
+  $('#view').innerHTML = trackTable(tracks, { trackNo: true, noArt: true })
+}
+async function renderPlaylist(id) {
+  const r = await act('playlist.get', { id }); if (!r) return go('tracks')
+  const tracks = r.items.map((i) => L.byId.get(i.track_id)).filter(Boolean)
+  $('#head').innerHTML = heroHtml('Playlist', r.name, `${tracks.length} titre(s) · ${longDur(tracks.reduce((s, t) => s + t.duration, 0))}`,
+    `<div class="art ph" style="${phStyle(r.name)};font-size:50px">🎼</div>`, '<button id="hRename">✏️ Renommer</button><button class="danger" id="hDelete">🗑 Supprimer</button>')
+  bindHero(tracks)
+  $('#hRename').onclick = () => playlistDialog(r)
+  $('#hDelete').onclick = async () => {
+    if (!confirm(`Supprimer la playlist « ${r.name} » ? Les morceaux restent dans la bibliothèque.`)) return
+    if (await act('playlist.delete', { id }, 'Playlist supprimée')) { await loadPlaylists(); go('tracks') }
+  }
+  $('#view').innerHTML = trackTable(tracks, { remove: true, drag: true }) + (tracks.length ? '<div class="note" style="padding:8px">Glissez les lignes pour réordonner.</div>' : '<div class="note" style="padding:8px;text-align:center">Ajoutez des morceaux avec un clic droit → « Ajouter à la playlist ».</div>')
+  const save = async (ids) => { if (await act('playlist.set_items', { id, track_ids: ids })) { await loadPlaylists(); renderPlaylist(id) } }
+  $$('[data-rm]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); const ids = tracks.map((t) => t.id); ids.splice(+b.dataset.rm, 1); save(ids) })
+  let from = null
+  $$('tr.trk').forEach((tr) => {
+    tr.addEventListener('dragstart', (e) => { from = +tr.dataset.i; e.dataTransfer.effectAllowed = 'move' })
+    tr.addEventListener('dragover', (e) => { e.preventDefault(); tr.classList.add('dragover') })
+    tr.addEventListener('dragleave', () => tr.classList.remove('dragover'))
+    tr.addEventListener('drop', (e) => {
+      e.preventDefault(); tr.classList.remove('dragover')
+      const to = +tr.dataset.i; if (from === null || from === to) return
+      const ids = tracks.map((t) => t.id); const [m] = ids.splice(from, 1); ids.splice(to, 0, m); save(ids)
+    })
+  })
+}
+
+// track table interactions
+$('#view').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr.trk'); if (!tr || e.target.closest('button')) return
+  const i = +tr.dataset.i
+  if (e.shiftKey && L.lastIdx != null) { for (let k = Math.min(i, L.lastIdx); k <= Math.max(i, L.lastIdx); k++) L.sel.add(k) }
+  else if (e.ctrlKey || e.metaKey) L.sel.has(i) ? L.sel.delete(i) : L.sel.add(i)
+  else { L.sel.clear(); L.sel.add(i) }
+  L.lastIdx = i
+  $$('tr.trk').forEach((r) => r.classList.toggle('sel', L.sel.has(+r.dataset.i)))
+})
+$('#view').addEventListener('dblclick', (e) => {
+  const tr = e.target.closest('tr.trk'); if (!tr) return
+  playList(L.list, +tr.dataset.i, false, true)
+})
+$('#view').addEventListener('contextmenu', (e) => {
+  const tr = e.target.closest('tr.trk'); if (!tr) return
+  e.preventDefault()
+  const i = +tr.dataset.i
+  if (!L.sel.has(i)) { L.sel.clear(); L.sel.add(i); $$('tr.trk').forEach((r) => r.classList.toggle('sel', L.sel.has(+r.dataset.i))) }
+  const chosen = [...L.sel].sort((a, b) => a - b).map((k) => L.list[k])
+  const one = chosen.length === 1 ? chosen[0] : null
+  menu(e.clientX, e.clientY, [
+    { label: '▶ Lire', run: () => playList(L.list, i, false, true) },
+    { label: '⏭ Lire ensuite', run: () => { playNext(chosen.map(trackItem)); toast('Ajouté après le morceau en cours') } },
+    { label: '＋ Ajouter à la file', run: () => { enqueue(chosen.map(trackItem)); toast(`${chosen.length} morceau(x) ajouté(s) à la file`) } },
+    '-', { label: null, text: `Ajouter à la playlist (${chosen.length})` },
+    ...L.playlists.map((p) => ({ label: '🎼 ' + esc(p.name), run: () => addToPlaylist(p.id, chosen) })),
+    { label: '＋ Nouvelle playlist…', run: () => playlistDialog(null, chosen) },
+    ...(one ? ['-', { label: '🎤 Aller à l\'artiste', run: () => go('artist', one.album_artist || one.artist || 'Artiste inconnu') },
+      ...(one.album ? [{ label: '💿 Aller à l\'album', run: () => go('album', one.album + '\u0000' + (one.album_artist || one.artist)) }] : []),
+      { label: 'ℹ️ Informations', run: () => trackInfo(one.id) }, { label: '📂 Afficher dans le dossier', run: () => act('track.reveal', { id: one.id }) }] : []),
+  ])
+})
+async function addToPlaylist(id, tracks) {
+  const r = await act('playlist.add', { id, track_ids: tracks.map((t) => t.id) })
+  if (r) { toast(`${r.added} morceau(x) ajouté(s) à la playlist`); loadPlaylists() }
+}
+function playlistDialog(pl, tracks = null) {
+  const ov = dialog(`<h3>${pl ? 'Renommer la playlist' : 'Nouvelle playlist'}</h3><div class="content"><div class="field"><label>Nom</label><input id="pName" maxlength="100" value="${esc(pl?.name || '')}"></div></div>
+    <div class="foot"><span class="spacer"></span><button id="pCancel">Annuler</button><button class="primary" id="pOk">${pl ? 'Renommer' : 'Créer'}</button></div>`)
+  const save = async () => {
+    const r = await act('playlist.save', { id: pl?.id, name: $('#pName', ov).value }); if (!r) return
+    ov.remove()
+    if (tracks?.length) await act('playlist.add', { id: r.id, track_ids: tracks.map((t) => t.id) }, `Playlist créée avec ${tracks.length} morceau(x)`)
+    await loadPlaylists()
+    if (pl) renderPlaylist(pl.id); else if (!tracks) go('playlist', r.id)
+  }
+  $('#pOk', ov).onclick = save; $('#pCancel', ov).onclick = () => ov.remove()
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter') save() })
+}
+$('#btnNewPl').onclick = () => playlistDialog(null)
+async function trackInfo(id) {
+  const t = await act('track.info', { id }); if (!t) return
+  const rows = [['Titre', t.title], ['Artiste', t.artist], ['Album', t.album], ['Artiste de l\'album', t.album_artist], ['Piste', t.track_no || ''], ['Disque', t.disc_no || ''],
+    ['Année', t.year], ['Genre', t.genre], ['Durée', dur(t.duration)], ['Taille', (t.size / 1048576).toFixed(1).replace('.', ',') + ' Mo'], ['Écoutes', t.play_count], ['Fichier', t.path]]
+  const ov = dialog(`<h3>Informations</h3><div class="content"><dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v || '—')}</dd>`).join('')}</dl></div>
+    <div class="foot"><span class="spacer"></span><button id="iClose">Fermer</button></div>`)
+  $('#iClose', ov).onclick = () => ov.remove()
+}
+
+// ── Podcasts ──
+async function renderEpisodes() {
+  const pod = L.view === 'podcast' ? L.podcasts.find((p) => p.id === L.arg) : null
+  if (L.view === 'podcast' && !pod) return go('episodes')
+  const filter = L.view === 'episodes' && L.epFilter === 'all' ? 'unplayed' : L.epFilter
+  if (pod) {
+    $('#head').innerHTML = `<div class="hero">${remoteImg(pod.image, pod.title, 'art')}<div style="min-width:0"><div class="kind">Podcast</div><h2>${esc(pod.title)}</h2>
+      <div class="meta">${esc(pod.author || '')}${pod.author ? ' · ' : ''}${pod.episodes} épisode(s) · ${pod.unplayed} non écouté(s)${pod.error ? ` · <span style="color:#fca5a5">${esc(pod.error)}</span>` : ''}</div>
+      <div class="note" style="max-width:720px;max-height:54px;overflow:hidden;margin-bottom:10px">${esc(pod.description)}</div>
+      <div class="acts">${segHtml()}<button id="pRefresh">🔄 Actualiser</button><button id="pAllRead">✓ Tout marquer écouté</button>${pod.site_url ? '<button id="pSite">🌐 Site</button>' : ''}<button class="danger" id="pUnsub">Se désabonner</button></div></div></div>`
+    $('#pRefresh').onclick = async () => { const r = await act('podcast.refresh', { id: pod.id }, null, { timeout: 60000 }); if (r) { toast(r.error ? r.error : `${r.new} nouvel(s) épisode(s)`, !!r.error); await loadPodcasts(); renderEpisodes() } }
+    if ($('#pSite')) $('#pSite').onclick = () => act('open_url', { url: pod.site_url })
+    $('#pUnsub').onclick = async () => { if (confirm(`Se désabonner de « ${pod.title} » ? Les épisodes téléchargés seront supprimés.`) && await act('podcast.delete', { id: pod.id }, 'Désabonné')) { await loadPodcasts(); go('episodes') } }
+  } else {
+    $('#head').innerHTML = `<div class="bar"><h2>Nouveaux épisodes</h2><span class="spacer"></span>${segHtml()}<button id="pRefreshAll" ${L.podcasts.length ? '' : 'disabled'}>🔄 Tout actualiser</button><button class="primary" id="pAdd">＋ S'abonner…</button></div>`
+    $('#pAdd').onclick = addPodcastDialog
+    $('#pRefreshAll').onclick = refreshAll
+  }
+  $$('#epSeg button').forEach((b) => b.onclick = () => { L.epFilter = b.dataset.f; renderEpisodes() })
+  if (!L.podcasts.length) {
+    $('#view').innerHTML = `<div class="empty"><h2>Aucun abonnement</h2><p>Abonnez-vous à un podcast avec l'adresse de son flux RSS (souvent indiquée « RSS » sur le site du podcast).</p><button class="primary" onclick="addPodcastDialog()">＋ S'abonner…</button></div>`
+    return
+  }
+  const r = await act('episodes.list', { podcast_id: pod?.id || 0, filter: filter === 'all' ? '' : filter, limit: pod ? 1000 : 300 }); if (!r) return
+  const eps = r.episodes
+  if (pod && $('#pAllRead')) $('#pAllRead').onclick = async () => { if (await act('episode.mark', { ids: eps.map((e) => e.id), played: true }, 'Épisodes marqués comme écoutés')) { await loadPodcasts(); renderEpisodes() } }
+  L.eps = eps
+  $('#view').innerHTML = eps.map((e, i) => {
+    const pct = e.duration && e.position ? Math.min(100, e.position / e.duration * 100) : 0
+    const playing = P.cur?.type === 'episode' && P.cur.id === e.id
+    return `<div class="ep ${e.played ? 'played' : ''} ${playing ? 'playing' : ''}" data-i="${i}">${remoteImg(e.image || e.podcast_image, e.podcast)}
+      <div class="body"><div class="et">${playing ? '♫ ' : ''}${esc(e.title)}</div>
+      <div class="em">${pod ? '' : esc(e.podcast) + ' · '}${fmtDate(e.published)}${e.duration ? ' · ' + longDur(e.duration) : ''}${e.played ? ' · ✓ écouté' : e.position ? ` · reste ${longDur(Math.max(0, (e.duration || 0) - e.position))}` : ''}${e.downloaded ? ' · ⬇ téléchargé' : ''}</div>
+      ${e.summary ? `<div class="sum" title="Cliquer pour déplier">${esc(e.summary)}</div>` : ''}${pct ? `<div class="pbar"><i style="width:${pct}%"></i></div>` : ''}</div>
+      <div class="acts"><span class="dl" id="dl${e.id}">${e.downloading ? '…' : ''}</span>
+        <button class="icon" data-a="play" title="Lire">▶</button><button class="icon" data-a="queue" title="Ajouter à la file">＋</button>
+        ${e.downloaded ? '<button class="icon" data-a="deldl" title="Supprimer le fichier téléchargé">🗑</button>' : '<button class="icon" data-a="dl" title="Télécharger pour écouter hors ligne">⬇</button>'}
+        <button class="icon" data-a="mark" title="${e.played ? 'Marquer non écouté' : 'Marquer écouté'}">${e.played ? '↺' : '✓'}</button></div></div>`
+  }).join('') || '<div class="muted" style="padding:40px;text-align:center">Aucun épisode pour ce filtre.</div>'
+}
+function segHtml() {
+  const f = L.view === 'episodes' && L.epFilter === 'all' ? 'unplayed' : L.epFilter
+  const opts = L.view === 'episodes' ? [['unplayed', 'Non écoutés'], ['progress', 'En cours'], ['downloaded', 'Téléchargés']] : [['all', 'Tous'], ['unplayed', 'Non écoutés'], ['progress', 'En cours'], ['downloaded', 'Téléchargés']]
+  return `<div class="seg" id="epSeg">${opts.map(([k, l]) => `<button data-f="${k}" class="${k === f ? 'on' : ''}">${l}</button>`).join('')}</div>`
+}
+function episodeItem(e) { return { type: 'episode', id: e.id, title: e.title, artist: e.podcast, image: e.image || e.podcast_image, duration: e.duration, position: e.played ? 0 : e.position } }
+$('#view').addEventListener('click', async (e) => {
+  const row = e.target.closest('.ep'); if (!row) return
+  const ep = L.eps[+row.dataset.i]
+  const a = e.target.closest('[data-a]')?.dataset.a
+  if (!a) { if (e.target.closest('.sum')) e.target.closest('.sum').classList.toggle('open'); return }
+  if (a === 'play') { P.queue.splice(P.idx + 1, 0, episodeItem(ep)); startAt(P.idx + 1) }
+  else if (a === 'queue') { enqueue([episodeItem(ep)]); toast('Épisode ajouté à la file') }
+  else if (a === 'mark') { if (await act('episode.mark', { id: ep.id, played: !ep.played })) { await loadPodcasts(); renderEpisodes() } }
+  else if (a === 'deldl') { if (await act('episode.delete_download', { id: ep.id }, 'Fichier supprimé')) renderEpisodes() }
+  else if (a === 'dl') {
+    const lbl = $('#dl' + ep.id); lbl.textContent = '0 %'
+    try {
+      await window.ledroide.run(MODULE_ID, 'episode.download', { id: ep.id }, { onProgress: (p) => { const l = $('#dl' + ep.id); if (l) l.textContent = p.percent != null ? Math.round(p.percent) + ' %' : p.message } })
+      toast('Épisode téléchargé'); if (L.view === 'podcast' || L.view === 'episodes') renderEpisodes()
+    } catch (err) { toast(err.message, true); const l = $('#dl' + ep.id); if (l) l.textContent = '' }
+  }
+})
+function addPodcastDialog() {
+  const ov = dialog(`<h3>S'abonner à un podcast</h3><div class="content"><div class="field"><label>Adresse du flux RSS</label><input id="uUrl" placeholder="https://exemple.fr/podcast/feed.xml"></div>
+    <div class="note">Les épisodes sont lus en streaming via le module (ou depuis le fichier téléchargé). Votre position d'écoute est mémorisée.</div></div>
+    <div class="foot"><span class="spacer"></span><button id="uCancel">Annuler</button><button class="primary" id="uOk">S'abonner</button></div>`)
+  const go2 = async () => {
+    $('#uOk', ov).disabled = true; $('#uOk', ov).textContent = 'Chargement…'
+    const r = await act('podcast.add', { url: $('#uUrl', ov).value }, null, { timeout: 60000 })
+    $('#uOk', ov).disabled = false; $('#uOk', ov).textContent = 'S\'abonner'
+    if (!r) return
+    ov.remove(); toast(`Abonné à « ${r.title} » (${r.episodes} épisodes)`)
+    await loadPodcasts(); go('podcast', r.id)
+  }
+  $('#uOk', ov).onclick = go2; $('#uCancel', ov).onclick = () => ov.remove()
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter') go2() })
+}
+$('#btnAddPod').onclick = addPodcastDialog
+async function refreshAll() {
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'podcasts.refresh_all', {})
+    toast(`${r.new} nouvel(s) épisode(s)` + (r.errors.length ? ` · ${r.errors.length} flux en erreur` : ''), r.errors.length > 0)
+  } catch (e) { toast(e.message, true) }
+  await loadPodcasts(); if (L.view === 'episodes' || L.view === 'podcast') renderEpisodes()
+}
+
+// ── Folders & scan ──
+async function foldersDialog() {
+  await loadFolders()
+  const ov = dialog(`<h3>Dossiers de musique</h3><div class="content">
+    <div class="row"><input id="fPath" placeholder="Chemin absolu, ex. D:\\Musique" style="flex:1"><button class="primary" id="fAdd">Ajouter</button></div>
+    <div class="note">Les sous-dossiers sont inclus. Seuls les fichiers de ces dossiers peuvent être lus par le lecteur.</div><div id="fList" style="display:flex;flex-direction:column;gap:6px"></div></div>
+    <div class="foot"><span class="spacer"></span><button id="fClose">Fermer</button></div>`)
+  const list = () => {
+    $('#fList', ov).innerHTML = L.folders.map((f) => `<div class="fitem"><span>📁</span><div class="p" title="${esc(f.path)}">${esc(f.path)}<div class="note">${f.count} morceau(x)${f.exists ? '' : ' · introuvable'}</div></div><button class="danger" data-rm="${f.id}">Retirer</button></div>`).join('') || '<div class="muted">Aucun dossier.</div>'
+    $$('[data-rm]', ov).forEach((b) => b.onclick = async () => {
+      if (!confirm('Retirer ce dossier de la bibliothèque ? Les fichiers ne sont pas supprimés.')) return
+      if (await act('folder.remove', { id: +b.dataset.rm }, 'Dossier retiré')) { await loadFolders(); await loadLibrary(); list(); render() }
+    })
+  }
+  list()
+  const add = async () => {
+    const r = await act('folder.add', { path: $('#fPath', ov).value }); if (!r) return
+    ov.remove(); if (r.existing) toast('Dossier déjà couvert : actualisation')
+    scan(r.id)
+  }
+  $('#fAdd', ov).onclick = add; $('#fClose', ov).onclick = () => ov.remove()
+  $('#fPath', ov).addEventListener('keydown', (e) => { if (e.key === 'Enter') add() })
+}
+$('#btnFolders').onclick = foldersDialog
+let scanning = false
+async function scan(folderId = 0) {
+  if (scanning) return
+  scanning = true; $('#scanBar').classList.remove('hidden'); $('#btnScan').disabled = true
+  try {
+    const r = await window.ledroide.run(MODULE_ID, 'scan', { folder_id: folderId }, { onProgress: (p) => { $('#scanBar i').style.width = (p.percent || 0) + '%'; $('#scanMsg').textContent = p.message || '' } })
+    toast(`Bibliothèque à jour : ${r.added} ajouté(s)` + (r.updated ? `, ${r.updated} modifié(s)` : '') + (r.removed ? `, ${r.removed} retiré(s)` : '') + (r.failed ? `, ${r.failed} illisible(s)` : ''))
+  } catch (e) { toast(e.message, true) }
+  scanning = false; $('#scanBar').classList.add('hidden'); $('#btnScan').disabled = false
+  await loadLibrary(); render()
+}
+$('#btnScan').onclick = async () => { await loadFolders(); L.folders.length ? scan() : foldersDialog() }
+let qTimer
+$('#q').addEventListener('input', (e) => {
+  clearTimeout(qTimer); qTimer = setTimeout(() => {
+    L.q = e.target.value.trim()
+    if (!['tracks', 'artists', 'albums'].includes(L.view)) { L.view = 'tracks'; markNav() }
+    render()
+  }, 150)
+})
+
+// ── Player ──
+function trackItem(t) { return { type: 'track', id: t.id } }
+function meta(item) {
+  if (item.type === 'track') { const t = L.byId.get(item.id) || {}; return { title: t.title || 'Morceau introuvable', sub: [t.artist, t.album].filter(Boolean).join(' — '), art: artHtml(t), duration: t.duration } }
+  return { title: item.title, sub: item.artist, art: remoteImg(item.image, item.artist), duration: item.duration }
+}
+function shuffleOrder(start) {
+  const rest = P.queue.map((_, i) => i).filter((i) => i !== start)
+  for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]] }
+  return start >= 0 ? [start, ...rest] : rest
+}
+function playList(list, start, shuffle = false, keepShuffle = false) {
+  if (!list.length) return
+  P.queue = list.map(trackItem)
+  if (shuffle) { P.shuffle = true; localSet('mp-shuffle', '1'); start = Math.floor(Math.random() * list.length) }
+  else if (!keepShuffle) { /* keep user's shuffle state */ }
+  P.order = P.shuffle ? shuffleOrder(start) : []
+  startAt(start)
+}
+function enqueue(items) {
+  const wasEmpty = !P.queue.length
+  P.queue.push(...items)
+  if (P.shuffle) P.order.push(...items.map((_, k) => P.queue.length - items.length + k))
+  if (wasEmpty) startAt(0); else { renderQueue(); persist() }
+}
+function playNext(items) {
+  P.queue.splice(P.idx + 1, 0, ...items)
+  if (P.shuffle) { P.order = P.order.map((i) => (i > P.idx ? i + items.length : i)); const pos = P.order.indexOf(P.idx); P.order.splice(pos + 1, 0, ...items.map((_, k) => P.idx + 1 + k)) }
+  if (P.idx < 0) startAt(0); else { renderQueue(); persist() }
+}
+async function startAt(i, { resume = 0, autoplay = true } = {}) {
+  if (i < 0 || i >= P.queue.length) return
+  saveEpisodePos(true)
+  P.idx = i; const item = P.queue[i]; P.cur = item; P.counted = false
+  if (P.shuffle && !P.order.includes(i)) P.order = shuffleOrder(i)
+  audio.src = item.type === 'track' ? `${BASE}/stream/${item.id}` : `${BASE}/episode/${item.id}`
+  const pos = resume || (item.type === 'episode' ? item.position || 0 : 0)
+  if (pos) audio.addEventListener('loadedmetadata', () => { audio.currentTime = Math.min(pos, (audio.duration || pos + 1) - 1) }, { once: true })
+  audio.playbackRate = item.type === 'episode' ? +$('#speed').value : 1
+  if (autoplay) { ensureGraph(); audio.play().catch((e) => { if (e.name !== 'AbortError') toast('Lecture impossible : ' + e.message, true) }) }
+  updateNow(); renderQueue(); persist(); refreshPlayingMarks()
+}
+function nextIndex(dir) {
+  if (!P.queue.length) return -1
+  if (P.shuffle) {
+    const pos = P.order.indexOf(P.idx) + dir
+    if (pos >= 0 && pos < P.order.length) return P.order[pos]
+    if (P.repeat === 'all') { if (dir > 0) { P.order = shuffleOrder(-1); return P.order[0] } return P.order[P.order.length - 1] }
+    return -1
+  }
+  const n = P.idx + dir
+  if (n >= 0 && n < P.queue.length) return n
+  if (P.repeat === 'all') return dir > 0 ? 0 : P.queue.length - 1
+  return -1
+}
+function next(auto = false) {
+  if (auto && P.repeat === 'one') { audio.currentTime = 0; audio.play(); return }
+  const n = nextIndex(1)
+  if (n < 0) { if (auto) { audio.pause(); audio.currentTime = 0; updateNow() } return }
+  startAt(n)
+}
+function prev() {
+  if (audio.currentTime > 3 || nextIndex(-1) < 0) { audio.currentTime = 0; return }
+  startAt(nextIndex(-1))
+}
+function togglePlay() {
+  if (!P.cur) { if (P.queue.length) return startAt(Math.max(0, P.idx)); if (L.list.length) return playList(L.list, 0); return }
+  ensureGraph()
+  if (!audio.src || audio.src === location.href) return startAt(P.idx)
+  audio.paused ? audio.play().catch((e) => toast(e.message, true)) : audio.pause()
+}
+function updateNow() {
+  const item = P.cur
+  if (!item) { $('#nowTitle').textContent = 'Rien en lecture'; $('#nowSub').textContent = ''; return }
+  const m = meta(item)
+  $('#nowTitle').textContent = m.title; $('#nowTitle').classList.remove('muted'); $('#nowSub').textContent = m.sub
+  $('#nowArt').outerHTML = m.art.replace(/class="([^"]*)"/, 'id="nowArt" class="$1"')
+  document.title = m.title + ' — Lecteur audio'
+  $('#speed').classList.toggle('hidden', item.type !== 'episode')
+}
+function refreshPlayingMarks() {
+  const cur = P.cur
+  $$('tr.trk').forEach((tr) => {
+    const t = L.list[+tr.dataset.i]; const on = cur?.type === 'track' && t?.id === cur.id
+    tr.classList.toggle('playing', on)
+    const n = tr.querySelector('.c-n'); if (n) n.textContent = on ? '♫' : (n.textContent === '♫' ? +tr.dataset.i + 1 : n.textContent)
+  })
+  $$('.ep').forEach((el) => el.classList.toggle('playing', cur?.type === 'episode' && L.eps?.[+el.dataset.i]?.id === cur.id))
+}
+audio.addEventListener('play', () => { $('#btnPlay').textContent = '⏸' })
+audio.addEventListener('pause', () => { $('#btnPlay').textContent = '▶'; saveEpisodePos(true); persist() })
+audio.addEventListener('ended', () => {
+  if (P.cur?.type === 'episode') { call('episode.position', { id: P.cur.id, finished: true }).then(loadPodcasts).catch(() => {}); P.cur.position = 0 }
+  next(true)
+})
+audio.addEventListener('error', () => { if (P.cur && audio.src) toast('Lecture impossible : fichier introuvable ou format non pris en charge', true) })
+let seeking = false
+audio.addEventListener('timeupdate', () => {
+  const d = audio.duration || meta(P.cur || { type: 'track' }).duration || 0
+  $('#tCur').textContent = dur(audio.currentTime); $('#tDur').textContent = dur(d)
+  if (!seeking && d) $('#seek').value = Math.round(audio.currentTime / d * 1000)
+  if (P.cur?.type === 'track' && !P.counted && audio.currentTime > Math.min(30, (audio.duration || 60) * 0.5)) { P.counted = true; call('track.played', { id: P.cur.id }).catch(() => {}) }
+  saveEpisodePos(false)
+  if (Date.now() - P.lastSave > 5000) persist()
+})
+function saveEpisodePos(force) {
+  const c = P.cur
+  if (!c || c.type !== 'episode' || !audio.currentTime || audio.ended) return
+  if (!force && Date.now() - (c.saved || 0) < 10000) return
+  c.saved = Date.now(); c.position = audio.currentTime
+  call('episode.position', { id: c.id, position: audio.currentTime }).catch(() => {})
+}
+$('#seek').addEventListener('input', () => { seeking = true; const d = audio.duration || 0; $('#tCur').textContent = dur($('#seek').value / 1000 * d) })
+$('#seek').addEventListener('change', () => { seeking = false; if (audio.duration) audio.currentTime = $('#seek').value / 1000 * audio.duration })
+$('#btnPlay').onclick = togglePlay
+$('#btnNext').onclick = () => next()
+$('#btnPrev').onclick = prev
+function setShuffle(on) { P.shuffle = on; localSet('mp-shuffle', on ? '1' : '0'); P.order = on ? shuffleOrder(P.idx) : []; $('#btnShuffle').classList.toggle('on', on); renderQueue() }
+function cycleRepeat() { P.repeat = { off: 'all', all: 'one', one: 'off' }[P.repeat]; localSet('mp-repeat', P.repeat); applyRepeat(); toast({ off: 'Répétition désactivée', all: 'Répéter la file', one: 'Répéter le morceau' }[P.repeat]) }
+function applyRepeat() { $('#btnRepeat').textContent = P.repeat === 'one' ? '🔂' : '🔁'; $('#btnRepeat').classList.toggle('on', P.repeat !== 'off') }
+$('#btnShuffle').onclick = () => setShuffle(!P.shuffle)
+$('#btnRepeat').onclick = cycleRepeat
+function setVolume(v) { v = Math.max(0, Math.min(100, v)); $('#vol').value = v; audio.volume = v / 100; audio.muted = false; localSet('mp-vol', v); muteIcon() }
+function muteIcon() { $('#btnMute').textContent = audio.muted || audio.volume === 0 ? '🔇' : audio.volume < .5 ? '🔉' : '🔊' }
+$('#vol').oninput = (e) => setVolume(+e.target.value)
+$('#btnMute').onclick = () => { audio.muted = !audio.muted; muteIcon() }
+$('#speed').onchange = (e) => { audio.playbackRate = +e.target.value }
+
+// queue panel
+function renderQueue() {
+  if ($('#queue').classList.contains('hidden')) return
+  const order = P.shuffle && P.order.length ? P.order : P.queue.map((_, i) => i)
+  const pos = order.indexOf(P.idx)
+  $('#qList').innerHTML = order.map((qi, k) => {
+    const m = meta(P.queue[qi])
+    return `<div class="qi ${qi === P.idx ? 'cur' : k < pos ? 'past' : ''}" data-q="${qi}" draggable="${P.shuffle ? 'false' : 'true'}">${m.art}<div class="tx"><div>${esc(m.title)}</div><div class="a">${esc(m.sub)}</div></div>
+      <span class="muted num" style="font-size:11.5px">${dur(m.duration)}</span><button class="rm" data-rmq="${qi}" title="Retirer">✕</button></div>`
+  }).join('') || '<div class="muted" style="padding:20px;text-align:center">La file est vide.<br>Double-cliquez sur un morceau pour le lire.</div>'
+  $$('.qi').forEach((el) => {
+    el.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/q', el.dataset.q) })
+    el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('dragover') })
+    el.addEventListener('dragleave', () => el.classList.remove('dragover'))
+    el.addEventListener('drop', (e) => {
+      e.preventDefault(); el.classList.remove('dragover')
+      const from = +e.dataTransfer.getData('text/q'), to = +el.dataset.q; if (isNaN(from) || from === to) return
+      const cur = P.queue[P.idx]; const [m] = P.queue.splice(from, 1); P.queue.splice(to, 0, m); P.idx = P.queue.indexOf(cur); renderQueue(); persist()
+    })
+  })
+}
+$('#qList').addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-rmq]')
+  if (rm) {
+    const i = +rm.dataset.rmq
+    if (i === P.idx) { audio.pause(); audio.removeAttribute('src'); P.cur = null }
+    P.queue.splice(i, 1)
+    if (i < P.idx) P.idx--
+    else if (i === P.idx) P.idx = Math.min(P.idx, P.queue.length - 1)
+    P.order = P.order.filter((x) => x !== i).map((x) => (x > i ? x - 1 : x))
+    if (!P.cur) updateNow()
+    renderQueue(); persist(); return
+  }
+  const q = e.target.closest('.qi'); if (q) startAt(+q.dataset.q)
+})
+$('#btnQueue').onclick = () => { $('#queue').classList.toggle('hidden'); $('#btnQueue').classList.toggle('on', !$('#queue').classList.contains('hidden')); renderQueue() }
+$('#qClose').onclick = () => $('#btnQueue').click()
+$('#qClear').onclick = () => {
+  const cur = P.cur ? P.queue[P.idx] : null
+  P.queue = cur ? [cur] : []; P.idx = cur ? 0 : -1; P.order = cur ? [0] : []
+  renderQueue(); persist()
+}
+function persist() {
+  P.lastSave = Date.now()
+  localSet('mp-queue', JSON.stringify({ queue: P.queue.slice(0, 2000).map(({ saved, ...q }) => q), idx: P.idx, pos: audio.currentTime || 0 }))
+}
+function restore() {
+  try {
+    const s = JSON.parse(localGet('mp-queue') || 'null'); if (!s) return
+    P.queue = s.queue.filter((q) => q.type === 'episode' || L.byId.has(q.id))
+    if (!P.queue.length) return
+    const idx = Math.min(Math.max(0, s.idx), P.queue.length - 1)
+    startAt(idx, { resume: s.pos, autoplay: false })
+  } catch {}
+}
+
+// ── Equalizer (WebAudio) ──
+const BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+const PRESETS = { 'Plat': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'Basses+': [6, 5, 4, 2, 0, 0, 0, 0, 0, 0], 'Aigus+': [0, 0, 0, 0, 0, 1, 2, 4, 5, 6],
+  'Voix': [-3, -2, -1, 1, 3, 4, 3, 1, 0, -1], 'Rock': [4, 3, 2, 0, -1, -1, 1, 2, 3, 4], 'Électro': [5, 4, 1, 0, -2, 1, 0, 2, 4, 5], 'Classique': [3, 2, 1, 0, 0, 0, -1, -1, 1, 2] }
+const EQ = { ctx: null, filters: [], gains: JSON.parse(localGet('mp-eq', 'null') || 'null') || PRESETS['Plat'], on: localGet('mp-eqon', '1') === '1' }
+function ensureGraph() {
+  if (EQ.ctx) { if (EQ.ctx.state === 'suspended') EQ.ctx.resume(); return }
+  try {
+    const ctx = new AudioContext(); const src = ctx.createMediaElementSource(audio)
+    EQ.filters = BANDS.map((f, i) => { const b = ctx.createBiquadFilter(); b.type = i === 0 ? 'lowshelf' : i === BANDS.length - 1 ? 'highshelf' : 'peaking'; b.frequency.value = f; b.Q.value = 1.1; return b })
+    let node = src; for (const f of EQ.filters) { node.connect(f); node = f }
+    node.connect(ctx.destination)
+    EQ.ctx = ctx; applyEq()
+  } catch (e) { console.warn('WebAudio indisponible', e) }
+}
+function applyEq() { EQ.filters.forEach((f, i) => (f.gain.value = EQ.on ? EQ.gains[i] : 0)); $('#btnEq').classList.toggle('on', EQ.on && EQ.gains.some((g) => g)) }
+function eqDialog() {
+  const ov = dialog(`<h3>Égaliseur</h3><div class="content">
+    <div class="row"><label class="row"><input type="checkbox" id="eqOn" ${EQ.on ? 'checked' : ''}> Activé</label><span class="spacer"></span><select id="eqPreset"><option value="">Préréglages…</option>${Object.keys(PRESETS).map((p) => `<option>${p}</option>`).join('')}</select></div>
+    <div class="eq">${BANDS.map((f, i) => `<div class="band"><span class="v" id="eqv${i}">${EQ.gains[i] > 0 ? '+' : ''}${EQ.gains[i]} dB</span><input type="range" min="-12" max="12" step="1" value="${EQ.gains[i]}" data-b="${i}"><span>${f >= 1000 ? f / 1000 + ' k' : f}</span></div>`).join('')}</div></div>
+    <div class="foot"><button id="eqReset">Réinitialiser</button><span class="spacer"></span><button class="primary" id="eqClose">Fermer</button></div>`)
+  const save = () => { localSet('mp-eq', JSON.stringify(EQ.gains)); localSet('mp-eqon', EQ.on ? '1' : '0'); applyEq() }
+  const sync = () => $$('input[data-b]', ov).forEach((r) => { const i = +r.dataset.b; r.value = EQ.gains[i]; $('#eqv' + i, ov).textContent = (EQ.gains[i] > 0 ? '+' : '') + EQ.gains[i] + ' dB' })
+  $$('input[data-b]', ov).forEach((r) => r.oninput = () => { EQ.gains[+r.dataset.b] = +r.value; sync(); save() })
+  $('#eqOn', ov).onchange = (e) => { EQ.on = e.target.checked; save() }
+  $('#eqPreset', ov).onchange = (e) => { if (PRESETS[e.target.value]) { EQ.gains = [...PRESETS[e.target.value]]; sync(); save() } }
+  $('#eqReset', ov).onclick = () => { EQ.gains = [...PRESETS['Plat']]; sync(); save() }
+  $('#eqClose', ov).onclick = () => ov.remove()
+  ensureGraph()
+}
+$('#btnEq').onclick = eqDialog
+
+document.addEventListener('keydown', (e) => {
+  if ($('.overlay')) return
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select(); return }
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName) && document.activeElement.type !== 'range') { if (e.key === 'Escape') document.activeElement.blur(); return }
+  const k = e.key
+  if (k === ' ') { e.preventDefault(); togglePlay() }
+  else if (k === 'ArrowRight' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); next() }
+  else if (k === 'ArrowLeft' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); prev() }
+  else if (k === 'ArrowRight') { e.preventDefault(); audio.currentTime = Math.min((audio.duration || 0), audio.currentTime + 10) }
+  else if (k === 'ArrowLeft') { e.preventDefault(); audio.currentTime = Math.max(0, audio.currentTime - 10) }
+  else if (k === 'ArrowUp') { e.preventDefault(); setVolume(+$('#vol').value + 5) }
+  else if (k === 'ArrowDown') { e.preventDefault(); setVolume(+$('#vol').value - 5) }
+  else if (k.toLowerCase() === 'm') $('#btnMute').click()
+  else if (k.toLowerCase() === 's') setShuffle(!P.shuffle)
+  else if (k.toLowerCase() === 'r') cycleRepeat()
+  else if (k === 'Enter' && L.sel.size === 1) playList(L.list, [...L.sel][0], false, true)
+})
+window.addEventListener('beforeunload', () => { saveEpisodePos(true); persist() })
+
+;(async () => {
+  setVolume(+localGet('mp-vol', 80)); $('#btnShuffle').classList.toggle('on', P.shuffle); applyRepeat()
+  await Promise.all([loadLibrary(), loadPlaylists(), loadPodcasts()])
+  render(); restore()
+  const stale = L.podcasts.some((p) => !p.last_refresh || Date.now() - new Date(p.last_refresh).getTime() > 3 * 3600 * 1000)
+  if (stale) refreshAll()
+})()
+</script>
+</body>
+</html>

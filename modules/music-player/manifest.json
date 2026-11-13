@@ -1,0 +1,35 @@
+{
+  "id": "music-player",
+  "name": "Lecteur audio et podcasts",
+  "version": "1.0.0",
+  "description": "Bibliothèque musicale locale (tags, pochettes, artistes, albums, recherche), lecture avec file d'attente, aléatoire, répétition, playlists, égaliseur et raccourcis clavier ; podcasts par flux RSS avec lecture en streaming ou téléchargement, reprise à la position et suivi des épisodes écoutés.",
+  "category": "Images & médias",
+  "tags": [
+    "musique",
+    "audio",
+    "podcast",
+    "playlist",
+    "lecteur"
+  ],
+  "icon": "🎵",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "network",
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "mutagen>=1.47,<2"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

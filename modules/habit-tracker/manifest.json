@@ -11,7 +11,7 @@
     "routine",
     "calendrier"
   ],
-  "icon": "💶",
+  "icon": "✅",
   "author": "LedroideDesktop",
   "entry": {
     "backend": "backend/main.py",

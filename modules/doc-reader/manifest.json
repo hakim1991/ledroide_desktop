@@ -1,0 +1,35 @@
+{
+  "id": "doc-reader",
+  "name": "Lecteur de documents",
+  "version": "1.0.0",
+  "description": "Bibliothèque et liseuse PDF et EPUB : couvertures, collections, progression et reprise de lecture, zoom, mode page ou continu, recherche plein texte surlignée, table des matières, thèmes de lecture, marque-pages, surlignages et notes exportables en Markdown.",
+  "category": "Fichiers & PDF",
+  "tags": [
+    "pdf",
+    "epub",
+    "lecture",
+    "livre",
+    "annotations"
+  ],
+  "icon": "📖",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "pypdfium2>=5,<6",
+      "Pillow>=11,<13"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}

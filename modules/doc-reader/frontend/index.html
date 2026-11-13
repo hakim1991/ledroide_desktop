@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecteur de documents</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #0f0f12; --surface: #18181b; --surface2: #1f1f23; --border: #27272a; --line: #1d1d21;
+    --text: #e2e2e8; --muted: #71717a; --accent: #6366f1; --accent-h: #818cf8;
+    --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --hl-yellow: rgba(250,204,21,.38); --hl-green: rgba(34,197,94,.35); --hl-blue: rgba(56,189,248,.35);
+    --hl-pink: rgba(236,72,153,.35); --hl-orange: rgba(249,115,22,.38);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text);
+         font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }
+  button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 5px 10px; font: inherit; cursor: pointer; transition: .12s; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: #3f3f46; background: #26262b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  button.danger { color: #fca5a5; }
+  button.icon { padding: 5px 8px; min-width: 30px; }
+  button.on { background: rgba(99,102,241,.25); border-color: var(--accent); }
+  input, select, textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 8px; font: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  input[type=checkbox], input[type=range] { accent-color: var(--accent); }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  .sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+  .muted { color: var(--muted); }
+
+  header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+           background: var(--surface); flex-shrink: 0; min-height: 46px; }
+  header .title { font-weight: 600; font-size: 14px; margin-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Library */
+  #library { flex: 1; min-height: 0; display: flex; }
+  #side { width: 210px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 10px 8px; overflow-y: auto; }
+  #side h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 8px 6px; display: flex; align-items: center; }
+  #side h4 button { margin-left: auto; padding: 0 6px; font-size: 14px; line-height: 18px; }
+  .nav { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: #c4c4cc; }
+  .nav:hover { background: var(--surface2); }
+  .nav.sel { background: rgba(99,102,241,.18); color: #fff; }
+  .nav .n { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+  .nav .x { display: none; color: var(--muted); padding: 0 3px; }
+  .nav:hover .x { display: inline; }
+  .nav:hover .n.c { display: none; }
+  #shelf { flex: 1; overflow-y: auto; padding: 18px 20px; position: relative; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 18px; }
+  .book { cursor: pointer; display: flex; flex-direction: column; gap: 6px; position: relative; }
+  .cover { aspect-ratio: 2/3; border-radius: 6px; overflow: hidden; background: var(--surface2); border: 1px solid var(--border);
+           position: relative; box-shadow: 0 6px 16px rgba(0,0,0,.35); transition: transform .15s; }
+  .book:hover .cover { transform: translateY(-3px); border-color: #3f3f46; }
+  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover .ph { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 14px;
+               font-weight: 700; font-size: 15px; line-height: 1.3; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .cover .ph small { font-weight: 400; font-size: 11.5px; opacity: .8; margin-top: 8px; }
+  .badge { position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+           background: rgba(0,0,0,.65); color: #fff; letter-spacing: .04em; }
+  .badge.missing { left: auto; right: 6px; background: rgba(239,68,68,.85); }
+  .prog { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .prog i { display: block; height: 100%; background: var(--accent); }
+  .book .t { font-weight: 600; font-size: 12.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .book .a { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .book .more { position: absolute; top: 6px; right: 6px; opacity: 0; padding: 2px 7px; background: rgba(0,0,0,.7); }
+  .book:hover .more { opacity: 1; }
+  #emptyShelf { margin: 60px auto; max-width: 440px; text-align: center; background: var(--surface); border: 1px solid var(--border);
+                border-radius: 12px; padding: 28px 32px; }
+  #emptyShelf h2 { font-size: 17px; margin-bottom: 8px; }
+  #emptyShelf p { color: var(--muted); line-height: 1.5; margin-bottom: 16px; }
+  #dropzone { position: fixed; inset: 10px; border: 2px dashed var(--accent); border-radius: 14px; background: rgba(15,15,18,.88);
+              display: flex; align-items: center; justify-content: center; font-size: 16px; z-index: 90; pointer-events: none; }
+
+  /* Reader */
+  #reader { flex: 1; min-height: 0; display: flex; }
+  #rbody { flex: 1; min-width: 0; overflow: auto; position: relative; background: #0b0b0e; outline: none; }
+  #pages { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 20px 40px; min-width: min-content; }
+  .pg { position: relative; background: #fff; box-shadow: 0 4px 18px rgba(0,0,0,.5); flex-shrink: 0; }
+  .pg img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+  .pg .num { position: absolute; bottom: -13px; right: 0; font-size: 10px; color: var(--muted); }
+  .pg .ov { position: absolute; inset: 0; }
+  .pg.hlmode { cursor: crosshair; }
+  .hl { position: absolute; mix-blend-mode: multiply; cursor: pointer; border-radius: 2px; }
+  .hl.yellow { background: rgba(250,204,21,.55); } .hl.green { background: rgba(34,197,94,.45); }
+  .hl.blue { background: rgba(56,189,248,.45); } .hl.pink { background: rgba(236,72,153,.4); } .hl.orange { background: rgba(249,115,22,.5); }
+  .hl.noted::after { content: '📝'; position: absolute; right: -16px; top: -4px; font-size: 12px; mix-blend-mode: normal; }
+  .sr { position: absolute; background: rgba(99,102,241,.35); outline: 1px solid rgba(99,102,241,.8); pointer-events: none; }
+  .sr.cur { background: rgba(249,115,22,.45); outline: 2px solid #f97316; }
+  .drag-rect { position: absolute; border: 1.5px dashed var(--accent); background: rgba(99,102,241,.15); pointer-events: none; }
+  .bm-flag { position: absolute; top: -2px; right: 18px; font-size: 22px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+
+  #epub { --fs: 18px; --lh: 1.65; min-height: 100%; padding: 30px 20px 80px; }
+  #epub.t-dark { background: #141418; color: #d8d8de; } #epub.t-light { background: #fbfbf8; color: #1f1f23; }
+  #epub.t-sepia { background: #f4ecd8; color: #4b3a26; }
+  #rbody.t-light { background: #fbfbf8; } #rbody.t-sepia { background: #f4ecd8; } #rbody.t-dark { background: #141418; }
+  #epub article { max-width: 720px; margin: 0 auto; font-family: Georgia, 'Times New Roman', serif; font-size: var(--fs); line-height: var(--lh); user-select: text; }
+  #epub article p { margin: 0 0 .8em; text-align: justify; }
+  #epub article h1, #epub article h2, #epub article h3 { font-family: system-ui, sans-serif; line-height: 1.25; margin: 1.2em 0 .6em; }
+  #epub article img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
+  #epub article a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  #epub.t-sepia article a { color: #8a4b12; }
+  #epub article blockquote { border-left: 3px solid currentColor; opacity: .85; padding-left: 1em; margin: 1em 0; }
+  #epub article pre { white-space: pre-wrap; font-size: .85em; }
+  #epub article table { border-collapse: collapse; margin: 1em 0; } #epub article td, #epub article th { border: 1px solid rgba(128,128,128,.4); padding: 4px 6px; }
+  #epub mark { color: inherit; cursor: pointer; border-radius: 2px; }
+  #epub mark.yellow { background: var(--hl-yellow); } #epub mark.green { background: var(--hl-green); } #epub mark.blue { background: var(--hl-blue); }
+  #epub mark.pink { background: var(--hl-pink); } #epub mark.orange { background: var(--hl-orange); }
+  #epub mark.noted { border-bottom: 2px dotted currentColor; }
+  #epub mark.search { background: rgba(249,115,22,.6); outline: 2px solid #f97316; }
+  .chapnav { max-width: 720px; margin: 40px auto 0; display: flex; justify-content: space-between; gap: 10px; font-family: system-ui, sans-serif; }
+  #epub.t-light .chapnav button, #epub.t-sepia .chapnav button { background: rgba(0,0,0,.06); color: inherit; border-color: rgba(0,0,0,.15); }
+
+  #panel { width: 300px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .tabs button { flex: 1; border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 9px 4px; border-bottom: 2px solid transparent; }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--accent); background: transparent; }
+  .pane { flex: 1; overflow-y: auto; padding: 8px; }
+  .toc-item { padding: 5px 8px; border-radius: 5px; cursor: pointer; line-height: 1.35; color: #c4c4cc; display: flex; gap: 8px; }
+  .toc-item:hover { background: var(--surface2); }
+  .toc-item.cur { background: rgba(99,102,241,.18); color: #fff; }
+  .toc-item .pn { margin-left: auto; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .ann { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; cursor: pointer; background: var(--surface2); }
+  .ann:hover { border-color: #3f3f46; }
+  .ann .h { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+  .ann .h .del { margin-left: auto; padding: 0 6px; border: none; background: transparent; color: var(--muted); }
+  .ann .h .del:hover { color: #fca5a5; }
+  .ann .q { border-left: 3px solid; padding-left: 8px; line-height: 1.4; max-height: 80px; overflow: hidden; }
+  .ann .nt { margin-top: 5px; line-height: 1.4; white-space: pre-wrap; }
+  .dotc { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .c-yellow { background: #facc15; border-color: #facc15 !important; } .c-green { background: #22c55e; border-color: #22c55e !important; }
+  .c-blue { background: #38bdf8; border-color: #38bdf8 !important; } .c-pink { background: #ec4899; border-color: #ec4899 !important; }
+  .c-orange { background: #f97316; border-color: #f97316 !important; }
+  .ann .q.c-yellow, .ann .q.c-green, .ann .q.c-blue, .ann .q.c-pink, .ann .q.c-orange { background: transparent; }
+  .sres { padding: 6px 8px; border-radius: 5px; cursor: pointer; line-height: 1.4; font-size: 12px; }
+  .sres:hover { background: var(--surface2); } .sres.cur { background: rgba(249,115,22,.15); }
+  .sres b { color: #fdba74; font-weight: 600; } .sres .w { color: var(--muted); font-size: 11px; display: block; }
+  .pane .empty { color: var(--muted); padding: 20px 8px; text-align: center; line-height: 1.5; }
+  .pane-head { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; align-items: center; }
+  #pageInput { width: 52px; text-align: center; }
+  #searchBox { width: 170px; }
+  .zoomlbl { min-width: 46px; text-align: center; color: #a1a1aa; font-variant-numeric: tabular-nums; }
+
+  #selPop { position: fixed; z-index: 70; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+            display: flex; gap: 3px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  #selPop button { padding: 4px 8px; border: none; }
+  #selPop .sw { width: 18px; height: 18px; border-radius: 50%; padding: 0; min-width: 0; border: 2px solid transparent; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: min(520px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .dialog h3 { font-size: 15px; padding: 14px 18px 10px; }
+  .dialog .content { padding: 0 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .dialog .foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); margin-top: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > label { font-size: 11.5px; color: var(--muted); }
+  .field.row { flex-direction: row; align-items: center; gap: 8px; }
+  .field textarea { min-height: 90px; resize: vertical; }
+  .quote { border-left: 3px solid var(--accent); padding: 6px 10px; background: var(--surface2); border-radius: 0 6px 6px 0; max-height: 140px; overflow: auto; line-height: 1.45; white-space: pre-wrap; }
+  .swatches { display: flex; gap: 8px; }
+  .swatches .sw { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  .swatches .sw.on, #selPop .sw.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px #fff; }
+  .note { color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+  .checklist { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow: auto; }
+  .checklist label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .progressbar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progressbar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+  .menu-list { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; z-index: 65;
+               min-width: 200px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .menu-list button { display: flex; gap: 8px; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; }
+  .menu-list button:hover { background: var(--surface2); }
+  .menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); }
+  .seg button.on { background: var(--surface2); color: var(--text); }
+  #loading { position: absolute; top: 40%; left: 0; right: 0; text-align: center; color: var(--muted); }
+
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: #27272a;
+           border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; transition: .2s; z-index: 100; pointer-events: none; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.bad { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+
+<header id="libHead">
+  <span class="title">📖 Lecteur de documents</span>
+  <input id="libSearch" placeholder="Rechercher un titre, un auteur…" style="width:260px">
+  <select id="libSort" title="Tri">
+    <option value="recent">Lus récemment</option>
+    <option value="added">Ajoutés récemment</option>
+    <option value="title">Titre</option>
+    <option value="author">Auteur</option>
+    <option value="progress">Progression</option>
+  </select>
+  <span class="spacer"></span>
+  <button class="primary" id="btnAdd">＋ Ajouter…</button>
+</header>
+
+<header id="readHead" class="hidden">
+  <button class="icon" id="btnBack" title="Retour à la bibliothèque (Échap)">←</button>
+  <span class="title" id="docTitle" style="max-width:260px"></span>
+  <span class="sep"></span>
+  <span id="pdfTools" class="hidden" style="display:flex;gap:6px;align-items:center">
+    <button class="icon" id="btnPrev" title="Page précédente (←)">‹</button>
+    <input id="pageInput" title="Aller à la page"><span class="muted" id="pageCount"></span>
+    <button class="icon" id="btnNext" title="Page suivante (→)">›</button>
+    <span class="sep"></span>
+    <button class="icon" id="btnZoomOut" title="Zoom arrière (−)">−</button>
+    <span class="zoomlbl" id="zoomLbl"></span>
+    <button class="icon" id="btnZoomIn" title="Zoom avant (+)">＋</button>
+    <button id="btnFit" title="Ajuster à la largeur">↔ Largeur</button>
+    <div class="seg" id="modeSeg"><button data-m="page">Page</button><button data-m="scroll">Continu</button></div>
+    <button id="btnHl" title="Surligner : tracez un rectangle sur la page">🖍 Surligner</button>
+  </span>
+  <span id="epubTools" class="hidden" style="display:flex;gap:6px;align-items:center">
+    <button class="icon" id="btnChPrev" title="Chapitre précédent (←)">‹</button>
+    <select id="chapSel" style="max-width:220px"></select>
+    <button class="icon" id="btnChNext" title="Chapitre suivant (→)">›</button>
+    <span class="sep"></span>
+    <button class="icon" id="btnFsDown" title="Réduire le texte">A−</button>
+    <button class="icon" id="btnFsUp" title="Agrandir le texte">A＋</button>
+    <div class="seg" id="themeSeg"><button data-t="dark">Sombre</button><button data-t="light">Clair</button><button data-t="sepia">Sépia</button></div>
+  </span>
+  <span class="spacer"></span>
+  <input id="searchBox" placeholder="Rechercher (Ctrl+F)">
+  <button class="icon" id="btnBm" title="Marque-page (Ctrl+B)">🔖</button>
+  <button class="icon" id="btnNote" title="Ajouter une note ici">📝</button>
+  <button class="icon" id="btnPanel" title="Panneau latéral">☰</button>
+</header>
+
+<div id="library">
+  <aside id="side">
+    <div class="nav sel" data-f="all">📚 Tous<span class="n" id="cAll"></span></div>
+    <div class="nav" data-f="reading">⏳ En cours<span class="n" id="cReading"></span></div>
+    <div class="nav" data-f="new">✨ Non commencés<span class="n" id="cNew"></span></div>
+    <div class="nav" data-f="done">✅ Terminés<span class="n" id="cDone"></span></div>
+    <div class="nav" data-f="pdf">📄 PDF<span class="n" id="cPdf"></span></div>
+    <div class="nav" data-f="epub">📗 EPUB<span class="n" id="cEpub"></span></div>
+    <h4>Collections <button id="btnNewColl" title="Nouvelle collection">＋</button></h4>
+    <div id="collList"></div>
+  </aside>
+  <main id="shelf">
+    <div id="grid"></div>
+    <div id="emptyShelf" class="hidden">
+      <h2>Votre bibliothèque est vide</h2>
+      <p>Ajoutez un fichier ou un dossier contenant des PDF et des EPUB, ou glissez-déposez des fichiers dans cette fenêtre.</p>
+      <button class="primary" id="emptyAdd">＋ Ajouter des documents…</button>
+    </div>
+    <div id="noMatch" class="hidden muted" style="text-align:center;margin-top:60px">Aucun document ne correspond.</div>
+  </main>
+</div>
+
+<div id="reader" class="hidden">
+  <div id="rbody" tabindex="0">
+    <div id="pages" class="hidden"></div>
+    <div id="epub" class="hidden"><article id="epubArticle"></article>
+      <div class="chapnav"><button id="chPrevB">‹ Chapitre précédent</button><button id="chNextB">Chapitre suivant ›</button></div>
+    </div>
+    <div id="loading" class="hidden">Chargement…</div>
+  </div>
+  <aside id="panel">
+    <div class="tabs"><button data-p="toc" class="on">Sommaire</button><button data-p="ann">Annotations</button><button data-p="search">Recherche</button></div>
+    <div class="pane" id="paneToc"></div>
+    <div id="paneAnnWrap" class="hidden" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="pane-head"><select id="annFilter" style="flex:1"><option value="">Toutes</option><option value="bookmark">Marque-pages</option><option value="highlight">Surlignages</option><option value="note">Notes</option></select>
+        <button id="btnExport" title="Exporter en Markdown">⬇ Markdown</button></div>
+      <div class="pane" id="paneAnn"></div>
+    </div>
+    <div id="paneSearchWrap" class="hidden" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="pane-head"><span id="searchInfo" class="muted" style="flex:1"></span>
+        <button class="icon" id="btnSPrev" title="Précédent (Maj+Entrée)">↑</button><button class="icon" id="btnSNext" title="Suivant (Entrée)">↓</button></div>
+      <div class="pane" id="paneSearch"></div>
+    </div>
+  </aside>
+</div>
+
+<div id="selPop" class="hidden"></div>
+<div id="dropzone" class="hidden">Déposez vos PDF et EPUB pour les ajouter à la bibliothèque</div>
+<div id="toast"></div>
+
+<script>
+const MODULE_ID = 'doc-reader'
+const BASE = `/modules/${MODULE_ID}/api`
+const call = (action, payload = {}, opts) => window.ledroide.call(MODULE_ID, action, payload, opts)
+const $ = (s, root = document) => root.querySelector(s)
+const $$ = (s, root = document) => [...root.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const COLORS = ['yellow', 'green', 'blue', 'pink', 'orange']
+const KIND_LBL = { bookmark: '🔖 Marque-page', highlight: '🖍 Surlignage', note: '📝 Note' }
+const PT2PX = 96 / 72
+
+function localGet(k, d = null) { try { return localStorage.getItem(k) ?? d } catch { return d } }
+function localSet(k, v) { try { localStorage.setItem(k, v) } catch {} }
+
+let toastTimer
+function toast(msg, bad = false) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), bad ? 5000 : 2400)
+}
+async function act(action, payload, okMsg, opts) {
+  try { const r = await call(action, payload, opts); if (okMsg) toast(okMsg); return r }
+  catch (e) { toast(e.message || String(e), true); return null }
+}
+function dialog(html) {
+  const ov = document.createElement('div')
+  ov.className = 'overlay'
+  ov.innerHTML = `<div class="dialog">${html}</div>`
+  document.body.appendChild(ov)
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) ov.remove() })
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); ov.remove() } })
+  setTimeout(() => ov.querySelector('input:not([type=checkbox]), textarea')?.focus(), 30)
+  return ov
+}
+function download(name, content, type) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type }))
+  a.download = name; document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+function swatches(cur) { return `<div class="swatches">${COLORS.map((c) => `<span class="sw c-${c} ${c === cur ? 'on' : ''}" data-c="${c}"></span>`).join('')}</div>` }
+function bindSwatches(root, onPick) {
+  $$('.sw', root).forEach((s) => s.addEventListener('click', () => { $$('.sw', root).forEach((x) => x.classList.remove('on')); s.classList.add('on'); onPick(s.dataset.c) }))
+}
+function hue(str) { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % 360; return h }
+function menu(x, y, items) {
+  $$('.menu-list').forEach((m) => m.remove())
+  const m = document.createElement('div'); m.className = 'menu-list'
+  m.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : `<button data-i="${i}" class="${it.danger ? 'danger' : ''}">${it.label}</button>`).join('')
+  document.body.appendChild(m)
+  const r = m.getBoundingClientRect()
+  m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px'
+  m.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; m.remove(); items[+b.dataset.i].run() })
+  setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', off) } }), 0)
+}
+
+// ── Library ───────────────────────────────────────────────────────────────────
+const lib = { docs: [], collections: [], filter: 'all', q: '', sort: localGet('dr-sort', 'recent') }
+
+async function loadLibrary() {
+  const r = await act('library.list')
+  if (!r) return
+  lib.docs = r.docs; lib.collections = r.collections
+  renderSide(); renderGrid()
+}
+function renderSide() {
+  const d = lib.docs
+  $('#cAll').textContent = d.length
+  $('#cReading').textContent = d.filter((x) => x.progress > 0 && x.progress < 0.995).length
+  $('#cNew').textContent = d.filter((x) => !x.progress).length
+  $('#cDone').textContent = d.filter((x) => x.progress >= 0.995).length
+  $('#cPdf').textContent = d.filter((x) => x.kind === 'pdf').length
+  $('#cEpub').textContent = d.filter((x) => x.kind === 'epub').length
+  $('#collList').innerHTML = lib.collections.map((c) => `<div class="nav ${lib.filter === 'c' + c.id ? 'sel' : ''}" data-f="c${c.id}" data-id="${c.id}">🏷 <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span><span class="n c">${c.count}</span><span class="x" title="Options" data-opt="${c.id}">⋯</span></div>`).join('')
+    || '<div class="muted" style="padding:4px 8px;font-size:12px">Aucune collection</div>'
+  $$('#side .nav').forEach((n) => n.classList.toggle('sel', n.dataset.f === lib.filter))
+}
+function filtered() {
+  const q = lib.q.trim().toLowerCase()
+  let d = lib.docs.filter((x) => {
+    const f = lib.filter
+    if (f === 'reading' && !(x.progress > 0 && x.progress < 0.995)) return false
+    if (f === 'new' && x.progress) return false
+    if (f === 'done' && x.progress < 0.995) return false
+    if ((f === 'pdf' || f === 'epub') && x.kind !== f) return false
+    if (f.startsWith('c') && f !== 'all' && !x.collections.includes(+f.slice(1))) return false
+    return !q || x.title.toLowerCase().includes(q) || x.author.toLowerCase().includes(q)
+  })
+  const by = { recent: (a, b) => (b.last_opened || '').localeCompare(a.last_opened || '') || b.added_at.localeCompare(a.added_at),
+    added: (a, b) => b.added_at.localeCompare(a.added_at), title: (a, b) => a.title.localeCompare(b.title, 'fr'),
+    author: (a, b) => (a.author || '~').localeCompare(b.author || '~', 'fr') || a.title.localeCompare(b.title, 'fr'),
+    progress: (a, b) => b.progress - a.progress }[lib.sort]
+  return d.sort(by)
+}
+function renderGrid() {
+  const list = filtered()
+  $('#emptyShelf').classList.toggle('hidden', lib.docs.length > 0)
+  $('#noMatch').classList.toggle('hidden', !lib.docs.length || list.length > 0)
+  $('#grid').innerHTML = list.map((d) => `
+    <div class="book" data-id="${d.id}" title="${esc(d.title)}${d.author ? ' — ' + esc(d.author) : ''}\n${esc(d.path)}">
+      <div class="cover">${d.has_cover ? `<img src="${BASE}/cover/${d.id}" alt="" loading="lazy">` : `<div class="ph" style="background:linear-gradient(150deg,hsl(${hue(d.title)} 45% 38%),hsl(${(hue(d.title) + 40) % 360} 50% 22%))">${esc(d.title)}<small>${esc(d.author)}</small></div>`}
+        <span class="badge">${d.kind.toUpperCase()}</span>${d.exists ? '' : '<span class="badge missing" title="Fichier introuvable">!</span>'}
+        <button class="more" data-more="${d.id}" title="Options">⋯</button></div>
+      <div class="prog"><i style="width:${Math.round(d.progress * 100)}%"></i></div>
+      <div class="t">${esc(d.title)}</div>
+      <div class="a">${esc(d.author || '—')}${d.progress ? ` · ${Math.round(d.progress * 100)} %` : ''}${d.annotations ? ` · ${d.annotations} 📝` : ''}</div>
+    </div>`).join('')
+}
+
+$('#grid').addEventListener('click', (e) => {
+  const more = e.target.closest('[data-more]')
+  const book = e.target.closest('.book')
+  if (!book) return
+  const d = lib.docs.find((x) => x.id === +book.dataset.id)
+  if (more) { e.stopPropagation(); const r = more.getBoundingClientRect(); return docMenu(d, r.left, r.bottom + 4) }
+  openDoc(d.id)
+})
+$('#grid').addEventListener('contextmenu', (e) => {
+  const book = e.target.closest('.book'); if (!book) return
+  e.preventDefault(); docMenu(lib.docs.find((x) => x.id === +book.dataset.id), e.clientX, e.clientY)
+})
+function docMenu(d, x, y) {
+  menu(x, y, [
+    { label: '📖 Ouvrir', run: () => openDoc(d.id) },
+    { label: '✏️ Titre et auteur…', run: () => editMeta(d) },
+    { label: '🏷 Collections…', run: () => editCollections(d) },
+    { label: '↺ Recommencer la lecture', run: async () => { if (await act('doc.reset_progress', { id: d.id }, 'Progression remise à zéro')) loadLibrary() } },
+    '-',
+    { label: '🗑 Retirer de la bibliothèque', danger: true, run: async () => {
+      if (!confirm(`Retirer « ${d.title} » de la bibliothèque ?\nSes annotations seront supprimées.${d.imported ? '\nLa copie importée sera effacée.' : '\nLe fichier lui-même n\'est pas supprimé.'}`)) return
+      if (await act('doc.remove', { id: d.id }, 'Document retiré')) loadLibrary()
+    } },
+  ])
+}
+function editMeta(d) {
+  const ov = dialog(`<h3>Titre et auteur</h3><div class="content">
+    <div class="field"><label>Titre</label><input id="mT" maxlength="300" value="${esc(d.title)}"></div>
+    <div class="field"><label>Auteur</label><input id="mA" maxlength="200" value="${esc(d.author)}"></div>
+    <div class="note">${esc(d.path)}</div></div>
+    <div class="foot"><span class="spacer"></span><button id="mCancel">Annuler</button><button class="primary" id="mOk">Enregistrer</button></div>`)
+  const save = async () => { if (await act('doc.update', { id: d.id, title: $('#mT', ov).value, author: $('#mA', ov).value }, 'Enregistré')) { ov.remove(); loadLibrary() } }
+  $('#mOk', ov).onclick = save; $('#mCancel', ov).onclick = () => ov.remove()
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter') save() })
+}
+function editCollections(d) {
+  const ov = dialog(`<h3>Collections — ${esc(d.title)}</h3><div class="content">
+    <div class="checklist">${lib.collections.map((c) => `<label><input type="checkbox" value="${c.id}" ${d.collections.includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('') || '<span class="muted">Aucune collection pour l\'instant.</span>'}</div>
+    <div class="field row"><input id="cNewName" placeholder="Nouvelle collection…" maxlength="80" style="flex:1"><button id="cNewBtn">Créer</button></div></div>
+    <div class="foot"><span class="spacer"></span><button id="cCancel">Annuler</button><button class="primary" id="cOk">Enregistrer</button></div>`)
+  $('#cCancel', ov).onclick = () => ov.remove()
+  $('#cNewBtn', ov).onclick = async () => {
+    const name = $('#cNewName', ov).value.trim(); if (!name) return
+    const r = await act('collection.save', { name })
+    if (r) { const l = document.createElement('label'); l.innerHTML = `<input type="checkbox" value="${r.id}" checked> ${esc(name)}`; $('.checklist', ov).querySelector('.muted')?.remove(); $('.checklist', ov).appendChild(l); $('#cNewName', ov).value = '' }
+  }
+  $('#cOk', ov).onclick = async () => {
+    const ids = $$('.checklist input:checked', ov).map((i) => +i.value)
+    if (await act('doc.set_collections', { id: d.id, collections: ids }, 'Collections mises à jour')) { ov.remove(); loadLibrary() }
+  }
+}
+function collectionDialog(c) {
+  const ov = dialog(`<h3>${c ? 'Renommer la collection' : 'Nouvelle collection'}</h3><div class="content">
+    <div class="field"><label>Nom</label><input id="nName" maxlength="80" value="${esc(c?.name || '')}"></div></div>
+    <div class="foot"><span class="spacer"></span><button id="nCancel">Annuler</button><button class="primary" id="nOk">${c ? 'Renommer' : 'Créer'}</button></div>`)
+  const save = async () => { if (await act('collection.save', { id: c?.id, name: $('#nName', ov).value })) { ov.remove(); loadLibrary() } }
+  $('#nOk', ov).onclick = save; $('#nCancel', ov).onclick = () => ov.remove()
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter') save() })
+}
+$('#btnNewColl').onclick = () => collectionDialog(null)
+$('#side').addEventListener('click', (e) => {
+  const opt = e.target.closest('[data-opt]')
+  if (opt) {
+    e.stopPropagation()
+    const c = lib.collections.find((x) => x.id === +opt.dataset.opt)
+    const r = opt.getBoundingClientRect()
+    return menu(r.left, r.bottom + 4, [
+      { label: '✏️ Renommer…', run: () => collectionDialog(c) },
+      { label: '🗑 Supprimer la collection', danger: true, run: async () => {
+        if (!confirm(`Supprimer la collection « ${c.name} » ? Les documents restent dans la bibliothèque.`)) return
+        if (await act('collection.delete', { id: c.id }, 'Collection supprimée')) { if (lib.filter === 'c' + c.id) lib.filter = 'all'; loadLibrary() }
+      } },
+    ])
+  }
+  const n = e.target.closest('.nav'); if (!n) return
+  lib.filter = n.dataset.f; renderSide(); renderGrid()
+})
+$('#libSearch').addEventListener('input', (e) => { lib.q = e.target.value; renderGrid() })
+$('#libSort').value = lib.sort
+$('#libSort').addEventListener('change', (e) => { lib.sort = e.target.value; localSet('dr-sort', lib.sort); renderGrid() })
+
+function addDialog() {
+  const ov = dialog(`<h3>Ajouter des documents</h3><div class="content">
+    <div class="field"><label>Chemin d'un fichier PDF/EPUB ou d'un dossier</label><input id="aPath" placeholder="D:\\Livres" value="${esc(localGet('dr-lastpath', ''))}"></div>
+    <label class="field row"><input type="checkbox" id="aRec" checked> Inclure les sous-dossiers</label>
+    <div class="note">Les fichiers restent à leur emplacement : la bibliothèque mémorise leur chemin. Vous pouvez aussi glisser-déposer des fichiers dans la fenêtre (ils sont alors copiés dans les données du module).</div>
+    <div id="aProg" class="hidden"><div class="progressbar"><i style="width:0"></i></div><div class="note" id="aMsg" style="margin-top:6px"></div></div></div>
+    <div class="foot"><span class="spacer"></span><button id="aCancel">Fermer</button><button class="primary" id="aOk">Ajouter</button></div>`)
+  $('#aCancel', ov).onclick = () => ov.remove()
+  const go = async () => {
+    const path = $('#aPath', ov).value.trim()
+    if (!path) return toast('Indiquez un chemin', true)
+    localSet('dr-lastpath', path)
+    $('#aOk', ov).disabled = true; $('#aProg', ov).classList.remove('hidden')
+    try {
+      const r = await window.ledroide.run(MODULE_ID, 'library.add', { path, recursive: $('#aRec', ov).checked }, {
+        onProgress: (p) => { $('#aProg i', ov).style.width = (p.percent || 0) + '%'; $('#aMsg', ov).textContent = p.message || '' } })
+      const parts = [`${r.added} ajouté(s)`]
+      if (r.existing) parts.push(`${r.existing} déjà présent(s)`)
+      if (r.failed_count) parts.push(`${r.failed_count} illisible(s)`)
+      toast(parts.join(', '), r.failed_count > 0 && !r.added)
+      if (r.failed_count) $('#aMsg', ov).innerHTML = 'Fichiers ignorés :<br>' + r.failed.map((f) => `${esc(f.path)} — ${esc(f.error)}`).join('<br>')
+      else ov.remove()
+      loadLibrary()
+    } catch (e) { toast(e.message, true); $('#aProg', ov).classList.add('hidden') }
+    $('#aOk', ov).disabled = false
+  }
+  $('#aOk', ov).onclick = go
+  $('#aPath', ov).addEventListener('keydown', (e) => { if (e.key === 'Enter') go() })
+}
+$('#btnAdd').onclick = addDialog
+$('#emptyAdd').onclick = addDialog
+
+let dragDepth = 0
+document.addEventListener('dragenter', (e) => { if (!$('#library').classList.contains('hidden') && e.dataTransfer?.types?.includes('Files')) { dragDepth++; $('#dropzone').classList.remove('hidden') } })
+document.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('#dropzone').classList.add('hidden') } })
+document.addEventListener('dragover', (e) => e.preventDefault())
+document.addEventListener('drop', async (e) => {
+  e.preventDefault(); dragDepth = 0; $('#dropzone').classList.add('hidden')
+  if ($('#library').classList.contains('hidden')) return
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => /\.(pdf|epub)$/i.test(f.name))
+  if (!files.length) return toast('Déposez des fichiers PDF ou EPUB', true)
+  let n = 0
+  for (const f of files) {
+    toast(`Import de ${f.name}…`)
+    const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f) })
+    const r = await act('library.upload', { name: f.name, data }, null, { timeout: 180000 })
+    if (r) n++
+  }
+  if (n) toast(`${n} document(s) importé(s)`)
+  loadLibrary()
+})
+
+// ── Reader ────────────────────────────────────────────────────────────────────
+const R = { doc: null, anns: [], page: 0, zoom: 1, fit: true, mode: localGet('dr-mode', 'scroll'), hl: false,
+  chapter: 0, theme: localGet('dr-theme', 'dark'), fs: +localGet('dr-fs', 18), search: null, sIdx: -1, panel: localGet('dr-panel', 'toc'),
+  showPanel: localGet('dr-showpanel', '1') === '1', saveTimer: null, observer: null, rendered: new Map() }
+
+function showReader(on) {
+  $('#library').classList.toggle('hidden', on); $('#libHead').classList.toggle('hidden', on)
+  $('#reader').classList.toggle('hidden', !on); $('#readHead').classList.toggle('hidden', !on)
+}
+async function openDoc(id) {
+  const d = await act('doc.open', { id }, null, { timeout: 60000 })
+  if (!d) return
+  R.doc = d; R.search = null; R.sIdx = -1; R.hl = false; $('#btnHl').classList.remove('on')
+  $('#searchBox').value = ''; $('#paneSearch').innerHTML = ''; $('#searchInfo').textContent = ''
+  $('#docTitle').textContent = d.title; $('#docTitle').title = d.title
+  showReader(true)
+  $('#pdfTools').classList.toggle('hidden', d.kind !== 'pdf'); $('#epubTools').classList.toggle('hidden', d.kind !== 'epub')
+  $('#pages').classList.toggle('hidden', d.kind !== 'pdf'); $('#epub').classList.toggle('hidden', d.kind !== 'epub')
+  applyPanel()
+  await loadAnns()
+  renderToc()
+  if (d.kind === 'pdf') {
+    R.page = Math.min(d.position.page || 0, d.pages - 1)
+    R.fit = localGet('dr-fit', '1') === '1'; R.zoom = +localGet('dr-zoom', '1')
+    buildPages(d.position.offset || 0)
+  } else {
+    applyTheme()
+    await loadChapter(Math.min(d.position.chapter || 0, d.chapters.length - 1), { scroll: d.position.scroll || 0 })
+  }
+  $('#rbody').focus()
+}
+async function closeReader() {
+  savePosition(true)
+  R.observer?.disconnect(); R.doc = null
+  $('#pages').innerHTML = ''; $('#epubArticle').innerHTML = ''; hideSelPop()
+  showReader(false); loadLibrary()
+}
+$('#btnBack').onclick = closeReader
+
+function applyPanel() {
+  $('#panel').classList.toggle('hidden', !R.showPanel)
+  $('#btnPanel').classList.toggle('on', R.showPanel)
+  $$('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.p === R.panel))
+  $('#paneToc').classList.toggle('hidden', R.panel !== 'toc')
+  $('#paneAnnWrap').classList.toggle('hidden', R.panel !== 'ann')
+  $('#paneSearchWrap').classList.toggle('hidden', R.panel !== 'search')
+}
+$('#btnPanel').onclick = () => { R.showPanel = !R.showPanel; localSet('dr-showpanel', R.showPanel ? '1' : '0'); applyPanel(); if (R.doc?.kind === 'pdf') relayout() }
+$$('.tabs button').forEach((b) => b.onclick = () => { R.panel = b.dataset.p; localSet('dr-panel', R.panel); applyPanel() })
+function showTab(p) { R.panel = p; if (!R.showPanel) { R.showPanel = true; localSet('dr-showpanel', '1') } applyPanel(); if (R.doc?.kind === 'pdf') relayout() }
+
+function savePosition(now = false) {
+  if (!R.doc) return
+  clearTimeout(R.saveTimer)
+  const d = R.doc
+  let position, progress
+  if (d.kind === 'pdf') {
+    const el = pageEl(R.page)
+    const offset = el && R.mode === 'scroll' ? Math.max(0, Math.min(1, ($('#rbody').scrollTop - el.offsetTop + 10) / el.offsetHeight)) : 0
+    position = { page: R.page, offset }; progress = d.pages <= 1 ? 1 : (R.page + offset) / (d.pages - 1)
+  } else {
+    const b = $('#rbody'); const scroll = b.scrollHeight > b.clientHeight ? b.scrollTop / (b.scrollHeight - b.clientHeight) : 1
+    position = { chapter: R.chapter, scroll }; progress = (R.chapter + scroll) / d.chapters.length
+  }
+  progress = Math.max(0, Math.min(1, progress))
+  const run = () => call('doc.position', { id: d.id, position, progress }).catch(() => {})
+  if (now) run(); else R.saveTimer = setTimeout(run, 700)
+}
+
+// ── PDF ──
+function cssScale() {
+  const d = R.doc
+  if (R.fit) {
+    const maxW = Math.max(...d.sizes.map((s) => s[0]))
+    return Math.max(0.2, ($('#rbody').clientWidth - 48) / maxW)
+  }
+  return R.zoom * PT2PX
+}
+function pageEl(i) { return $(`.pg[data-i="${i}"]`) }
+function buildPages(offset = 0) {
+  const d = R.doc, s = cssScale()
+  R.observer?.disconnect(); R.rendered.clear()
+  const idx = R.mode === 'page' ? [R.page] : d.sizes.map((_, i) => i)
+  $('#pages').innerHTML = idx.map((i) => {
+    const [w, h] = d.sizes[i]
+    return `<div class="pg ${R.hl ? 'hlmode' : ''}" data-i="${i}" style="width:${Math.round(w * s)}px;height:${Math.round(h * s)}px"><div class="ov"></div><span class="num">${i + 1}</span></div>`
+  }).join('')
+  $('#zoomLbl').textContent = Math.round(s / PT2PX * 100) + ' %'
+  $('#btnFit').classList.toggle('on', R.fit)
+  $$('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.m === R.mode))
+  $('#pageCount').textContent = '/ ' + d.pages
+  R.observer = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) loadPageImg(e.target)
+  }, { root: $('#rbody'), rootMargin: '600px 0px' })
+  $$('.pg').forEach((p) => { R.observer.observe(p); drawOverlay(+p.dataset.i) })
+  scrollToPage(R.page, offset, false)
+  updatePageUi()
+}
+function loadPageImg(pg) {
+  const i = +pg.dataset.i, s = cssScale() * (window.devicePixelRatio || 1)
+  const key = Math.round(s * 8) / 8
+  if (pg.dataset.scale === String(key)) return
+  pg.dataset.scale = key
+  const img = pg.querySelector('img') || document.createElement('img')
+  img.alt = ''; img.draggable = false
+  img.src = `${BASE}/page/${R.doc.id}/${i}?scale=${key}`
+  if (!img.parentNode) pg.prepend(img)
+}
+function relayout() {
+  if (!R.doc || R.doc.kind !== 'pdf') return
+  const el = pageEl(R.page)
+  const off = el && R.mode === 'scroll' ? ($('#rbody').scrollTop - el.offsetTop) / el.offsetHeight : 0
+  buildPages(Math.max(0, off))
+}
+function scrollToPage(i, offset = 0, smooth = false) {
+  i = Math.max(0, Math.min(R.doc.pages - 1, i))
+  if (R.mode === 'page') {
+    if (i !== R.page || !pageEl(i)) { R.page = i; buildPages(); return }
+    $('#rbody').scrollTop = offset ? pageEl(i).offsetHeight * offset : 0
+  } else {
+    const el = pageEl(i); if (!el) return
+    $('#rbody').scrollTo({ top: el.offsetTop - 12 + el.offsetHeight * offset, behavior: smooth ? 'smooth' : 'auto' })
+  }
+  R.page = i; updatePageUi()
+}
+function updatePageUi() {
+  if (!R.doc || R.doc.kind !== 'pdf') return
+  if (document.activeElement !== $('#pageInput')) $('#pageInput').value = R.page + 1
+  $('#btnPrev').disabled = R.page <= 0; $('#btnNext').disabled = R.page >= R.doc.pages - 1
+  $('#btnBm').classList.toggle('on', !!currentBookmark())
+  markTocCurrent()
+}
+$('#rbody').addEventListener('scroll', () => {
+  if (!R.doc) return
+  hideSelPop()
+  if (R.doc.kind === 'pdf' && R.mode === 'scroll') {
+    const mid = $('#rbody').scrollTop + $('#rbody').clientHeight * 0.35
+    let cur = 0
+    for (const p of $$('.pg')) { if (p.offsetTop <= mid) cur = +p.dataset.i; else break }
+    if (cur !== R.page) { R.page = cur; updatePageUi() }
+  }
+  savePosition()
+})
+window.addEventListener('resize', () => { if (R.doc?.kind === 'pdf' && R.fit) { clearTimeout(R.rz); R.rz = setTimeout(relayout, 150) } })
+$('#btnPrev').onclick = () => scrollToPage(R.page - 1)
+$('#btnNext').onclick = () => scrollToPage(R.page + 1)
+$('#pageInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const n = parseInt(e.target.value); if (n) scrollToPage(n - 1); $('#rbody').focus() } })
+$('#pageInput').addEventListener('blur', updatePageUi)
+function setZoom(z) { R.fit = false; R.zoom = Math.max(0.25, Math.min(4, z)); localSet('dr-fit', '0'); localSet('dr-zoom', R.zoom); relayout() }
+$('#btnZoomIn').onclick = () => setZoom((R.fit ? cssScale() / PT2PX : R.zoom) * 1.2)
+$('#btnZoomOut').onclick = () => setZoom((R.fit ? cssScale() / PT2PX : R.zoom) / 1.2)
+$('#btnFit').onclick = () => { R.fit = true; localSet('dr-fit', '1'); relayout() }
+$$('#modeSeg button').forEach((b) => b.onclick = () => { R.mode = b.dataset.m; localSet('dr-mode', R.mode); buildPages() })
+$('#btnHl').onclick = () => {
+  R.hl = !R.hl; $('#btnHl').classList.toggle('on', R.hl); $$('.pg').forEach((p) => p.classList.toggle('hlmode', R.hl))
+  if (R.hl) toast('Tracez un rectangle sur le texte à surligner')
+}
+
+function rectStyle(r) { return `left:${r[0] * 100}%;top:${r[1] * 100}%;width:${(r[2] - r[0]) * 100}%;height:${(r[3] - r[1]) * 100}%` }
+function drawOverlay(i) {
+  const pg = pageEl(i); if (!pg) return
+  const ov = pg.querySelector('.ov')
+  let html = ''
+  for (const a of R.anns) {
+    if (a.loc.page !== i) continue
+    if (a.kind === 'highlight') html += (a.loc.rects || []).map((r, k) => `<div class="hl ${a.color} ${a.note && k === 0 ? 'noted' : ''}" data-ann="${a.id}" style="${rectStyle(r)}" title="${esc(a.note || a.text)}"></div>`).join('')
+    if (a.kind === 'bookmark') html += `<span class="bm-flag" title="${esc(a.note || 'Marque-page')}">🔖</span>`
+  }
+  if (R.search) R.search.results.forEach((res, k) => { if (res.page === i) html += res.rects.map((r) => `<div class="sr ${k === R.sIdx ? 'cur' : ''}" style="${rectStyle(r)}"></div>`).join('') })
+  ov.innerHTML = html
+}
+function redrawOverlays() { $$('.pg').forEach((p) => drawOverlay(+p.dataset.i)) }
+
+let drag = null
+$('#pages').addEventListener('mousedown', (e) => {
+  const pg = e.target.closest('.pg'); if (!pg || e.button !== 0) return
+  const hl = e.target.closest('.hl')
+  if (hl && !R.hl) return
+  if (!R.hl) return
+  e.preventDefault()
+  const box = pg.getBoundingClientRect()
+  const rect = document.createElement('div'); rect.className = 'drag-rect'; pg.appendChild(rect)
+  drag = { pg, box, x0: (e.clientX - box.left) / box.width, y0: (e.clientY - box.top) / box.height, rect }
+})
+document.addEventListener('mousemove', (e) => {
+  if (!drag) return
+  const { box, x0, y0, rect } = drag
+  const x = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width)), y = Math.max(0, Math.min(1, (e.clientY - box.top) / box.height))
+  drag.r = [Math.min(x0, x), Math.min(y0, y), Math.max(x0, x), Math.max(y0, y)]
+  rect.setAttribute('style', rectStyle(drag.r))
+})
+document.addEventListener('mouseup', async () => {
+  if (!drag) return
+  const { pg, r, rect } = drag; drag = null
+  if (!r || (r[2] - r[0]) * pg.offsetWidth < 6 || (r[3] - r[1]) * pg.offsetHeight < 6) { rect.remove(); return }
+  const page = +pg.dataset.i
+  const t = await act('pdf.text_in', { id: R.doc.id, page, rect: r })
+  rect.remove()
+  annotationDialog({ kind: 'highlight', loc: { page, rects: [r] }, text: t?.text || '' })
+})
+$('#pages').addEventListener('click', (e) => {
+  const hl = e.target.closest('.hl'); if (!hl || R.hl) return
+  const a = R.anns.find((x) => x.id === +hl.dataset.ann); if (a) annotationDialog(a)
+})
+
+// ── EPUB ──
+function applyTheme() {
+  const e = $('#epub'); e.className = 't-' + R.theme; $('#rbody').className = 't-' + R.theme
+  e.style.setProperty('--fs', R.fs + 'px')
+  $$('#themeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.t === R.theme))
+}
+$$('#themeSeg button').forEach((b) => b.onclick = () => { R.theme = b.dataset.t; localSet('dr-theme', R.theme); applyTheme() })
+$('#btnFsUp').onclick = () => { R.fs = Math.min(32, R.fs + 1); localSet('dr-fs', R.fs); applyTheme() }
+$('#btnFsDown').onclick = () => { R.fs = Math.max(12, R.fs - 1); localSet('dr-fs', R.fs); applyTheme() }
+async function loadChapter(i, { scroll = 0, anchor = '', start = null } = {}) {
+  const d = R.doc
+  i = Math.max(0, Math.min(d.chapters.length - 1, i))
+  $('#loading').classList.remove('hidden')
+  const r = await act('epub.chapter', { id: d.id, index: i }, null, { timeout: 30000 })
+  $('#loading').classList.add('hidden')
+  if (!r || R.doc !== d) return
+  R.chapter = i
+  $('#epubArticle').innerHTML = r.html
+  $('#chapSel').innerHTML = d.chapters.map((t, k) => `<option value="${k}">${esc(t)}</option>`).join('')
+  $('#chapSel').value = i
+  $('#btnChPrev').disabled = $('#chPrevB').disabled = i === 0
+  $('#btnChNext').disabled = $('#chNextB').disabled = i >= d.chapters.length - 1
+  paintEpubAnns()
+  await new Promise((res) => requestAnimationFrame(res))
+  const b = $('#rbody')
+  if (anchor) $(`[data-anchor="${CSS.escape(anchor)}"]`, $('#epubArticle'))?.scrollIntoView()
+  else if (start !== null) $(`mark[data-start="${start}"]`)?.scrollIntoView({ block: 'center' })
+  else b.scrollTop = scroll * (b.scrollHeight - b.clientHeight)
+  $('#btnBm').classList.toggle('on', !!currentBookmark())
+  markTocCurrent(); savePosition()
+}
+$('#chapSel').onchange = (e) => loadChapter(+e.target.value)
+$('#btnChPrev').onclick = $('#chPrevB').onclick = () => loadChapter(R.chapter - 1, { scroll: 0 })
+$('#btnChNext').onclick = $('#chNextB').onclick = () => loadChapter(R.chapter + 1, { scroll: 0 })
+$('#epubArticle').addEventListener('click', (e) => {
+  const m = e.target.closest('mark[data-ann]')
+  if (m && window.getSelection().isCollapsed) { const a = R.anns.find((x) => x.id === +m.dataset.ann); if (a) return annotationDialog(a) }
+  const a = e.target.closest('a'); if (!a) return
+  e.preventDefault()
+  if (a.dataset.ext) { if (confirm(`Ouvrir ce lien dans le navigateur ?\n${a.dataset.ext}`)) act('open_url', { url: a.dataset.ext }); return }
+  if (a.dataset.chapter !== undefined) {
+    const c = +a.dataset.chapter
+    if (c < 0 || c === R.chapter) $(`[data-anchor="${CSS.escape(a.dataset.frag)}"]`, $('#epubArticle'))?.scrollIntoView({ behavior: 'smooth' })
+    else loadChapter(c, { anchor: a.dataset.frag })
+  }
+})
+
+function textNodes(root) {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const out = []; let n
+  while ((n = w.nextNode())) out.push(n)
+  return out
+}
+function wrapRange(root, start, end, make) {
+  let pos = 0
+  for (const node of textNodes(root)) {
+    const len = node.data.length, a = pos, b = pos + len
+    pos = b
+    if (b <= start || a >= end || !len) continue
+    let n = node
+    if (start > a) n = n.splitText(start - a)
+    if (end < b) n.splitText(end - Math.max(a, start))
+    if (!n.data.trim() && n.parentNode.closest?.('table,tr,tbody,ul,ol')) continue
+    const m = make(); n.parentNode.insertBefore(m, n); m.appendChild(n)
+  }
+}
+function paintEpubAnns() {
+  const art = $('#epubArticle')
+  for (const a of R.anns) {
+    if (a.kind !== 'highlight' || a.loc.chapter !== R.chapter) continue
+    wrapRange(art, a.loc.start, a.loc.end, () => {
+      const m = document.createElement('mark'); m.className = a.color + (a.note ? ' noted' : ''); m.dataset.ann = a.id; m.dataset.start = a.loc.start
+      m.title = a.note || ''; return m
+    })
+  }
+}
+function selectionOffsets() {
+  const sel = window.getSelection()
+  if (!sel.rangeCount || sel.isCollapsed) return null
+  const range = sel.getRangeAt(0), art = $('#epubArticle')
+  if (!art.contains(range.commonAncestorContainer)) return null
+  const pre = document.createRange(); pre.selectNodeContents(art); pre.setEnd(range.startContainer, range.startOffset)
+  const start = pre.toString().length, text = range.toString()
+  if (!text.trim()) return null
+  return { start, end: start + text.length, text: text.trim(), rect: range.getBoundingClientRect() }
+}
+function hideSelPop() { $('#selPop').classList.add('hidden') }
+$('#epubArticle').addEventListener('mouseup', () => setTimeout(() => {
+  const s = selectionOffsets(); if (!s) return hideSelPop()
+  const pop = $('#selPop')
+  pop.innerHTML = COLORS.map((c) => `<button class="sw c-${c}" data-c="${c}" title="Surligner"></button>`).join('') + '<button data-note="1">📝 Note…</button>'
+  pop.classList.remove('hidden')
+  pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, s.rect.left + s.rect.width / 2 - pop.offsetWidth / 2)) + 'px'
+  pop.style.top = (s.rect.top > 50 ? s.rect.top - 42 : s.rect.bottom + 8) + 'px'
+  pop.onmousedown = (e) => e.preventDefault()
+  pop.onclick = async (e) => {
+    const b = e.target.closest('button'); if (!b) return
+    hideSelPop()
+    const loc = { chapter: R.chapter, start: s.start, end: s.end }
+    window.getSelection().removeAllRanges()
+    if (b.dataset.note) return annotationDialog({ kind: 'highlight', loc, text: s.text })
+    const a = await act('annotation.save', { doc_id: R.doc.id, kind: 'highlight', loc, text: s.text, color: b.dataset.c }, 'Passage surligné')
+    if (a) { R.anns.push(a); afterAnnChange() }
+  }
+}, 0))
+
+// ── TOC / Annotations / Search panels ──
+function renderToc() {
+  const d = R.doc
+  const items = d.kind === 'pdf' ? d.toc.map((t) => ({ title: t.title, level: t.level, page: t.page }))
+    : (d.toc.length ? d.toc : d.chapters.map((t, i) => ({ title: t, chapter: i, level: 0, anchor: '' })))
+  if (!items.length) {
+    $('#paneToc').innerHTML = `<div class="empty">Ce document n'a pas de table des matières.</div>` +
+      (d.kind === 'pdf' ? d.sizes.slice(0, 500).map((_, i) => `<div class="toc-item" data-page="${i}">Page ${i + 1}</div>`).join('') : '')
+  } else {
+    $('#paneToc').innerHTML = items.map((t) => `<div class="toc-item" style="padding-left:${8 + t.level * 14}px" ${d.kind === 'pdf' ? `data-page="${t.page}"` : `data-chapter="${t.chapter}" data-anchor="${esc(t.anchor)}"`}>
+      <span>${esc(t.title)}</span>${d.kind === 'pdf' ? `<span class="pn">${t.page + 1}</span>` : ''}</div>`).join('')
+  }
+}
+function markTocCurrent() {
+  const items = $$('#paneToc .toc-item'); let cur = null
+  for (const it of items) {
+    const v = R.doc.kind === 'pdf' ? +it.dataset.page : +it.dataset.chapter
+    const at = R.doc.kind === 'pdf' ? R.page : R.chapter
+    if (v <= at) cur = it
+  }
+  items.forEach((it) => it.classList.toggle('cur', it === cur))
+}
+$('#paneToc').addEventListener('click', (e) => {
+  const it = e.target.closest('.toc-item'); if (!it) return
+  if (it.dataset.page !== undefined) scrollToPage(+it.dataset.page)
+  else if (+it.dataset.chapter === R.chapter && it.dataset.anchor) $(`[data-anchor="${CSS.escape(it.dataset.anchor)}"]`, $('#epubArticle'))?.scrollIntoView()
+  else loadChapter(+it.dataset.chapter, { anchor: it.dataset.anchor })
+})
+
+async function loadAnns() {
+  const r = await act('annotations.list', { doc_id: R.doc.id })
+  R.anns = r ? r.annotations : []
+  renderAnns()
+}
+function where(a) {
+  return R.doc.kind === 'pdf' ? `Page ${a.loc.page + 1}` : (R.doc.chapters[a.loc.chapter] || `Section ${a.loc.chapter + 1}`)
+}
+function renderAnns() {
+  const f = $('#annFilter').value
+  const list = R.anns.filter((a) => !f || a.kind === f).sort((a, b) => a.sort_key - b.sort_key || a.id - b.id)
+  $('#paneAnn').innerHTML = list.map((a) => `<div class="ann" data-id="${a.id}">
+      <div class="h">${a.kind === 'highlight' ? `<span class="dotc c-${a.color}"></span>` : KIND_LBL[a.kind].split(' ')[0]} <span>${esc(where(a))}</span>
+        <button class="del" data-del="${a.id}" title="Supprimer">✕</button></div>
+      ${a.text ? `<div class="q c-${a.color}" style="border-left-color:var(--hl-${a.color})">${esc(a.text)}</div>` : ''}
+      ${a.note ? `<div class="nt">${esc(a.note)}</div>` : (!a.text ? `<div class="nt muted">${KIND_LBL[a.kind]}</div>` : '')}
+    </div>`).join('') || `<div class="empty">Aucune annotation.<br>Utilisez 🔖 pour un marque-page, 📝 pour une note${R.doc.kind === 'pdf' ? ', « 🖍 Surligner » puis tracez une zone' : ', ou sélectionnez du texte pour le surligner'}.</div>`
+}
+$('#annFilter').onchange = renderAnns
+$('#paneAnn').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del]')
+  if (del) { e.stopPropagation(); return deleteAnn(+del.dataset.del) }
+  const card = e.target.closest('.ann'); if (!card) return
+  const a = R.anns.find((x) => x.id === +card.dataset.id); goToAnn(a)
+})
+$('#paneAnn').addEventListener('dblclick', (e) => {
+  const card = e.target.closest('.ann'); if (!card) return
+  annotationDialog(R.anns.find((x) => x.id === +card.dataset.id))
+})
+function goToAnn(a) {
+  if (R.doc.kind === 'pdf') scrollToPage(a.loc.page, a.loc.rects?.length ? Math.max(0, a.loc.rects[0][1] - 0.05) : (a.loc.offset || 0), true)
+  else if (a.loc.chapter !== R.chapter) loadChapter(a.loc.chapter, a.kind === 'highlight' ? { start: a.loc.start } : { scroll: a.loc.scroll || 0 })
+  else if (a.kind === 'highlight') $(`mark[data-ann="${a.id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  else { const b = $('#rbody'); b.scrollTo({ top: (a.loc.scroll || 0) * (b.scrollHeight - b.clientHeight), behavior: 'smooth' }) }
+}
+async function deleteAnn(id) {
+  if (!(await act('annotation.delete', { id }, 'Annotation supprimée'))) return
+  R.anns = R.anns.filter((a) => a.id !== id); afterAnnChange(true)
+}
+async function afterAnnChange(repaint = true) {
+  renderAnns()
+  if (R.doc.kind === 'pdf') redrawOverlays()
+  else if (repaint) { const b = $('#rbody'), top = b.scrollTop; const r = await act('epub.chapter', { id: R.doc.id, index: R.chapter }); if (r) { $('#epubArticle').innerHTML = r.html; paintEpubAnns(); b.scrollTop = top } }
+  $('#btnBm').classList.toggle('on', !!currentBookmark())
+}
+function annotationDialog(a) {
+  const isNew = !a.id
+  let color = a.color || 'yellow'
+  const ov = dialog(`<h3>${isNew ? (a.kind === 'highlight' ? 'Nouveau surlignage' : a.kind === 'bookmark' ? 'Nouveau marque-page' : 'Nouvelle note') : KIND_LBL[a.kind]} — ${esc(where(a))}</h3>
+    <div class="content">
+      ${a.kind === 'highlight' ? (a.text ? `<div class="quote">${esc(a.text)}</div>` : '<div class="note">Aucun texte détecté dans la zone (image ou page scannée) : la zone sera tout de même surlignée.</div>') : ''}
+      ${a.kind === 'highlight' ? `<div class="field"><label>Couleur</label>${swatches(color)}</div>` : ''}
+      <div class="field"><label>${a.kind === 'bookmark' ? 'Libellé (facultatif)' : a.kind === 'note' ? 'Note' : 'Note (facultative)'}</label>
+        ${a.kind === 'bookmark' ? `<input id="aNote" maxlength="300" value="${esc(a.note || '')}">` : `<textarea id="aNote" maxlength="20000">${esc(a.note || '')}</textarea>`}</div>
+    </div>
+    <div class="foot">${isNew ? '' : '<button class="danger" id="aDel">Supprimer</button>'}<span class="spacer"></span><button id="aCancel">Annuler</button><button class="primary" id="aSave">${isNew ? 'Ajouter' : 'Enregistrer'}</button></div>`)
+  bindSwatches(ov, (c) => (color = c))
+  $('#aCancel', ov).onclick = () => ov.remove()
+  if (!isNew) $('#aDel', ov).onclick = async () => { ov.remove(); deleteAnn(a.id) }
+  const save = async () => {
+    const note = $('#aNote', ov).value
+    if (isNew) {
+      const r = await act('annotation.save', { doc_id: R.doc.id, kind: a.kind, loc: a.loc, text: a.text || '', note, color }, 'Annotation ajoutée')
+      if (!r) return
+      R.anns.push(r)
+    } else {
+      const r = await act('annotation.save', { id: a.id, note, color }, 'Annotation mise à jour')
+      if (!r) return
+      Object.assign(a, r)
+    }
+    ov.remove(); afterAnnChange()
+  }
+  $('#aSave', ov).onclick = save
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || a.kind === 'bookmark')) save() })
+}
+function currentLoc() {
+  if (R.doc.kind === 'pdf') {
+    const el = pageEl(R.page)
+    const offset = el && R.mode === 'scroll' ? Math.max(0, Math.min(1, ($('#rbody').scrollTop - el.offsetTop) / el.offsetHeight)) : 0
+    return { page: R.page, offset }
+  }
+  const b = $('#rbody'); return { chapter: R.chapter, scroll: b.scrollHeight > b.clientHeight ? b.scrollTop / (b.scrollHeight - b.clientHeight) : 0 }
+}
+function currentBookmark() {
+  if (!R.doc) return null
+  return R.anns.find((a) => a.kind === 'bookmark' && (R.doc.kind === 'pdf' ? a.loc.page === R.page : a.loc.chapter === R.chapter))
+}
+async function toggleBookmark() {
+  const bm = currentBookmark()
+  if (bm) return deleteAnn(bm.id)
+  const a = await act('annotation.save', { doc_id: R.doc.id, kind: 'bookmark', loc: currentLoc() }, 'Marque-page ajouté')
+  if (a) { R.anns.push(a); afterAnnChange(false) }
+}
+$('#btnBm').onclick = toggleBookmark
+$('#btnNote').onclick = () => annotationDialog({ kind: 'note', loc: currentLoc(), text: '' })
+$('#btnExport').onclick = async () => {
+  const r = await act('annotations.export', { doc_id: R.doc.id })
+  if (r) download(r.filename, r.markdown, 'text/markdown;charset=utf-8')
+}
+
+async function runSearch() {
+  const q = $('#searchBox').value.trim()
+  if (q.length < 2) { R.search = null; R.sIdx = -1; $('#paneSearch').innerHTML = ''; $('#searchInfo').textContent = ''; if (R.doc.kind === 'pdf') redrawOverlays(); return }
+  $('#searchInfo').textContent = 'Recherche…'; showTab('search')
+  const r = await act('doc.search', { id: R.doc.id, query: q }, null, { timeout: 120000 })
+  if (!r) { $('#searchInfo').textContent = ''; return }
+  R.search = { q, results: r.results }; R.sIdx = -1
+  $('#searchInfo').textContent = r.results.length ? `${r.results.length}${r.truncated ? '+' : ''} résultat(s)` : 'Aucun résultat'
+  $('#paneSearch').innerHTML = r.results.map((res, k) => {
+    const c = res.context, o = res.offset
+    return `<div class="sres" data-k="${k}"><span class="w">${R.doc.kind === 'pdf' ? 'Page ' + (res.page + 1) : esc(R.doc.chapters[res.chapter])}</span>…${esc(c.slice(0, o))}<b>${esc(c.slice(o, o + q.length))}</b>${esc(c.slice(o + q.length))}…</div>`
+  }).join('') || '<div class="empty">Aucun résultat pour cette recherche.</div>'
+  if (R.doc.kind === 'pdf') redrawOverlays()
+  if (r.results.length) gotoResult(0)
+}
+async function gotoResult(k) {
+  const res = R.search?.results; if (!res?.length) return
+  R.sIdx = (k + res.length) % res.length
+  const cur = res[R.sIdx]
+  $$('.sres').forEach((el) => el.classList.toggle('cur', +el.dataset.k === R.sIdx))
+  $(`.sres[data-k="${R.sIdx}"]`)?.scrollIntoView({ block: 'nearest' })
+  $('#searchInfo').textContent = `${R.sIdx + 1} / ${res.length}`
+  if (R.doc.kind === 'pdf') {
+    if (R.mode === 'page' && cur.page !== R.page) { R.page = cur.page; buildPages() }
+    redrawOverlays()
+    scrollToPage(cur.page, Math.max(0, cur.rects[0][1] - 0.2), false)
+  } else {
+    if (cur.chapter !== R.chapter) await loadChapter(cur.chapter)
+    $$('#epubArticle mark.search').forEach((m) => m.replaceWith(...m.childNodes))
+    const text = textNodes($('#epubArticle')).map((n) => n.data).join('').toLowerCase()
+    const q = R.search.q.toLowerCase()
+    let idx = -1, from = 0
+    for (let n = 0; n <= cur.occurrence; n++) { idx = text.indexOf(q, from); if (idx < 0) break; from = idx + q.length }
+    if (idx < 0) idx = text.indexOf(q)
+    if (idx >= 0) {
+      wrapRange($('#epubArticle'), idx, idx + q.length, () => { const m = document.createElement('mark'); m.className = 'search'; return m })
+      $('#epubArticle mark.search')?.scrollIntoView({ block: 'center' })
+    }
+  }
+}
+$('#searchBox').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return
+  e.preventDefault()
+  if (R.search && R.search.q === $('#searchBox').value.trim()) gotoResult(R.sIdx + (e.shiftKey ? -1 : 1))
+  else runSearch()
+})
+$('#searchBox').addEventListener('input', (e) => { if (!e.target.value.trim() && R.search) runSearch() })
+$('#paneSearch').addEventListener('click', (e) => { const el = e.target.closest('.sres'); if (el) gotoResult(+el.dataset.k) })
+$('#btnSNext').onclick = () => gotoResult(R.sIdx + 1)
+$('#btnSPrev').onclick = () => gotoResult(R.sIdx - 1)
+
+document.addEventListener('keydown', (e) => {
+  if (!R.doc || $('.overlay')) return
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#searchBox').focus(); $('#searchBox').select(); return }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); toggleBookmark(); return }
+  if (e.key === 'Escape') { if (typing) { document.activeElement.blur(); return } if (R.hl) { $('#btnHl').click(); return } closeReader(); return }
+  if (typing) return
+  const pdf = R.doc.kind === 'pdf'
+  if (e.key === 'ArrowLeft' || (pdf && e.key === 'PageUp' && R.mode === 'page')) { e.preventDefault(); pdf ? scrollToPage(R.page - 1) : R.chapter > 0 && loadChapter(R.chapter - 1, { scroll: 1 }) }
+  else if (e.key === 'ArrowRight' || (pdf && e.key === 'PageDown' && R.mode === 'page')) { e.preventDefault(); pdf ? scrollToPage(R.page + 1) : R.chapter < R.doc.chapters.length - 1 && loadChapter(R.chapter + 1) }
+  else if (pdf && (e.key === '+' || e.key === '=')) { e.preventDefault(); $('#btnZoomIn').click() }
+  else if (pdf && e.key === '-') { e.preventDefault(); $('#btnZoomOut').click() }
+  else if (e.key === 'Home' && pdf) { e.preventDefault(); scrollToPage(0) }
+  else if (e.key === 'End' && pdf) { e.preventDefault(); scrollToPage(R.doc.pages - 1) }
+})
+$('#rbody').addEventListener('wheel', (e) => {
+  if (!R.doc || R.doc.kind !== 'pdf' || !e.ctrlKey) return
+  e.preventDefault(); e.deltaY < 0 ? $('#btnZoomIn').click() : $('#btnZoomOut').click()
+}, { passive: false })
+window.addEventListener('beforeunload', () => savePosition(true))
+
+loadLibrary()
+</script>
+</body>
+</html>

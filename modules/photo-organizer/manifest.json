@@ -1,0 +1,35 @@
+{
+  "id": "photo-organizer",
+  "name": "Organiseur de photos",
+  "version": "1.0.0",
+  "description": "Indexe vos dossiers de photos (EXIF : date de prise de vue, appareil, GPS), les présente par date, appareil et lieu, détecte les doublons exacts et visuellement similaires, renomme en lot selon un modèle, range dans des dossiers Année/Mois avec aperçu et annulation, et envoie à la corbeille.",
+  "category": "Images & médias",
+  "tags": [
+    "photo",
+    "exif",
+    "doublons",
+    "tri",
+    "renommage"
+  ],
+  "icon": "📸",
+  "author": "LedroideDesktop",
+  "entry": {
+    "backend": "backend/main.py",
+    "frontend": "frontend/index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "database"
+  ],
+  "database": {
+    "type": "sqlite"
+  },
+  "dependencies": {
+    "python": [
+      "Pillow>=11,<13",
+      "send2trash>=1.8,<3"
+    ],
+    "modules": []
+  },
+  "config_schema": {}
+}
