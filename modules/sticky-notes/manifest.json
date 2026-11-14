@@ -1,11 +1,14 @@
 {
   "id": "sticky-notes",
   "name": "Sticky Notes",
-  "version": "1.0.0",
-  "description": "Tableau de post-its colorés — créez, organisez et retrouvez vos notes en un coup d'œil.",
+  "version": "2.0.0",
+  "description": "Tableaux de post-its colorés : notes libres ou en grille, cases à cocher, recherche, plusieurs tableaux, corbeille, zoom, export et import.",
   "category": "Productivité",
   "tags": [
-    "notes"
+    "notes",
+    "post-it",
+    "tâches",
+    "mémo"
   ],
   "icon": "📝",
   "author": "ABOURA Abdelhakim",

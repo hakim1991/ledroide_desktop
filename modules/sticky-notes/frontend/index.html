@@ -1,675 +1,987 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sticky Notes</title>
-  <script>
-  /* ledroide bridge — inlined */
-  (function () {
-    var pending   = new Map();
-    var listeners = new Map();
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sticky Notes</title>
+<script src="/ledroide-bridge.js"></script>
+<style>
+  :root {
+    --bg: #1e1e2e; --bar: #181825; --line: #313244; --line2: #45475a; --text: #cdd6f4; --muted: #7f849c;
+    --accent: #89b4fa; --accent-h: #74c7ec; --danger: #f38ba8; --ok: #a6e3a1;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 13px;
+         overflow: hidden; user-select: none; display: flex; flex-direction: column; }
+  button { font: inherit; cursor: pointer; }
+  .hidden { display: none !important; }
 
-    window.addEventListener('message', function (e) {
-      var d = e.data;
-      if (d && d.type === 'ledroide:response' && pending.has(d.requestId)) {
-        var p = pending.get(d.requestId);
-        clearTimeout(p.timer);
-        pending.delete(d.requestId);
-        if (d.payload && d.payload.error) p.reject(new Error(d.payload.error));
-        else p.resolve(d.payload);
-      }
-      if (d && d.type === 'ledroide:event') {
-        var key = d.moduleId + ':' + d.action;
-        var cbs = listeners.get(key);
-        if (cbs) cbs.forEach(function (cb) { cb(d.payload); });
-      }
-    });
+  #toolbar { flex-shrink: 0; min-height: 52px; background: var(--bar); border-bottom: 1px solid var(--line);
+             display: flex; align-items: center; gap: 8px; padding: 8px 14px; flex-wrap: wrap; z-index: 10; }
+  #toolbar h1 { font-size: 14px; font-weight: 600; letter-spacing: .5px; margin-right: 4px; white-space: nowrap; }
+  .tb-btn { background: transparent; color: var(--text); border: 1px solid var(--line2); border-radius: 8px; padding: 5px 10px;
+            transition: background .15s, border-color .15s; white-space: nowrap; }
+  .tb-btn:hover { background: rgba(205,214,244,.08); border-color: var(--muted); }
+  .tb-btn.on { background: rgba(137,180,250,.18); border-color: var(--accent); color: var(--accent); }
+  .tb-btn.primary { background: var(--accent); color: #1e1e2e; border-color: var(--accent); font-weight: 600; }
+  .tb-btn.primary:hover { background: var(--accent-h); border-color: var(--accent-h); }
+  .tb-btn.danger { color: var(--danger); border-color: rgba(243,139,168,.5); }
+  .tb-btn.danger:hover { background: rgba(243,139,168,.15); }
+  .tb-btn.icon { padding: 5px 8px; min-width: 30px; }
+  .spacer { flex: 1; }
+  @media (max-width: 1500px) { #toolbar h1 span { display: none; } #search { width: 130px; } }
+  .seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; border: none; color: var(--muted); padding: 5px 9px; }
+  .seg button.on { background: rgba(137,180,250,.18); color: var(--accent); }
 
-    window.ledroide = {
-      backendPort: parseInt(window.location.port) || 8765,
-      call: function (moduleId, action, payload) {
-        payload = payload || {};
-        return new Promise(function (resolve, reject) {
-          var rid   = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-          var timer = setTimeout(function () {
-            pending.delete(rid);
-            reject(new Error('RPC timeout'));
-          }, 10000);
-          pending.set(rid, { resolve: resolve, reject: reject, timer: timer });
-          window.parent.postMessage(
-            { type: 'ledroide:call', moduleId: moduleId, action: action, payload: payload, requestId: rid },
-            '*'
-          );
-        });
-      },
-      on: function (moduleId, event, callback) {
-        var key = moduleId + ':' + event;
-        if (!listeners.has(key)) listeners.set(key, new Set());
-        listeners.get(key).add(callback);
-        window.parent.postMessage({ type: 'ledroide:subscribe', moduleId: moduleId, event: event }, '*');
-      },
-      off: function (moduleId, event, callback) {
-        var key = moduleId + ':' + event;
-        var cbs = listeners.get(key);
-        if (cbs) cbs.delete(callback);
-      },
-    };
-    console.log('[sticky-notes] bridge inline OK');
-  })();
-  </script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  #tabs { display: flex; gap: 4px; align-items: center; overflow-x: auto; max-width: 46vw; scrollbar-width: none; }
+  #tabs::-webkit-scrollbar { display: none; }
+  .tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; background: transparent;
+         border: 1px solid transparent; color: var(--muted); white-space: nowrap; }
+  .tab:hover { color: var(--text); background: rgba(205,214,244,.06); }
+  .tab.on { color: var(--text); background: var(--line); border-color: var(--line2); }
+  .tab .n { font-size: 11px; opacity: .7; }
+  .tab .hit { font-size: 10px; background: var(--accent); color: #1e1e2e; border-radius: 999px; padding: 0 5px; font-weight: 700; }
 
-    body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #1e1e2e;
-      height: 100vh;
-      overflow: hidden;
-      user-select: none;
-    }
+  #search { background: var(--bg); color: var(--text); border: 1px solid var(--line2); border-radius: 8px; padding: 5px 9px;
+            width: 150px; font: inherit; outline: none; user-select: text; }
+  #search:focus { border-color: var(--accent); }
+  #searchInfo { color: var(--muted); font-size: 12px; min-width: 34px; }
 
-    #toolbar {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      height: 52px;
-      background: #181825;
-      border-bottom: 1px solid #313244;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 16px;
-      z-index: 1000;
-    }
+  #swatches { display: flex; gap: 4px; align-items: center; }
+  .color-swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
+                  transition: transform .15s, border-color .15s; }
+  .color-swatch:hover { transform: scale(1.2); }
+  .color-swatch.selected { border-color: var(--text); transform: scale(1.15); }
 
-    #toolbar h1 {
-      font-size: 14px;
-      font-weight: 600;
-      color: #cdd6f4;
-      margin-right: auto;
-      letter-spacing: 0.5px;
-    }
+  #board { flex: 1; min-height: 0; position: relative; overflow: auto; isolation: isolate; }
+  #canvas { position: relative; min-width: 100%; min-height: 100%;
+            background-image: radial-gradient(circle, var(--line) 1px, transparent 1px); background-size: 28px 28px; }
+  #canvas.panning { cursor: grabbing; }
+  #canvas.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; padding: 22px;
+                 align-content: start; width: auto !important; height: auto !important; zoom: 1 !important; }
+  #canvas.grid .note { position: relative; left: auto !important; top: auto !important; width: auto !important;
+                       height: 210px !important; cursor: default; z-index: auto !important; }
+  #canvas.grid .note.collapsed { height: auto !important; }
+  #canvas.grid .note-resize-handle { display: none; }
 
-    .color-swatch {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      cursor: pointer;
-      transition: transform 0.15s, border-color 0.15s;
-    }
-    .color-swatch:hover { transform: scale(1.2); }
-    .color-swatch.selected { border-color: #cdd6f4; transform: scale(1.15); }
+  .note { position: absolute; border-radius: 4px; padding: 16px 12px 8px; display: flex; flex-direction: column; gap: 4px;
+          box-shadow: 3px 4px 14px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.3); cursor: grab; overflow: hidden;
+          transition: box-shadow .15s, transform .1s, opacity .2s; color: rgba(0,0,0,.72); animation: pop .16s ease-out; }
+  .note::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 9px; background: rgba(0,0,0,.09); }
+  .note.selected { box-shadow: 0 0 0 2px var(--accent), 3px 4px 14px rgba(0,0,0,.45); }
+  .note.dragging { box-shadow: 6px 10px 28px rgba(0,0,0,.6); transform: rotate(1deg) scale(1.03); cursor: grabbing; transition: none; }
+  .note.pinned { cursor: default; }
+  .note.dim { opacity: .13; pointer-events: none; }
+  .note.collapsed { height: auto !important; }
+  .note.collapsed .note-body, .note.collapsed .note-footer, .note.collapsed .note-resize-handle { display: none; }
+  @keyframes pop { from { transform: scale(.9); opacity: 0 } }
 
-    #btn-add {
-      background: #89b4fa;
-      color: #1e1e2e;
-      border: none;
-      border-radius: 8px;
-      padding: 6px 14px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-      margin-left: 8px;
-    }
-    #btn-add:hover { background: #74c7ec; }
+  .note-head { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .note-title { flex: 1; min-width: 0; font: inherit; font-size: 13px; font-weight: 700; color: rgba(0,0,0,.78); border: none;
+                background: transparent; outline: none; cursor: text; user-select: text; text-overflow: ellipsis; }
+  .note-title::placeholder { color: rgba(0,0,0,.35); }
+  .n-btn { background: none; border: none; color: rgba(0,0,0,.38); border-radius: 4px; padding: 1px 4px; font-size: 13px;
+           line-height: 1.2; display: none; transition: background .12s, color .12s; flex-shrink: 0; }
+  .note:hover .n-btn, .note.selected .n-btn, .n-btn.on { display: inline-block; }
+  .n-btn:hover { background: rgba(0,0,0,.1); color: rgba(0,0,0,.75); }
+  .n-btn.on { color: rgba(0,0,0,.8); }
 
-    #btn-clear {
-      background: transparent;
-      color: #f38ba8;
-      border: 1px solid #f38ba8;
-      border-radius: 8px;
-      padding: 6px 14px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    #btn-clear:hover { background: rgba(243,139,168,0.15); }
+  .note-body { flex: 1; min-height: 0; display: flex; }
+  .note-view, .note-content { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.5; color: rgba(0,0,0,.68); }
+  .note.f0 .note-view, .note.f0 .note-content { font-size: 11px; }
+  .note.f2 .note-view, .note.f2 .note-content { font-size: 15px; }
+  .note-view { overflow-y: auto; cursor: text; word-break: break-word; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,.25) transparent; }
+  .note-view .ph { color: rgba(0,0,0,.3); }
+  .note-view .sp { height: .75em; }
+  .note-view .h { font-weight: 700; color: rgba(0,0,0,.8); }
+  .note-view .li { display: flex; gap: 6px; }
+  .note-view .li::before { content: '•'; flex-shrink: 0; }
+  .note-view label.cb { display: flex; gap: 6px; align-items: flex-start; cursor: pointer; }
+  .note-view label.cb input { margin-top: .28em; accent-color: #374151; cursor: pointer; flex-shrink: 0; }
+  .note-view label.cb.done span { text-decoration: line-through; opacity: .55; }
+  .note-view .link { text-decoration: underline; cursor: copy; color: rgba(0,0,90,.75); }
+  .note-content { border: none; background: rgba(255,255,255,.28); border-radius: 3px; outline: none; resize: none;
+                  font-family: inherit; cursor: text; user-select: text; padding: 0 2px; }
 
-    #board {
-      position: absolute;
-      top: 52px; left: 0; right: 0; bottom: 0;
-      overflow: auto;
-    }
+  .note-footer { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding-right: 12px; }
+  .note-date { font-size: 10px; color: rgba(0,0,0,.38); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .note-progress { font-size: 10px; color: rgba(0,0,0,.5); font-weight: 600; white-space: nowrap; }
+  .note-color-btn { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,.3); padding: 0; flex-shrink: 0;
+                    transition: transform .12s, border-color .12s; }
+  .note-color-btn:hover { transform: scale(1.2); border-color: rgba(0,0,0,.6); }
+  .note-resize-handle { position: absolute; bottom: 0; right: 0; width: 16px; height: 16px; cursor: nwse-resize;
+                        background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,.22) 50%); }
+  .note.pinned .note-resize-handle { display: none; }
 
-    #canvas {
-      position: relative;
-      width: 3000px;
-      height: 2000px;
-      background-image:
-        radial-gradient(circle, #313244 1px, transparent 1px);
-      background-size: 28px 28px;
-    }
+  .pop { position: fixed; z-index: 500; background: var(--bar); border: 1px solid var(--line2); border-radius: 10px;
+         padding: 5px; box-shadow: 0 8px 28px rgba(0,0,0,.55); min-width: 190px; animation: fade .1s; }
+  .pop button.item { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; background: transparent; border: none;
+                     color: var(--text); padding: 6px 10px; border-radius: 6px; }
+  .pop button.item:hover { background: var(--line); }
+  .pop button.item.danger { color: var(--danger); }
+  .pop hr { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
+  .pop .lbl { color: var(--muted); font-size: 11px; padding: 4px 10px 2px; text-transform: uppercase; letter-spacing: .05em; }
+  .pop .row { display: flex; align-items: center; gap: 6px; padding: 4px 10px; }
+  .pop.colors { min-width: 0; display: flex; gap: 7px; padding: 8px 10px; }
+  .picker-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform .12s; }
+  .picker-swatch:hover { transform: scale(1.2); }
+  .picker-swatch.active { border-color: var(--text); }
 
-    .note {
-      position: absolute;
-      width: 220px;
-      height: 200px;
-      border-radius: 4px 4px 4px 4px;
-      padding: 10px 12px 8px;
-      box-shadow: 3px 4px 14px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.3);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      cursor: grab;
-      overflow: hidden;
-      transition: box-shadow 0.15s, transform 0.1s;
-      background-clip: padding-box;
-    }
-    .note::before {
-      content: '';
-      position: absolute;
-      top: -10px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 48px;
-      height: 18px;
-      background: rgba(255,255,255,0.35);
-      border-radius: 3px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-    .note:active { cursor: grabbing; }
-    .note.dragging {
-      box-shadow: 6px 10px 28px rgba(0,0,0,0.6);
-      transform: rotate(1deg) scale(1.03);
-      z-index: 500;
-    }
+  #empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--line2); pointer-events: none; }
+  #empty .icon { font-size: 48px; margin-bottom: 12px; }
+  #empty p { font-size: 14px; line-height: 1.6; }
 
-    .note-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: rgba(0,0,0,0.75);
-      border: none;
-      background: transparent;
-      outline: none;
-      width: 100%;
-      resize: none;
-      font-family: inherit;
-      cursor: text;
-    }
-    .note-title::placeholder { color: rgba(0,0,0,0.35); }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--line);
+           color: var(--text); padding: 8px 14px; border-radius: 8px; transition: transform .25s; z-index: 2000;
+           display: flex; gap: 12px; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.err { color: var(--danger); }
+  #toast button { background: transparent; border: none; color: var(--accent); font-weight: 600; }
 
-    .note-content {
-      font-size: 12.5px;
-      color: rgba(0,0,0,0.65);
-      border: none;
-      background: transparent;
-      outline: none;
-      width: 100%;
-      flex: 1;
-      resize: none;
-      font-family: inherit;
-      line-height: 1.5;
-      min-height: 90px;
-      cursor: text;
-    }
-    .note-content::placeholder { color: rgba(0,0,0,0.3); }
-
-    .note-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-shrink: 0;
-    }
-
-    .note-date {
-      font-size: 10px;
-      color: rgba(0,0,0,0.35);
-    }
-
-    .note-color-btn {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      border: 2px solid rgba(0,0,0,0.3);
-      cursor: pointer;
-      padding: 0;
-      flex-shrink: 0;
-      transition: transform 0.12s, border-color 0.12s;
-    }
-    .note-color-btn:hover { transform: scale(1.15); border-color: rgba(0,0,0,0.6); }
-
-    .note-color-picker {
-      position: absolute;
-      bottom: 36px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #1e1e2e;
-      border: 1px solid #45475a;
-      border-radius: 12px;
-      padding: 8px 10px;
-      display: none;
-      gap: 7px;
-      align-items: center;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.5);
-      z-index: 200;
-    }
-    .note-color-picker.open { display: flex; }
-
-    .picker-swatch {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      cursor: pointer;
-      transition: transform 0.12s, border-color 0.12s;
-      flex-shrink: 0;
-    }
-    .picker-swatch:hover { transform: scale(1.2); }
-    .picker-swatch.active { border-color: #cdd6f4; transform: scale(1.1); }
-
-    .btn-delete {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 15px;
-      color: rgba(0,0,0,0.3);
-      line-height: 1;
-      padding: 2px 4px;
-      border-radius: 4px;
-      transition: color 0.15s, background 0.15s;
-      flex-shrink: 0;
-    }
-    .btn-delete:hover {
-      color: rgba(180,0,0,0.7);
-      background: rgba(0,0,0,0.08);
-    }
-
-    .note-resize-handle {
-      position: absolute;
-      bottom: 2px;
-      right: 2px;
-      width: 14px;
-      height: 14px;
-      cursor: nwse-resize;
-      color: rgba(0,0,0,0.25);
-      font-size: 12px;
-      line-height: 14px;
-      text-align: center;
-      user-select: none;
-      transition: color 0.12s;
-    }
-    .note-resize-handle:hover { color: rgba(0,0,0,0.55); }
-
-    #empty {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      color: #45475a;
-      pointer-events: none;
-    }
-    #empty .icon { font-size: 48px; margin-bottom: 12px; }
-    #empty p { font-size: 14px; }
-
-    #toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%) translateY(60px);
-      background: #313244;
-      color: #cdd6f4;
-      padding: 8px 18px;
-      border-radius: 8px;
-      font-size: 13px;
-      transition: transform 0.25s;
-      z-index: 2000;
-    }
-    #toast.show { transform: translateX(-50%) translateY(0); }
-  </style>
+  .dlg-back { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 1500; animation: fade .12s; }
+  .dlg { background: var(--bar); border: 1px solid var(--line2); border-radius: 12px; width: min(520px, 94vw); max-height: 88vh;
+         display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,.6); }
+  .dlg-title { padding: 12px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--line); }
+  .dlg-body { padding: 14px 16px; overflow-y: auto; line-height: 1.5; }
+  .dlg-body input[type=text] { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line2); border-radius: 8px;
+                    padding: 7px 10px; font: inherit; outline: none; user-select: text; }
+  .dlg-body input[type=text]:focus { border-color: var(--accent); }
+  .dlg-btns { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
+  .trash-item { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .trash-item .dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .trash-item .txt { flex: 1; min-width: 0; }
+  .trash-item .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trash-item .s { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  kbd { border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11px; background: var(--bg); }
+  .help td { padding: 3px 10px 3px 0; vertical-align: top; }
+  @keyframes fade { from { opacity: 0 } }
+</style>
 </head>
 <body>
 
 <div id="toolbar">
-  <h1>Sticky Notes</h1>
-  <div id="swatches"></div>
-  <button id="btn-add">+ Nouvelle note</button>
-  <button id="btn-clear">🗑 Tout supprimer</button>
+  <h1>📝 <span>Sticky Notes</span></h1>
+  <div id="tabs"></div>
+  <button class="tb-btn icon" id="btn-board-add" title="Nouveau tableau">＋</button>
+  <div class="spacer"></div>
+  <input id="search" type="text" placeholder="Rechercher… (Ctrl+F)" />
+  <span id="searchInfo"></span>
+  <div id="swatches" title="Couleur des nouvelles notes"></div>
+  <button class="tb-btn primary" id="btn-add" title="Nouvelle note (N) — ou double-clic sur le tableau">+ Note</button>
+  <div class="seg" id="viewSeg">
+    <button data-view="board" title="Vue tableau libre">▦</button>
+    <button data-view="grid" title="Vue grille, triée par date de modification">▤</button>
+  </div>
+  <button class="tb-btn" id="btn-arrange" title="Ranger les notes en grille sur le tableau">Ranger</button>
+  <div class="seg" id="zoomSeg">
+    <button id="zoomOut" title="Dézoomer (Ctrl + molette)">−</button>
+    <button id="zoomLbl" title="Revenir à 100 %">100 %</button>
+    <button id="zoomIn" title="Zoomer (Ctrl + molette)">+</button>
+  </div>
+  <button class="tb-btn icon" id="btn-menu" title="Plus d'actions">⋯</button>
 </div>
 
 <div id="board">
   <div id="canvas"></div>
+  <div id="empty"><div><div class="icon">📝</div><p id="emptyText"></p></div></div>
 </div>
 
-<div id="empty">
-  <div class="icon">📝</div>
-  <p>Aucune note — cliquez sur « Nouvelle note »</p>
-</div>
-
-<div id="toast"></div>
+<div id="toast"><span id="toastMsg"></span><button id="toastBtn" class="hidden"></button></div>
+<input type="file" id="importFile" accept=".json,application/json" class="hidden" />
 
 <script>
-const MODULE_ID = 'sticky-notes';
+const MODULE_ID = 'sticky-notes'
+const call = (action, payload, opts) => window.ledroide.call(MODULE_ID, action, payload || {}, opts)
 
 const COLORS = [
-  { hex: '#fef08a', label: 'Jaune' },
-  { hex: '#86efac', label: 'Vert' },
-  { hex: '#93c5fd', label: 'Bleu' },
-  { hex: '#f9a8d4', label: 'Rose' },
-  { hex: '#fdba74', label: 'Orange' },
-  { hex: '#e2e8f0', label: 'Blanc' },
-];
+  { hex: '#fef08a', label: 'Jaune' }, { hex: '#86efac', label: 'Vert' }, { hex: '#93c5fd', label: 'Bleu' },
+  { hex: '#f9a8d4', label: 'Rose' }, { hex: '#fdba74', label: 'Orange' }, { hex: '#d8b4fe', label: 'Violet' },
+  { hex: '#5eead4', label: 'Turquoise' }, { hex: '#e2e8f0', label: 'Blanc' },
+]
+const SAVE_DELAY = 500
+const MIN_W = 160, MIN_H = 100
 
-let selectedColor = COLORS[0].hex;
-let notes = {};        // id -> { el, data }
-let saveTimer = null;
+const $ = (s) => document.querySelector(s)
+const board = $('#board'), canvas = $('#canvas')
 
-// ── Toolbar color swatches ────────────────────────────────────────────
-const swatchContainer = document.getElementById('swatches');
-COLORS.forEach(c => {
-  const div = document.createElement('div');
-  div.className = 'color-swatch' + (c.hex === selectedColor ? ' selected' : '');
-  div.style.background = c.hex;
-  div.title = c.label;
-  div.addEventListener('click', () => {
-    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
-    div.classList.add('selected');
-    selectedColor = c.hex;
-  });
-  swatchContainer.appendChild(div);
-});
+function loadPrefs() { try { return JSON.parse(localStorage.getItem('sticky-notes') || '{}') } catch { return {} } }
+function savePrefs() {
+  try { localStorage.setItem('sticky-notes', JSON.stringify({ boardId: S.boardId, view: S.view, zoom: S.zoom, color: S.color })) } catch { /* private mode */ }
+}
+const prefs = loadPrefs()
 
-// ── Helpers ───────────────────────────────────────────────────────────
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
+const S = {
+  boards: [], all: new Map(), els: new Map(),
+  boardId: prefs.boardId || 'default', view: prefs.view === 'grid' ? 'grid' : 'board',
+  zoom: Math.min(2, Math.max(0.4, +prefs.zoom || 1)), color: COLORS.some((c) => c.hex === prefs.color) ? prefs.color : COLORS[0].hex,
+  query: '', selected: null, editing: null, trashCount: 0,
+}
+const dirty = new Map(), timers = new Map()
+
+// ── Small helpers ─────────────────────────────────────────────────────────────
+
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag)
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue
+    if (k === 'class') el.className = v
+    else if (k === 'style') Object.assign(el.style, v)
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v)
+    else el.setAttribute(k, v === true ? '' : v)
+  }
+  for (const c of children.flat(Infinity)) if (c != null && c !== false) el.append(c)
+  return el
+}
+const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+const fmtDate = (iso) => {
+  const d = new Date(iso)
+  return isNaN(d) ? '' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+const boardNotes = (id = S.boardId) => [...S.all.values()].filter((n) => n.board_id === id)
+
+let toastTimer = 0
+function toast(msg, { err = false, action = null, ms = 2400 } = {}) {
+  const t = $('#toast'), b = $('#toastBtn')
+  $('#toastMsg').textContent = msg
+  t.classList.toggle('err', err)
+  b.classList.toggle('hidden', !action)
+  if (action) { b.textContent = action.label; b.onclick = () => { t.classList.remove('show'); action.fn() } }
+  t.classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => t.classList.remove('show'), action ? 6000 : ms)
 }
 
-function formatDate(iso) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-
-function updateEmpty() {
-  document.getElementById('empty').style.display =
-    Object.keys(notes).length === 0 ? 'block' : 'none';
-}
-
-// ── Drag logic ────────────────────────────────────────────────────────
-function makeDraggable(el, noteId) {
-  let startX, startY, origX, origY, dragging = false;
-
-  el.addEventListener('mousedown', (e) => {
-    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'BUTTON') return;
-    if (e.target.classList.contains('note-resize-handle') || e.target.classList.contains('note-color-dot')) return;
-    dragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    origX = parseFloat(el.style.left) || 0;
-    origY = parseFloat(el.style.top) || 0;
-    el.classList.add('dragging');
-    e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    el.style.left = Math.max(0, origX + dx) + 'px';
-    el.style.top  = Math.max(0, origY + dy) + 'px';
-  });
-
-  document.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false;
-    el.classList.remove('dragging');
-    const data = notes[noteId]?.data;
-    if (data) {
-      data.pos_x = parseFloat(el.style.left);
-      data.pos_y = parseFloat(el.style.top);
-      debounceSave(noteId);
-    }
-  });
-}
-
-// ── Resize logic ──────────────────────────────────────────────────────
-function makeResizable(el, handle, noteId) {
-  let startX, startY, origW, origH, resizing = false;
-
-  handle.addEventListener('mousedown', (e) => {
-    resizing = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    origW = el.offsetWidth;
-    origH = el.offsetHeight;
-    e.stopPropagation();
-    e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (!resizing) return;
-    el.style.width  = Math.max(160, origW + (e.clientX - startX)) + 'px';
-    el.style.height = Math.max(120, origH + (e.clientY - startY)) + 'px';
-  });
-
-  document.addEventListener('mouseup', () => {
-    if (!resizing) return;
-    resizing = false;
-    const data = notes[noteId]?.data;
-    if (data) {
-      data.width  = el.offsetWidth;
-      data.height = el.offsetHeight;
-      debounceSave(noteId);
-    }
-  });
-}
-
-// ── Debounced save ────────────────────────────────────────────────────
-function debounceSave(noteId) {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveNote(noteId), 600);
-}
-
-async function saveNote(noteId) {
-  const entry = notes[noteId];
-  if (!entry) return;
-  try {
-    const updated = await window.ledroide.call(MODULE_ID, 'update_note', {
-      note_id: noteId,
-      payload: {
-        title:   entry.data.title,
-        content: entry.data.content,
-        color:   entry.data.color,
-        pos_x:   entry.data.pos_x,
-        pos_y:   entry.data.pos_y,
-        width:   entry.data.width,
-        height:  entry.data.height,
+function dialog({ title, body, buttons }) {
+  return new Promise((resolve) => {
+    const back = h('div', { class: 'dlg-back' })
+    const close = (v) => { back.remove(); document.removeEventListener('keydown', onKey, true); resolve(v) }
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(undefined) }
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+        const p = buttons.find((b) => b.primary)
+        if (p) { e.preventDefault(); e.stopPropagation(); close(typeof p.value === 'function' ? p.value() : p.value) }
       }
-    });
-    if (updated && !updated.error) Object.assign(entry.data, updated);
-  } catch (e) {
-    showToast('Erreur de sauvegarde');
-  }
-}
-
-// ── Render a note DOM element ─────────────────────────────────────────
-function renderNote(data) {
-  const el = document.createElement('div');
-  el.className = 'note';
-  el.style.cssText = `
-    left:       ${data.pos_x  || 20}px;
-    top:        ${data.pos_y  || 20}px;
-    width:      ${data.width  || 220}px;
-    height:     ${data.height || 200}px;
-    background: ${data.color  || '#fef08a'};
-  `;
-
-  const titleTA = document.createElement('textarea');
-  titleTA.className = 'note-title';
-  titleTA.placeholder = 'Titre…';
-  titleTA.value = data.title || '';
-  titleTA.rows = 1;
-  titleTA.addEventListener('input', () => {
-    data.title = titleTA.value;
-    debounceSave(data.id);
-  });
-
-  const contentTA = document.createElement('textarea');
-  contentTA.className = 'note-content';
-  contentTA.placeholder = 'Écrivez ici…';
-  contentTA.value = data.content || '';
-  contentTA.addEventListener('input', () => {
-    data.content = contentTA.value;
-    debounceSave(data.id);
-  });
-
-  // Color picker popover
-  const colorPicker = document.createElement('div');
-  colorPicker.className = 'note-color-picker';
-  COLORS.forEach(c => {
-    const swatch = document.createElement('div');
-    swatch.className = 'picker-swatch' + (c.hex === (data.color || '#fef08a') ? ' active' : '');
-    swatch.style.background = c.hex;
-    swatch.title = c.label;
-    swatch.addEventListener('mousedown', (e) => e.stopPropagation());
-    swatch.addEventListener('click', () => {
-      data.color = c.hex;
-      el.style.background = c.hex;
-      colorBtn.style.background = c.hex;
-      colorPicker.querySelectorAll('.picker-swatch').forEach(s => s.classList.remove('active'));
-      swatch.classList.add('active');
-      colorPicker.classList.remove('open');
-      debounceSave(data.id);
-    });
-    colorPicker.appendChild(swatch);
-  });
-  el.appendChild(colorPicker);
-
-  // Color button (shows current color, toggles picker)
-  const colorBtn = document.createElement('button');
-  colorBtn.className = 'note-color-btn';
-  colorBtn.style.background = data.color || '#fef08a';
-  colorBtn.title = 'Changer la couleur';
-  colorBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    colorPicker.classList.toggle('open');
-  });
-
-  const footer = document.createElement('div');
-  footer.className = 'note-footer';
-
-  const dateSpan = document.createElement('span');
-  dateSpan.className = 'note-date';
-  dateSpan.textContent = formatDate(data.updated_at || data.created_at);
-
-  const delBtn = document.createElement('button');
-  delBtn.className = 'btn-delete';
-  delBtn.title = 'Supprimer';
-  delBtn.textContent = '✕';
-  delBtn.addEventListener('click', () => deleteNote(data.id));
-
-  footer.appendChild(dateSpan);
-  footer.appendChild(colorBtn);
-  footer.appendChild(delBtn);
-  el.appendChild(titleTA);
-  el.appendChild(contentTA);
-  el.appendChild(footer);
-
-  // Resize handle
-  const resizeHandle = document.createElement('div');
-  resizeHandle.className = 'note-resize-handle';
-  resizeHandle.textContent = '⌟';
-  el.appendChild(resizeHandle);
-
-  document.getElementById('canvas').appendChild(el);
-  makeDraggable(el, data.id);
-  makeResizable(el, resizeHandle, data.id);
-  notes[data.id] = { el, data };
-  updateEmpty();
-  return el;
-}
-
-// ── API calls ─────────────────────────────────────────────────────────
-async function loadNotes() {
-  console.log('[sticky-notes] loadNotes() — appel list_notes');
-  try {
-    const result = await window.ledroide.call(MODULE_ID, 'list_notes', {});
-    console.log('[sticky-notes] list_notes réponse:', result);
-    (result.notes || []).forEach(n => renderNote(n));
-    updateEmpty();
-  } catch (e) {
-    console.error('[sticky-notes] exception list_notes:', e);
-    showToast('Impossible de charger les notes');
-  }
-}
-
-async function addNote() {
-  const board = document.getElementById('board');
-  const pos_x = board.scrollLeft + 40 + Math.random() * 120 | 0;
-  const pos_y = board.scrollTop  + 80 + Math.random() * 80  | 0;
-
-  console.log('[sticky-notes] addNote() — appel create_note', { pos_x, pos_y, color: selectedColor });
-  try {
-    const note = await window.ledroide.call(MODULE_ID, 'create_note', {
-      payload: { title: '', content: '', color: selectedColor, pos_x, pos_y, width: 220, height: 200 }
-    });
-    console.log('[sticky-notes] create_note réponse:', note);
-    if (note && !note.error) {
-      const el = renderNote(note);
-      el.querySelector('.note-title').focus();
-    } else {
-      console.error('[sticky-notes] erreur create_note:', note);
     }
-  } catch (e) {
-    console.error('[sticky-notes] exception create_note:', e);
-    showToast('Impossible de créer la note');
-  }
+    back.append(h('div', { class: 'dlg' },
+      h('div', { class: 'dlg-title' }, title),
+      h('div', { class: 'dlg-body' }, body),
+      h('div', { class: 'dlg-btns' }, buttons.map((b) => h('button', {
+        class: `tb-btn${b.primary ? ' primary' : ''}${b.danger ? ' danger' : ''}`,
+        onclick: () => close(typeof b.value === 'function' ? b.value() : b.value),
+      }, b.label)))))
+    back.addEventListener('mousedown', (e) => { if (e.target === back) close(undefined) })
+    document.body.append(back)
+    document.addEventListener('keydown', onKey, true)
+    ;(back.querySelector('input') || back.querySelector('.primary'))?.focus()
+    back.querySelector('input')?.select()
+  })
+}
+function ask(title, value = '', placeholder = '') {
+  const input = h('input', { type: 'text', value, placeholder, maxlength: 60 })
+  return dialog({ title, body: input, buttons: [{ label: 'Annuler' }, { label: 'Valider', primary: true, value: () => input.value.trim() }] })
+}
+const confirmDlg = (title, text, ok = 'Confirmer') =>
+  dialog({ title, body: text, buttons: [{ label: 'Annuler' }, { label: ok, danger: true, value: true }] }).then(Boolean)
+
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const a = h('a', { href: url, download: name })
+  document.body.append(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
-async function deleteNote(noteId) {
+let openPop = null
+function closePop() { openPop?.remove(); openPop = null; document.querySelectorAll('.n-btn.on.menu').forEach((b) => b.classList.remove('on')) }
+function popover(anchor, el) {
+  closePop()
+  document.body.append(el)
+  const r = anchor.getBoundingClientRect(), w = el.offsetWidth, ht = el.offsetHeight
+  el.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, r.left)) + 'px'
+  el.style.top = (r.bottom + ht + 8 > window.innerHeight ? Math.max(6, r.top - ht - 4) : r.bottom + 4) + 'px'
+  el.addEventListener('pointerdown', (e) => e.stopPropagation())
+  openPop = el
+}
+document.addEventListener('pointerdown', closePop)
+
+// ── Saving ────────────────────────────────────────────────────────────────────
+
+function markDirty(id, ...fields) {
+  if (!dirty.has(id)) dirty.set(id, new Set())
+  fields.forEach((f) => dirty.get(id).add(f))
+  clearTimeout(timers.get(id))
+  timers.set(id, setTimeout(() => flush(id), SAVE_DELAY))
+}
+
+async function flush(id) {
+  clearTimeout(timers.get(id))
+  timers.delete(id)
+  const fields = dirty.get(id), data = S.all.get(id)
+  dirty.delete(id)
+  if (!fields || !data) return
+  const payload = {}
+  fields.forEach((f) => { payload[f] = data[f] })
   try {
-    await window.ledroide.call(MODULE_ID, 'delete_note', { note_id: noteId });
-    const entry = notes[noteId];
-    if (entry) {
-      entry.el.remove();
-      delete notes[noteId];
-      updateEmpty();
-    }
+    const saved = await call('update_note', { note_id: id, payload })
+    // Only server-owned fields are taken back: the user may have typed more while the call was in flight.
+    const cur = S.all.get(id)
+    if (cur) { cur.updated_at = saved.updated_at; cur.z = saved.z; refreshMeta(id) }
   } catch (e) {
-    showToast('Impossible de supprimer la note');
+    if (e.code === 'NOT_FOUND') return
+    if (!dirty.has(id)) dirty.set(id, new Set())
+    fields.forEach((f) => dirty.get(id).add(f))
+    toast(`Sauvegarde impossible : ${e.message}`, { err: true })
+  }
+}
+const flushAll = () => Promise.all([...dirty.keys()].map(flush))
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushAll() })
+window.addEventListener('pagehide', flushAll)
+
+// ── Rendering of a note's text ────────────────────────────────────────────────
+
+const CB_RE = /^(\s*)(?:[-*]\s+)?\[( |x|X)\]\s?(.*)$/
+const LI_RE = /^\s*[-*]\s+(.*)$/
+const H_RE = /^#{1,3}\s+(.*)$/
+
+function inline(parent, text) {
+  for (const part of text.split(/(\*\*[^*\n]+\*\*|https?:\/\/[^\s<>"']+)/g)) {
+    if (!part) continue
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) parent.append(h('b', null, part.slice(2, -2)))
+    else if (/^https?:\/\//.test(part)) parent.append(h('span', { class: 'link', title: 'Cliquer pour copier le lien', 'data-url': part }, part))
+    else parent.append(part)
   }
 }
 
-// ── Real-time events from backend ─────────────────────────────────────
-window.ledroide.on(MODULE_ID, 'note_updated', (data) => {
-  const entry = notes[data.id];
-  if (!entry) return;
-  Object.assign(entry.data, data);
-  const footer = entry.el.querySelector('.note-date');
-  if (footer) footer.textContent = formatDate(data.updated_at);
-});
+function renderView(id) {
+  const parts = S.els.get(id), data = S.all.get(id)
+  if (!parts) return
+  const view = parts.view
+  view.replaceChildren()
+  const lines = (data.content || '').split('\n')
+  let total = 0, done = 0
+  if (!data.content.trim()) view.append(h('div', { class: 'ph' }, 'Cliquez pour écrire…'))
+  else lines.forEach((line, i) => {
+    let m
+    if ((m = CB_RE.exec(line))) {
+      const checked = m[2] !== ' '
+      total++; if (checked) done++
+      const span = h('span')
+      inline(span, m[3])
+      view.append(h('label', { class: `cb${checked ? ' done' : ''}` }, h('input', { type: 'checkbox', checked, 'data-line': i }), span))
+    } else if ((m = H_RE.exec(line))) { const d = h('div', { class: 'h' }); inline(d, m[1]); view.append(d) }
+    else if ((m = LI_RE.exec(line))) { const d = h('div', { class: 'li' }); const s = h('span'); inline(s, m[1]); d.append(s); view.append(d) }
+    else if (!line.trim()) view.append(h('div', { class: 'sp' }))
+    else { const d = h('div'); inline(d, line); view.append(d) }
+  })
+  parts.progress.textContent = total ? `☑ ${done}/${total}` : ''
+}
 
-window.ledroide.on(MODULE_ID, 'note_deleted', ({ id }) => {
-  const entry = notes[id];
-  if (entry) { entry.el.remove(); delete notes[id]; updateEmpty(); }
-});
+function refreshMeta(id) {
+  const parts = S.els.get(id), data = S.all.get(id)
+  if (parts && data) parts.date.textContent = fmtDate(data.updated_at || data.created_at)
+}
 
-async function clearAllNotes() {
-  if (!confirm('Supprimer toutes les notes ?')) return;
+// ── Note element ──────────────────────────────────────────────────────────────
+
+function applyNoteStyle(id) {
+  const { el, pinBtn, colorBtn } = S.els.get(id), d = S.all.get(id)
+  el.style.left = d.pos_x + 'px'
+  el.style.top = d.pos_y + 'px'
+  el.style.width = d.width + 'px'
+  el.style.height = d.height + 'px'
+  el.style.background = d.color
+  el.style.zIndex = d.z
+  el.className = `note f${d.font}${d.pinned ? ' pinned' : ''}${d.collapsed ? ' collapsed' : ''}${S.selected === id ? ' selected' : ''}`
+  pinBtn.classList.toggle('on', d.pinned)
+  pinBtn.title = d.pinned ? 'Désépingler (la note redevient déplaçable)' : 'Épingler (position verrouillée)'
+  colorBtn.style.background = d.color
+}
+
+function buildNote(data) {
+  const id = data.id
+  const title = h('input', { class: 'note-title', type: 'text', placeholder: 'Titre…', maxlength: 300, value: data.title || '' })
+  const pinBtn = h('button', { class: 'n-btn', onclick: () => { data.pinned = !data.pinned; applyNoteStyle(id); markDirty(id, 'pinned') } }, '📌')
+  const menuBtn = h('button', { class: 'n-btn menu', title: 'Actions', onclick: (e) => { e.stopPropagation(); noteMenu(id, menuBtn) } }, '⋯')
+  const delBtn = h('button', { class: 'n-btn', title: 'Mettre à la corbeille', onclick: () => deleteNote(id) }, '✕')
+  const view = h('div', { class: 'note-view' })
+  const ta = h('textarea', { class: 'note-content hidden', placeholder: 'Écrivez ici…\n- [ ] case à cocher\n- puce   # titre   **gras**', spellcheck: 'false' })
+  const date = h('span', { class: 'note-date' })
+  const progress = h('span', { class: 'note-progress' })
+  const colorBtn = h('button', { class: 'note-color-btn', title: 'Changer la couleur', onclick: (e) => { e.stopPropagation(); colorMenu(id, colorBtn) } })
+  const handle = h('div', { class: 'note-resize-handle', title: 'Redimensionner' })
+  const el = h('div', { class: 'note', 'data-id': id },
+    h('div', { class: 'note-head' }, title, pinBtn, menuBtn, delBtn),
+    h('div', { class: 'note-body' }, view, ta),
+    h('div', { class: 'note-footer' }, date, progress, colorBtn),
+    handle)
+
+  title.addEventListener('input', () => { data.title = title.value; markDirty(id, 'title'); if (S.query) applyFilter() })
+  title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); startEdit(id) } if (e.key === 'Escape') title.blur() })
+  ta.addEventListener('input', () => { data.content = ta.value; markDirty(id, 'content') })
+  ta.addEventListener('blur', () => endEdit(id))
+  ta.addEventListener('keydown', (e) => onEditorKey(e, id, ta))
+  view.addEventListener('change', (e) => {
+    const line = e.target.dataset?.line
+    if (line == null) return
+    const lines = data.content.split('\n')
+    lines[line] = lines[line].replace(/\[( |x|X)\]/, e.target.checked ? '[x]' : '[ ]')
+    data.content = lines.join('\n')
+    markDirty(id, 'content')
+    renderView(id)
+  })
+  view.addEventListener('click', (e) => {
+    const url = e.target.dataset?.url
+    if (url) navigator.clipboard?.writeText(url).then(() => toast('Lien copié'), () => toast('Copie impossible', { err: true }))
+  })
+  el.addEventListener('pointerdown', () => select(id), true)
+  makeDraggable(el, id)
+  makeResizable(el, handle, id)
+
+  S.els.set(id, { el, title, view, ta, date, progress, colorBtn, pinBtn })
+  applyNoteStyle(id)
+  renderView(id)
+  refreshMeta(id)
+  return el
+}
+
+function startEdit(id) {
+  const parts = S.els.get(id), data = S.all.get(id)
+  if (!parts || S.editing === id) return
+  if (data.collapsed) { data.collapsed = false; applyNoteStyle(id); markDirty(id, 'collapsed') }
+  S.editing = id
+  parts.ta.value = data.content || ''
+  parts.view.classList.add('hidden')
+  parts.ta.classList.remove('hidden')
+  parts.ta.focus()
+  parts.ta.setSelectionRange(parts.ta.value.length, parts.ta.value.length)
+}
+function endEdit(id) {
+  const parts = S.els.get(id)
+  if (!parts) return
+  if (S.editing === id) S.editing = null
+  parts.ta.classList.add('hidden')
+  parts.view.classList.remove('hidden')
+  renderView(id)
+  if (S.query) applyFilter()
+  if (S.view === 'grid') sortGrid()
+}
+
+// Enter continues a list or a checklist; Enter on an empty item ends it.
+function onEditorKey(e, id, ta) {
+  if (e.key === 'Escape') { e.stopPropagation(); ta.blur(); return }
+  if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey) return
+  const pos = ta.selectionStart
+  if (pos !== ta.selectionEnd) return
+  const start = ta.value.lastIndexOf('\n', pos - 1) + 1
+  const line = ta.value.slice(start, pos)
+  const m = /^(\s*)((?:[-*]\s+)?\[(?: |x|X)\]\s|[-*]\s+)(.*)$/.exec(line)
+  if (!m) return
+  e.preventDefault()
+  if (!m[3].trim()) ta.setRangeText('', start, pos, 'end')
+  else ta.setRangeText('\n' + m[1] + m[2].replace(/\[(x|X)\]/, '[ ]'), pos, pos, 'end')
+  ta.dispatchEvent(new Event('input'))
+}
+
+function select(id) {
+  if (S.selected !== id) {
+    S.els.get(S.selected)?.el.classList.remove('selected')
+    S.selected = id
+    S.els.get(id)?.el.classList.add('selected')
+  }
+  const data = S.all.get(id)
+  const top = Math.max(0, ...boardNotes().map((n) => n.z))
+  if (data && data.z < top) {
+    data.z = top + 1
+    S.els.get(id).el.style.zIndex = data.z
+    call('raise_note', { note_id: id }).then((n) => { const c = S.all.get(id); if (c) c.z = n.z }).catch(() => {})
+  }
+}
+function deselect() { S.els.get(S.selected)?.el.classList.remove('selected'); S.selected = null }
+
+// ── Drag / resize ─────────────────────────────────────────────────────────────
+
+function makeDraggable(el, id) {
+  let st = null
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return
+    if (e.target.closest('input, textarea, button, .note-resize-handle, label.cb, .link')) return
+    st = { x: e.clientX, y: e.clientY, ox: S.all.get(id).pos_x, oy: S.all.get(id).pos_y, moved: false, target: e.target }
+    el.setPointerCapture(e.pointerId)
+  })
+  el.addEventListener('pointermove', (e) => {
+    if (!st) return
+    const dx = (e.clientX - st.x) / S.zoom, dy = (e.clientY - st.y) / S.zoom
+    if (!st.moved && Math.hypot(dx, dy) < 4) return
+    const data = S.all.get(id)
+    if (S.view !== 'board' || data.pinned) return
+    if (!st.moved) { st.moved = true; el.classList.add('dragging') }
+    data.pos_x = Math.max(0, Math.round(st.ox + dx))
+    data.pos_y = Math.max(0, Math.round(st.oy + dy))
+    el.style.left = data.pos_x + 'px'
+    el.style.top = data.pos_y + 'px'
+  })
+  const end = (e) => {
+    if (!st) return
+    const { moved, target } = st
+    st = null
+    el.classList.remove('dragging')
+    if (moved) { markDirty(id, 'pos_x', 'pos_y'); fitCanvas() }
+    else if (e.type === 'pointerup' && target.closest('.note-view')) startEdit(id)
+  }
+  el.addEventListener('pointerup', end)
+  el.addEventListener('pointercancel', end)
+  el.addEventListener('lostpointercapture', end)
+}
+
+function makeResizable(el, handle, id) {
+  let st = null
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || S.view !== 'board') return
+    e.stopPropagation(); e.preventDefault()
+    st = { x: e.clientX, y: e.clientY, w: el.offsetWidth, h: el.offsetHeight }
+    handle.setPointerCapture(e.pointerId)
+  })
+  handle.addEventListener('pointermove', (e) => {
+    if (!st) return
+    const data = S.all.get(id)
+    data.width = Math.min(1600, Math.max(MIN_W, Math.round(st.w + (e.clientX - st.x) / S.zoom)))
+    data.height = Math.min(1600, Math.max(MIN_H, Math.round(st.h + (e.clientY - st.y) / S.zoom)))
+    el.style.width = data.width + 'px'
+    el.style.height = data.height + 'px'
+  })
+  const end = () => { if (!st) return; st = null; markDirty(id, 'width', 'height'); fitCanvas() }
+  handle.addEventListener('pointerup', end)
+  handle.addEventListener('lostpointercapture', end)
+}
+
+// ── Board ─────────────────────────────────────────────────────────────────────
+
+function fitCanvas() {
+  if (S.view !== 'board') { canvas.style.width = canvas.style.height = ''; canvas.style.zoom = ''; return }
+  let w = 0, ht = 0
+  for (const n of boardNotes()) { w = Math.max(w, n.pos_x + n.width); ht = Math.max(ht, n.pos_y + (n.collapsed ? 40 : n.height)) }
+  canvas.style.zoom = S.zoom
+  canvas.style.width = Math.max(w + 400, board.clientWidth / S.zoom) + 'px'
+  canvas.style.height = Math.max(ht + 300, board.clientHeight / S.zoom) + 'px'
+}
+
+function sortGrid() {
+  const order = boardNotes().sort((a, b) => (b.pinned - a.pinned) || String(b.updated_at).localeCompare(String(a.updated_at)))
+  order.forEach((n) => { if (n.id !== S.editing) canvas.append(S.els.get(n.id).el) })
+}
+
+function renderBoard() {
+  closePop()
+  S.els.clear()
+  S.selected = S.editing = null
+  canvas.replaceChildren(...boardNotes().sort((a, b) => a.z - b.z).map(buildNote))
+  canvas.classList.toggle('grid', S.view === 'grid')
+  if (S.view === 'grid') sortGrid()
+  document.querySelectorAll('#viewSeg button').forEach((b) => b.classList.toggle('on', b.dataset.view === S.view))
+  $('#btn-arrange').classList.toggle('hidden', S.view !== 'board')
+  $('#zoomSeg').classList.toggle('hidden', S.view !== 'board')
+  $('#zoomLbl').textContent = Math.round(S.zoom * 100) + ' %'
+  fitCanvas()
+  applyFilter()
+}
+
+function applyFilter() {
+  const q = norm(S.query.trim())
+  const match = (n) => !q || norm(n.title + '\n' + n.content).includes(q)
+  let shown = 0
+  const list = boardNotes()
+  for (const n of list) {
+    const ok = match(n)
+    if (ok) shown++
+    S.els.get(n.id)?.el.classList.toggle('dim', !ok)
+  }
+  $('#searchInfo').textContent = q ? `${shown}/${list.length}` : ''
+  $('#empty').classList.toggle('hidden', list.length > 0)
+  $('#emptyText').innerHTML = 'Aucune note sur ce tableau<br>cliquez sur « + Note » ou double-cliquez ici'
+  renderTabs()
+}
+
+function renderTabs() {
+  const q = norm(S.query.trim())
+  $('#tabs').replaceChildren(...S.boards.map((b) => {
+    const list = boardNotes(b.id)
+    const hits = q ? list.filter((n) => norm(n.title + '\n' + n.content).includes(q)).length : 0
+    return h('button', {
+      class: `tab${b.id === S.boardId ? ' on' : ''}`, title: 'Double-clic pour renommer',
+      onclick: () => switchBoard(b.id), ondblclick: () => renameBoard(b.id),
+    }, b.name, h('span', { class: 'n' }, list.length), q && hits && b.id !== S.boardId ? h('span', { class: 'hit' }, hits) : null)
+  }))
+}
+
+async function switchBoard(id) {
+  if (id === S.boardId) return
+  await flushAll()
+  S.boardId = id
+  savePrefs()
+  renderBoard()
+  board.scrollTo(0, 0)
+}
+
+function setZoom(z, cx = board.clientWidth / 2, cy = board.clientHeight / 2) {
+  z = Math.min(2, Math.max(0.4, Math.round(z * 20) / 20))
+  if (z === S.zoom) return
+  const px = (board.scrollLeft + cx) / S.zoom, py = (board.scrollTop + cy) / S.zoom
+  S.zoom = z
+  $('#zoomLbl').textContent = Math.round(z * 100) + ' %'
+  fitCanvas()
+  board.scrollLeft = px * z - cx
+  board.scrollTop = py * z - cy
+  savePrefs()
+}
+board.addEventListener('wheel', (e) => {
+  if (!e.ctrlKey || S.view !== 'board') return
+  e.preventDefault()
+  const r = board.getBoundingClientRect()
+  setZoom(S.zoom + (e.deltaY < 0 ? 0.1 : -0.1), e.clientX - r.left, e.clientY - r.top)
+}, { passive: false })
+$('#zoomIn').onclick = () => setZoom(S.zoom + 0.1)
+$('#zoomOut').onclick = () => setZoom(S.zoom - 0.1)
+$('#zoomLbl').onclick = () => setZoom(1)
+window.addEventListener('resize', fitCanvas)
+
+// Background: drag to pan, click to deselect, double-click to create a note there.
+let pan = null
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.target !== canvas || e.button !== 0) return
+  deselect()
+  document.activeElement?.blur?.()
+  if (S.view !== 'board') return
+  pan = { x: e.clientX, y: e.clientY, sl: board.scrollLeft, st: board.scrollTop }
+  canvas.setPointerCapture(e.pointerId)
+})
+canvas.addEventListener('pointermove', (e) => {
+  if (!pan) return
+  canvas.classList.add('panning')
+  board.scrollLeft = pan.sl - (e.clientX - pan.x)
+  board.scrollTop = pan.st - (e.clientY - pan.y)
+})
+const endPan = () => { pan = null; canvas.classList.remove('panning') }
+canvas.addEventListener('pointerup', endPan)
+canvas.addEventListener('lostpointercapture', endPan)
+canvas.addEventListener('dblclick', (e) => {
+  if (e.target !== canvas) return
+  if (S.view !== 'board') return addNote()
+  const r = canvas.getBoundingClientRect()
+  addNote({ pos_x: Math.max(0, Math.round((e.clientX - r.left) / S.zoom - 110)), pos_y: Math.max(0, Math.round((e.clientY - r.top) / S.zoom - 20)) })
+})
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+
+async function addNote(pos) {
+  const n = boardNotes().length
+  const p = pos || {
+    pos_x: Math.round((board.scrollLeft + 40) / S.zoom + (n % 8) * 26),
+    pos_y: Math.round((board.scrollTop + 30) / S.zoom + (n % 8) * 26),
+  }
   try {
-    await window.ledroide.call(MODULE_ID, 'delete_all_notes', {});
-    Object.values(notes).forEach(({ el }) => el.remove());
-    notes = {};
-    updateEmpty();
-  } catch (e) {
-    showToast('Erreur lors de la suppression');
+    const note = await call('create_note', { ...p, color: S.color, board_id: S.boardId, width: 220, height: 200 })
+    S.all.set(note.id, note)
+    canvas.append(buildNote(note))
+    if (S.view === 'grid') canvas.prepend(S.els.get(note.id).el)
+    fitCanvas(); applyFilter()
+    select(note.id)
+    S.els.get(note.id).el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    S.els.get(note.id).title.focus()
+  } catch (e) { toast(`Impossible de créer la note : ${e.message}`, { err: true }) }
+}
+
+function removeLocal(id) {
+  clearTimeout(timers.get(id)); timers.delete(id); dirty.delete(id)
+  S.els.get(id)?.el.remove()
+  S.els.delete(id); S.all.delete(id)
+  if (S.selected === id) S.selected = null
+  if (S.editing === id) S.editing = null
+}
+function addLocal(note) {
+  S.all.set(note.id, note)
+  if (note.board_id === S.boardId) { canvas.append(buildNote(note)); if (S.view === 'grid') sortGrid() }
+  fitCanvas(); applyFilter()
+}
+
+async function deleteNote(id) {
+  await flush(id)
+  try {
+    await call('delete_note', { note_id: id })
+    removeLocal(id)
+    S.trashCount++
+    fitCanvas(); applyFilter()
+    toast('Note mise à la corbeille', { action: { label: 'Annuler', fn: () => restoreNote(id) } })
+  } catch (e) { toast(`Suppression impossible : ${e.message}`, { err: true }) }
+}
+
+async function restoreNote(id) {
+  try {
+    const note = await call('restore_note', { note_id: id, board_id: S.boardId })
+    S.trashCount = Math.max(0, S.trashCount - 1)
+    addLocal(note)
+    return true
+  } catch (e) { toast(`Restauration impossible : ${e.message}`, { err: true }); return false }
+}
+
+async function duplicateNote(id) {
+  await flush(id)
+  try {
+    const note = await call('duplicate_note', { note_id: id })
+    addLocal(note)
+    select(note.id)
+  } catch (e) { toast(e.message, { err: true }) }
+}
+
+async function moveNote(id, boardId) {
+  const data = S.all.get(id)
+  await flush(id)
+  try {
+    const note = await call('update_note', { note_id: id, payload: { board_id: boardId } })
+    removeLocal(id)
+    S.all.set(id, { ...data, ...note })
+    applyFilter(); fitCanvas()
+    toast(`Note déplacée vers « ${S.boards.find((b) => b.id === boardId)?.name} »`)
+  } catch (e) { toast(e.message, { err: true }) }
+}
+
+function colorMenu(id, anchor) {
+  const data = S.all.get(id)
+  popover(anchor, h('div', { class: 'pop colors' }, COLORS.map((c) => h('div', {
+    class: `picker-swatch${c.hex === data.color ? ' active' : ''}`, title: c.label, style: { background: c.hex },
+    onclick: () => { data.color = c.hex; applyNoteStyle(id); markDirty(id, 'color'); closePop() },
+  }))))
+}
+
+function noteMenu(id, anchor) {
+  const data = S.all.get(id)
+  const item = (label, fn, cls = '') => h('button', { class: `item ${cls}`, onclick: () => { closePop(); fn() } }, label)
+  const fontSeg = h('div', { class: 'seg' }, [['A', 0, '11px'], ['A', 1, '13px'], ['A', 2, '16px']].map(([t, v, size]) =>
+    h('button', { class: data.font === v ? 'on' : '', style: { fontSize: size }, onclick: () => {
+      data.font = v; applyNoteStyle(id); markDirty(id, 'font'); closePop()
+    } }, t)))
+  const others = S.boards.filter((b) => b.id !== data.board_id)
+  popover(anchor, h('div', { class: 'pop' },
+    item('⧉ Dupliquer', () => duplicateNote(id)),
+    item(data.collapsed ? '▾ Déplier' : '▴ Réduire au titre', () => { data.collapsed = !data.collapsed; applyNoteStyle(id); markDirty(id, 'collapsed'); fitCanvas() }),
+    item('☑ Ajouter une case à cocher', () => {
+      data.content = (data.content ? data.content.replace(/\n*$/, '\n') : '') + '- [ ] '
+      markDirty(id, 'content'); startEdit(id)
+    }),
+    item('⎘ Copier le texte', () => navigator.clipboard?.writeText([data.title, data.content].filter(Boolean).join('\n\n'))
+      .then(() => toast('Texte copié'), () => toast('Copie impossible', { err: true }))),
+    h('div', { class: 'row' }, h('span', { style: { color: 'var(--muted)' } }, 'Taille du texte'), fontSeg),
+    others.length ? [h('hr'), h('div', { class: 'lbl' }, 'Déplacer vers'), others.map((b) => item(`→ ${b.name}`, () => moveNote(id, b.id)))] : null,
+    h('hr'),
+    item('🗑 Mettre à la corbeille', () => deleteNote(id), 'danger')))
+  anchor.classList.add('on')
+}
+
+async function arrange() {
+  const list = boardNotes().filter((n) => !n.pinned).sort((a, b) => (Math.round(a.pos_y / 80) - Math.round(b.pos_y / 80)) || a.pos_x - b.pos_x)
+  if (!list.length) return
+  const before = list.map((n) => ({ id: n.id, pos_x: n.pos_x, pos_y: n.pos_y }))
+  const gap = 22, maxW = Math.max(400, board.clientWidth / S.zoom - gap)
+  let x = gap, y = gap, rowH = 0
+  for (const n of list) {
+    const hh = n.collapsed ? 44 : n.height
+    if (x > gap && x + n.width > maxW) { x = gap; y += rowH + gap; rowH = 0 }
+    n.pos_x = x; n.pos_y = y
+    x += n.width + gap
+    rowH = Math.max(rowH, hh)
+  }
+  const apply = async (positions) => {
+    positions.forEach((p) => { const n = S.all.get(p.id); if (n) { n.pos_x = p.pos_x; n.pos_y = p.pos_y; applyNoteStyle(p.id) } })
+    fitCanvas()
+    try { await call('arrange_notes', { positions }) } catch (e) { toast(e.message, { err: true }) }
+  }
+  await apply(list.map((n) => ({ id: n.id, pos_x: n.pos_x, pos_y: n.pos_y })))
+  board.scrollTo({ left: 0, top: 0, behavior: 'smooth' })
+  toast('Notes rangées', { action: { label: 'Annuler', fn: () => apply(before) } })
+}
+
+// ── Boards ────────────────────────────────────────────────────────────────────
+
+async function addBoard() {
+  const name = await ask('Nouveau tableau', '', 'Nom du tableau')
+  if (!name) return
+  try {
+    const b = await call('board.save', { name })
+    S.boards.push(b)
+    await switchBoard(b.id)
+  } catch (e) { toast(e.message, { err: true }) }
+}
+async function renameBoard(id) {
+  const b = S.boards.find((x) => x.id === id)
+  const name = await ask('Renommer le tableau', b.name)
+  if (!name || name === b.name) return
+  try { Object.assign(b, await call('board.save', { id, name })); renderTabs() } catch (e) { toast(e.message, { err: true }) }
+}
+async function deleteBoard() {
+  const b = S.boards.find((x) => x.id === S.boardId)
+  if (S.boards.length <= 1) return toast('Impossible de supprimer le dernier tableau', { err: true })
+  const n = boardNotes().length
+  if (!(await confirmDlg('Supprimer le tableau', `Supprimer « ${b.name} » ?${n ? ` Ses ${n} note(s) iront dans la corbeille.` : ''}`, 'Supprimer'))) return
+  await flushAll()
+  try {
+    const r = await call('board.delete', { board_id: b.id })
+    boardNotes().forEach((x) => S.all.delete(x.id))
+    S.trashCount += r.trashed
+    S.boards = S.boards.filter((x) => x.id !== b.id)
+    S.boardId = S.boards[0].id
+    savePrefs(); renderBoard()
+  } catch (e) { toast(e.message, { err: true }) }
+}
+async function clearBoard() {
+  const n = boardNotes().length
+  if (!n) return toast('Ce tableau est déjà vide')
+  if (!(await confirmDlg('Vider le tableau', `Mettre les ${n} note(s) de ce tableau à la corbeille ?`, 'Vider'))) return
+  await flushAll()
+  try {
+    const r = await call('delete_all_notes', { board_id: S.boardId })
+    boardNotes().forEach((x) => S.all.delete(x.id))
+    S.trashCount += r.count
+    renderBoard()
+    toast(`${r.count} note(s) dans la corbeille — restaurables depuis le menu ⋯`)
+  } catch (e) { toast(e.message, { err: true }) }
+}
+
+// ── Trash, export, import ─────────────────────────────────────────────────────
+
+async function openTrash() {
+  let notes
+  try { notes = (await call('trash.list')).notes } catch (e) { return toast(e.message, { err: true }) }
+  const list = h('div')
+  const draw = () => {
+    S.trashCount = notes.length
+    list.replaceChildren(...(notes.length ? notes.map((n) => h('div', { class: 'trash-item' },
+      h('div', { class: 'dot', style: { background: n.color } }),
+      h('div', { class: 'txt' },
+        h('div', { class: 't' }, n.title || '(sans titre)'),
+        h('div', { class: 's' }, `${(n.content || '').replace(/\s+/g, ' ').slice(0, 90) || '—'} · supprimée le ${fmtDate(n.deleted_at)}`)),
+      h('button', { class: 'tb-btn', onclick: async () => { if (await restoreNote(n.id)) { notes = notes.filter((x) => x.id !== n.id); S.trashCount = notes.length; draw() } } }, 'Restaurer'),
+      h('button', { class: 'tb-btn danger icon', title: 'Supprimer définitivement', onclick: async () => {
+        try { await call('delete_note', { note_id: n.id, permanent: true }); notes = notes.filter((x) => x.id !== n.id); draw() } catch (e) { toast(e.message, { err: true }) }
+      } }, '✕'))) : [h('div', { style: { color: 'var(--muted)' } }, 'La corbeille est vide.')]))
+  }
+  draw()
+  const res = await dialog({ title: `Corbeille (${notes.length})`, body: list,
+    buttons: [{ label: 'Vider la corbeille', danger: true, value: 'empty' }, { label: 'Fermer', primary: true, value: true }] })
+  if (res === 'empty' && notes.length && await confirmDlg('Vider la corbeille', `Supprimer définitivement ${notes.length} note(s) ? Cette action est irréversible.`, 'Supprimer')) {
+    try { await call('trash.empty'); S.trashCount = 0; toast('Corbeille vidée') } catch (e) { toast(e.message, { err: true }) }
   }
 }
 
-// ── Fermer les pickers ouverts au clic extérieur ──────────────────────
-document.addEventListener('click', () => {
-  document.querySelectorAll('.note-color-picker.open').forEach(p => p.classList.remove('open'));
-});
+async function exportJson() {
+  await flushAll()
+  try {
+    const data = await call('export')
+    download(`sticky-notes-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2), 'application/json')
+  } catch (e) { toast(e.message, { err: true }) }
+}
+async function exportMarkdown() {
+  await flushAll()
+  const out = []
+  for (const b of S.boards) {
+    const list = boardNotes(b.id).sort((a, c) => a.pos_y - c.pos_y || a.pos_x - c.pos_x)
+    if (!list.length) continue
+    out.push(`# ${b.name}\n`)
+    for (const n of list) out.push(`## ${n.title || '(sans titre)'}\n\n${n.content || ''}\n`)
+  }
+  if (!out.length) return toast('Aucune note à exporter')
+  download(`sticky-notes-${new Date().toISOString().slice(0, 10)}.md`, out.join('\n'), 'text/markdown')
+}
+$('#importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0]
+  e.target.value = ''
+  if (!file) return
+  try {
+    const data = JSON.parse(await file.text())
+    const r = await call('import', { data }, { timeout: 60000 })
+    await loadState()
+    toast(`${r.notes} note(s) importée(s)${r.boards ? `, ${r.boards} tableau(x) créé(s)` : ''}`)
+  } catch (err) { toast(`Import impossible : ${err.message}`, { err: true }) }
+})
 
-// ── Init ──────────────────────────────────────────────────────────────
-document.getElementById('btn-add').addEventListener('click', addNote);
-document.getElementById('btn-clear').addEventListener('click', clearAllNotes);
-loadNotes();
+function mainMenu(anchor) {
+  const item = (label, fn, cls = '') => h('button', { class: `item ${cls}`, onclick: () => { closePop(); fn() } }, label)
+  popover(anchor, h('div', { class: 'pop' },
+    item(`🗑 Corbeille (${S.trashCount})`, openTrash),
+    h('hr'),
+    item('⬇ Exporter (JSON)', exportJson),
+    item('⬇ Exporter en Markdown', exportMarkdown),
+    item('⬆ Importer un export JSON…', () => $('#importFile').click()),
+    h('hr'),
+    item('✎ Renommer ce tableau', () => renameBoard(S.boardId)),
+    item('Vider ce tableau', clearBoard, 'danger'),
+    item('Supprimer ce tableau', deleteBoard, 'danger'),
+    h('hr'),
+    item('❔ Aide et raccourcis', help)))
+}
+
+function help() {
+  const rows = [
+    ['Double-clic sur le fond', 'créer une note à cet endroit'], ['Glisser le fond', 'se déplacer sur le tableau'],
+    ['Ctrl + molette', 'zoomer'], ['Clic sur le texte', 'modifier la note (Échap pour terminer)'],
+    ['- [ ] tâche', 'case à cocher (cliquable)'], ['- élément', 'puce'], ['# Titre', 'ligne en gras'], ['**texte**', 'gras'],
+    ['N', 'nouvelle note'], ['Ctrl+F', 'rechercher'], ['Ctrl+D', 'dupliquer la note sélectionnée'], ['Suppr', 'mettre la note sélectionnée à la corbeille'],
+  ]
+  dialog({ title: 'Aide', body: h('table', { class: 'help' }, rows.map(([k, v]) => h('tr', null, h('td', null, h('kbd', null, k)), h('td', null, v)))),
+    buttons: [{ label: 'Fermer', primary: true, value: true }] })
+}
+
+// ── Toolbar wiring ────────────────────────────────────────────────────────────
+
+COLORS.forEach((c) => $('#swatches').append(h('div', {
+  class: `color-swatch${c.hex === S.color ? ' selected' : ''}`, title: c.label, style: { background: c.hex },
+  onclick: (e) => {
+    document.querySelectorAll('.color-swatch').forEach((s) => s.classList.remove('selected'))
+    e.currentTarget.classList.add('selected')
+    S.color = c.hex
+    savePrefs()
+  },
+})))
+$('#btn-add').onclick = () => addNote()
+$('#btn-board-add').onclick = addBoard
+$('#btn-arrange').onclick = arrange
+$('#btn-menu').onclick = (e) => { e.stopPropagation(); mainMenu(e.currentTarget) }
+$('#btn-menu').addEventListener('pointerdown', (e) => e.stopPropagation())
+$('#search').addEventListener('input', (e) => { S.query = e.target.value; applyFilter() })
+document.querySelectorAll('#viewSeg button').forEach((b) => b.addEventListener('click', async () => {
+  if (S.view === b.dataset.view) return
+  await flushAll()
+  S.view = b.dataset.view
+  savePrefs(); renderBoard()
+}))
+
+document.addEventListener('keydown', (e) => {
+  if (document.querySelector('.dlg-back')) return
+  const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName)
+  if (e.ctrlKey && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#search').focus(); $('#search').select(); return }
+  if (e.key === 'Escape') {
+    if (openPop) return closePop()
+    if (e.target === $('#search')) { S.query = $('#search').value = ''; applyFilter(); $('#search').blur() }
+    else if (!typing) deselect()
+    return
+  }
+  if (typing) return
+  if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); addNote() }
+  else if (e.ctrlKey && e.key.toLowerCase() === 'd' && S.selected) { e.preventDefault(); duplicateNote(S.selected) }
+  else if (e.key === 'Delete' && S.selected) { e.preventDefault(); deleteNote(S.selected) }
+  else if (e.ctrlKey && e.key === '0') { e.preventDefault(); setZoom(1) }
+})
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+async function loadState() {
+  const st = await call('state.get')
+  S.boards = st.boards
+  S.all = new Map(st.notes.map((n) => [n.id, n]))
+  S.trashCount = st.trash_count
+  if (!S.boards.some((b) => b.id === S.boardId)) S.boardId = S.boards[0].id
+  renderBoard()
+}
+loadState().catch((e) => toast(`Impossible de charger les notes : ${e.message}`, { err: true, ms: 6000 }))
 </script>
 </body>
 </html>
